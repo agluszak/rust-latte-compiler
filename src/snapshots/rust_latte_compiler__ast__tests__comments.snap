@@ -1,0 +1,38 @@
+---
+source: src/ast.rs
+description: "1 + # comment\n// /* comment */\n// comment\n2 /* comment */ == 3 /*\nprobably\n*/"
+---
+Ok(
+    [
+        (
+            Num(
+                "1",
+            ),
+            0..1,
+        ),
+        (
+            Op(
+                Plus,
+            ),
+            2..3,
+        ),
+        (
+            Num(
+                "2",
+            ),
+            42..43,
+        ),
+        (
+            Op(
+                EqualEqual,
+            ),
+            58..60,
+        ),
+        (
+            Num(
+                "3",
+            ),
+            61..62,
+        ),
+    ],
+)
