@@ -184,7 +184,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + C
                 Token::Num(n) => Expr::Value(Value::Num(n.parse().unwrap())),
                 Token::Str(s) => Expr::Value(Value::Str(s)),
             }
-                .labelled("value");
+            .labelled("value");
 
             let ident = select! { Token::Ident(ident) => ident.clone() }.labelled("identifier");
 

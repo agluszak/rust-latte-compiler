@@ -3,8 +3,8 @@ extern crate core;
 mod ast;
 mod example;
 mod grammar;
-mod parser;
 mod lexer;
+mod parser;
 
 fn main() {
     println!("Hello, world!");
