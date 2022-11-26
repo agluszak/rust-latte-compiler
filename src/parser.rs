@@ -3,7 +3,7 @@ use crate::lexer::Ctrl::{LBrace, LBracket, LParen, RBrace, RBracket, RParen, Sem
 use crate::lexer::Op::Equal;
 use crate::lexer::{Ctrl, Op, Spanned, Token};
 use chumsky::error::Simple;
-use chumsky::prelude::{filter_map, just, nested_delimiters, recursive};
+use chumsky::prelude::{end, filter_map, just, nested_delimiters, recursive};
 use chumsky::{select, Error, Parser};
 
 fn binary_expr_parser(
@@ -84,7 +84,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
                 Spanned::new(
                     span,
                     Expr::Application {
-                        target: Spanned::new(target.span, Box::new(target.value)),
+                        target: Box::new(Spanned::new(target.span, target.value)),
                         args: args.value,
                     },
                 )
@@ -124,9 +124,14 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
     })
 }
 
-fn block_parser() -> impl Parser<Token, Spanned<Block>, Error = Simple<Token>> {
-    stmt_parser()
+fn block_parser(
+    stmt_parser: impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>>,
+) -> impl Parser<Token, Spanned<Block>, Error = Simple<Token>> {
+    stmt_parser
+        .repeated()
+        .collect::<Vec<_>>()
         .delimited_by(just(Token::Ctrl(LBrace)), just(Token::Ctrl(RBrace)))
+        .map_with_span(|stmts, span| Spanned::new(span, Block(stmts)))
         // Attempt to recover anything that looks like a block but contains errors
         .recover_with(nested_delimiters(
             Token::Ctrl(LBrace),
@@ -135,11 +140,8 @@ fn block_parser() -> impl Parser<Token, Spanned<Block>, Error = Simple<Token>> {
                 (Token::Ctrl(LParen), Token::Ctrl(RParen)),
                 (Token::Ctrl(LBracket), Token::Ctrl(RBracket)),
             ],
-            |span| Spanned::new(span, Stmt::Error),
+            |span| Spanned::new(span, Block(Vec::new())),
         ))
-        .repeated()
-        .collect::<Vec<_>>()
-        .map_with_span(|stmts, span| Spanned::new(span, Block(stmts)))
 }
 
 fn type_parser() -> impl Parser<Token, Spanned<Type>, Error = Simple<Token>> {
@@ -156,7 +158,11 @@ fn ident_parser() -> impl Parser<Token, Spanned<Ident>, Error = Simple<Token>> {
 
 fn item_parser() -> impl Parser<Token, Spanned<Item>, Error = Simple<Token>> {
     ident_parser()
-        .then(just(Token::Op(Op::Equal)).ignore_then(expr_parser().or_not()))
+        .then(
+            just(Token::Op(Op::Equal))
+                .ignore_then(expr_parser())
+                .or_not(),
+        )
         .map_with_span(|(ident, init), span| Spanned::new(span, Item { ident, init }))
 }
 
@@ -166,13 +172,16 @@ fn arg_parser() -> impl Parser<Token, Spanned<Arg>, Error = Simple<Token>> {
         .map_with_span(|(ty, name), span| Spanned::new(span, Arg { ty, name }))
 }
 
-fn decl_parser() -> impl Parser<Token, Spanned<Decl>, Error = Simple<Token>> {
+fn decl_parser(
+    stmt_parser: impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>>,
+) -> impl Parser<Token, Spanned<Decl>, Error = Simple<Token>> {
     let var = type_parser()
         .then(
             item_parser()
                 .separated_by(just(Token::Ctrl(Ctrl::Comma)))
                 .at_least(1),
         )
+        .then_ignore(just(Token::Ctrl(Ctrl::Semicolon)))
         .map_with_span(|(ty, items), span| Spanned::new(span, Decl::Var { ty, items }))
         .labelled("variable declaration");
 
@@ -183,13 +192,13 @@ fn decl_parser() -> impl Parser<Token, Spanned<Decl>, Error = Simple<Token>> {
                 .separated_by(just(Token::Ctrl(Ctrl::Comma)))
                 .delimited_by(just(Token::Ctrl(LParen)), just(Token::Ctrl(RParen))),
         )
-        .then(block_parser())
+        .then(block_parser(stmt_parser))
         .map_with_span(|(((ty, ident), args), body), span| {
             Spanned::new(
                 span,
                 Decl::Fn {
-                    ty,
-                    ident,
+                    return_type: ty,
+                    name: ident,
                     args,
                     body,
                 },
@@ -199,7 +208,6 @@ fn decl_parser() -> impl Parser<Token, Spanned<Decl>, Error = Simple<Token>> {
     var.or(fun)
 }
 
-// TODO: make sure it consumes all input
 fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
     let stmt = recursive(|stmt| {
         let expr_stmt = expr_parser()
@@ -213,7 +221,7 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             // .repeated()
             // .delimited_by(just(Token::Ctrl(LBrace)), just(Token::Ctrl(RBrace)))
             // .collect::<Vec<_>>()
-            block_parser()
+            block_parser(stmt.clone())
             .map_with_span(|block, span| Spanned::new(span, Stmt::Block(block)))
             .labelled("block");
 
@@ -250,60 +258,93 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             })
             .labelled("while statement");
 
-        // let decl = type_parser()
-        //     .then(
-        //         ident_parser()
-        //             .separated_by(just(Token::Ctrl(Ctrl::Comma)))
-        //             .at_least(1),
-        //     )
-        //     .then_ignore(just(Token::Ctrl(Semicolon)))
-        //     .map_with_span(|(ty, idents), span| {
-        //         let decl = Stmt::Decl { ty, idents };
-        //         Spanned::new(span, decl)
-        //     })
-        //     .labelled("declaration");
+        let assignment = ident_parser()
+            .then_ignore(just(Token::Op(Op::Equal)))
+            .then(expr_parser())
+            .then_ignore(just(Token::Ctrl(Semicolon)))
+            .map_with_span(|(ident, expr), span| {
+                Spanned::new(
+                    span,
+                    Stmt::Assignment {
+                        target: ident,
+                        expr,
+                    },
+                )
+            })
+            .labelled("assignment statement");
 
-        expr_stmt.or(if_).or(while_).or(block)
+        let decl =
+            decl_parser(stmt).map_with_span(|decl, span| Spanned::new(span, Stmt::Decl(decl)));
+
+        let return_ = just(Token::Return)
+            .ignore_then(expr_parser().or_not())
+            .then_ignore(just(Token::Ctrl(Semicolon)))
+            .map_with_span(|expr, span| Spanned::new(span, Stmt::Return(expr)))
+            .labelled("return statement");
+
+        let inc = expr_parser()
+            .then_ignore(just(Token::Op(Op::PlusPlus)))
+            .then_ignore(just(Token::Ctrl(Semicolon)))
+            .map_with_span(|ident, span| Spanned::new(span, Stmt::Incr(ident)))
+            .labelled("increment statement");
+
+        let dec = expr_parser()
+            .then_ignore(just(Token::Op(Op::MinusMinus)))
+            .then_ignore(just(Token::Ctrl(Semicolon)))
+            .map_with_span(|ident, span| Spanned::new(span, Stmt::Decr(ident)))
+            .labelled("decrement statement");
+
+        decl.or(assignment)
+            .or(expr_stmt)
+            .or(if_)
+            .or(while_)
+            .or(return_)
+            .or(block)
+            .or(inc)
+            .or(dec)
     });
     stmt
+}
+
+pub fn program_parser() -> impl Parser<Token, Spanned<Program>, Error = Simple<Token>> {
+    let decl = decl_parser(stmt_parser());
+    let program = decl
+        .repeated()
+        .then_ignore(end())
+        .map_with_span(|decls, span| Spanned::new(span, Program(decls)))
+        .labelled("program");
+    program
 }
 
 #[cfg(test)]
 mod tests {
     use crate::lexer::{Ctrl, Op, Token};
-    use crate::parser::{expr_parser, stmt_parser};
+    use crate::parser::program_parser;
+    use chumsky::prelude::end;
     use chumsky::{Parser, Stream};
 
-    #[test]
-    fn mul_todo() {
-        let input = "a + b(3, 1 % 2) * c";
-        let input_len = input.len();
-        let mut lexer = crate::lexer::lexer();
-        let tokens = lexer.parse(input).unwrap();
-        let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
-        let result = expr_parser().parse(stream);
-        println!("{:?}", result);
+    macro_rules! parser_tests {
+            ($($name:ident),*) => {
+            $(
+                #[test]
+                fn $name() {
+                    let input = include_str!(concat!("../inputs/", stringify!($name), ".lat"));
+                    let input_len = input.len();
+                    let lexer = crate::lexer::lexer();
+                    let tokens = lexer.parse(input).unwrap();
+                    let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
+                    let result = program_parser().parse(stream);
+
+                    insta::with_settings!({
+                        description => input,
+                        omit_expression => true
+                    }, {
+                        insta::assert_debug_snapshot!(result);
+                    });
+                }
+            )*
+            };
     }
 
-    #[test]
-    fn stmts() {
-        let input = r#"
-        if (a) { 
-            b; 
-        } else { 
-            while (true) { 
-                int test;
-                c; 
-            } 
-        }"#;
-        // let input = "";
-        // let input = "if (a) {} else { a; }";
-        let input_len = input.len();
-        let mut lexer = crate::lexer::lexer();
-        let tokens = lexer.parse(input).unwrap();
-        println!("{:?}", tokens);
-        let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
-        let result = stmt_parser().parse(stream);
-        println!("{}", result.unwrap());
-    }
+    parser_tests!(_parser_ugly, hello_world, factorial);
 }

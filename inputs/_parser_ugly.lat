@@ -1,0 +1,12 @@
+void main() {
+    if (a) {
+        b;
+    } else {
+        while (true) {
+            int test;
+            int test2 = 3, test8;
+            int x() {}
+            c;
+        }
+    }
+}

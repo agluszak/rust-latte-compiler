@@ -3,17 +3,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Program(Vec<Spanned<TopDef>>);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TopDef {
-    Fn {
-        ty: Spanned<Type>,
-        ident: Spanned<Ident>,
-        args: Vec<Spanned<Arg>>,
-        block: Block,
-    },
-}
+pub struct Program(pub Vec<Spanned<Decl>>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block(pub Vec<Spanned<Stmt>>);
@@ -23,9 +13,8 @@ pub enum Stmt {
     Error,
     Block(Spanned<Block>),
     Decl(Spanned<Decl>),
-    Empty,
     Assignment {
-        ident: Spanned<Ident>,
+        target: Spanned<Ident>,
         expr: Spanned<Expr>,
     },
     Return(Option<Spanned<Expr>>),
@@ -58,7 +47,7 @@ pub enum Expr {
         expr: Box<Spanned<Expr>>,
     },
     Application {
-        target: Spanned<Box<Expr>>,
+        target: Box<Spanned<Expr>>,
         args: Vec<Spanned<Expr>>,
     },
 }
@@ -100,8 +89,8 @@ pub enum Decl {
         items: Vec<Spanned<Item>>,
     },
     Fn {
-        ty: Spanned<Type>,
-        ident: Spanned<Ident>,
+        return_type: Spanned<Type>,
+        name: Spanned<Ident>,
         args: Vec<Spanned<Arg>>,
         body: Spanned<Block>,
     },
@@ -119,10 +108,16 @@ pub struct Arg {
     pub name: Spanned<Ident>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String); // TODO: interned
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl Ident {
+    pub fn new(s: impl Into<String>) -> Self {
+        Self(s.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Type(pub String); // TODO: interned
 
 impl<T> Display for Spanned<T>
@@ -143,33 +138,6 @@ impl Display for Program {
     }
 }
 
-impl Display for TopDef {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            TopDef::Fn {
-                ty,
-                ident,
-                args,
-                block,
-            } => {
-                write!(f, "{} {}(", ty, ident)?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", arg)?;
-                }
-                write!(f, ") {{")?;
-                for stmt in &block.0 {
-                    write!(f, "{}", stmt)?;
-                }
-                write!(f, "}}")?;
-            }
-        }
-        Ok(())
-    }
-}
-
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -181,8 +149,10 @@ impl Display for Stmt {
                 }
                 write!(f, "}}")
             }
-            Stmt::Empty => write!(f, ";"),
-            Stmt::Assignment { ident, expr } => write!(f, "{} = {};", ident, expr),
+            Stmt::Assignment {
+                target: ident,
+                expr,
+            } => write!(f, "{} = {};", ident, expr),
             Stmt::Return(expr) => match expr {
                 Some(expr) => write!(f, "return {};", expr),
                 None => write!(f, "return;"),
@@ -221,8 +191,8 @@ impl Display for Decl {
                 write!(f, ";")
             }
             Decl::Fn {
-                ty,
-                ident,
+                return_type: ty,
+                name: ident,
                 args,
                 body,
             } => {

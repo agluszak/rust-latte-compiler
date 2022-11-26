@@ -173,5 +173,5 @@ mod tests {
             };
     }
 
-    lexer_tests!(comments, hello_world, simple);
+    lexer_tests!(_lexer_comments, hello_world, _lexer_simple);
 }

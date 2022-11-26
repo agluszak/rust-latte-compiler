@@ -1,0 +1,81 @@
+---
+source: src/parser.rs
+description: "// Hello world\n\nint main () {\n  printString(\"hello world\") ;\n  return 0 ;\n}"
+---
+Ok(
+    Spanned {
+        span: 16..75,
+        value: Program(
+            [
+                Spanned {
+                    span: 16..75,
+                    value: Fn {
+                        ty: Spanned {
+                            span: 16..19,
+                            value: Type(
+                                "int",
+                            ),
+                        },
+                        ident: Spanned {
+                            span: 20..24,
+                            value: Ident(
+                                "main",
+                            ),
+                        },
+                        args: [],
+                        body: Spanned {
+                            span: 28..75,
+                            value: Block(
+                                [
+                                    Spanned {
+                                        span: 32..60,
+                                        value: Expr(
+                                            Spanned {
+                                                span: 32..58,
+                                                value: Application {
+                                                    target: Spanned {
+                                                        span: 32..43,
+                                                        value: Variable(
+                                                            Ident(
+                                                                "printString",
+                                                            ),
+                                                        ),
+                                                    },
+                                                    args: [
+                                                        Spanned {
+                                                            span: 44..57,
+                                                            value: Literal(
+                                                                String(
+                                                                    "hello world",
+                                                                ),
+                                                            ),
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    Spanned {
+                                        span: 63..73,
+                                        value: Return(
+                                            Some(
+                                                Spanned {
+                                                    span: 70..71,
+                                                    value: Literal(
+                                                        Int(
+                                                            0,
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    },
+                },
+            ],
+        ),
+    },
+)

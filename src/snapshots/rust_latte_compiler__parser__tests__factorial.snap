@@ -1,0 +1,539 @@
+---
+source: src/parser.rs
+description: "int main () {\n  printInt(fact(7)) ;\n  printInt(factr(7)) ;\n  return 0 ;\n}\n\n// iteracyjnie\nint fact (int n) {\n  int i,r ;\n  i = 1 ;\n  r = 1 ;\n  while (i < n+1) {\n    r = r * i ;\n    i++ ;\n  }\n  return r ;\n}\n\n// rekurencyjnie\nint factr (int n) {\n  if (n < 2)\n    return 1 ;\n  else\n    return (n * factr(n-1)) ;\n}\n"
+---
+Ok(
+    Spanned {
+        span: 0..310,
+        value: Program(
+            [
+                Spanned {
+                    span: 0..73,
+                    value: Fn {
+                        ty: Spanned {
+                            span: 0..3,
+                            value: Type(
+                                "int",
+                            ),
+                        },
+                        ident: Spanned {
+                            span: 4..8,
+                            value: Ident(
+                                "main",
+                            ),
+                        },
+                        args: [],
+                        body: Spanned {
+                            span: 12..73,
+                            value: Block(
+                                [
+                                    Spanned {
+                                        span: 16..35,
+                                        value: Expr(
+                                            Spanned {
+                                                span: 16..33,
+                                                value: Application {
+                                                    target: Spanned {
+                                                        span: 16..24,
+                                                        value: Variable(
+                                                            Ident(
+                                                                "printInt",
+                                                            ),
+                                                        ),
+                                                    },
+                                                    args: [
+                                                        Spanned {
+                                                            span: 25..32,
+                                                            value: Application {
+                                                                target: Spanned {
+                                                                    span: 25..29,
+                                                                    value: Variable(
+                                                                        Ident(
+                                                                            "fact",
+                                                                        ),
+                                                                    ),
+                                                                },
+                                                                args: [
+                                                                    Spanned {
+                                                                        span: 30..31,
+                                                                        value: Literal(
+                                                                            Int(
+                                                                                7,
+                                                                            ),
+                                                                        ),
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    Spanned {
+                                        span: 38..58,
+                                        value: Expr(
+                                            Spanned {
+                                                span: 38..56,
+                                                value: Application {
+                                                    target: Spanned {
+                                                        span: 38..46,
+                                                        value: Variable(
+                                                            Ident(
+                                                                "printInt",
+                                                            ),
+                                                        ),
+                                                    },
+                                                    args: [
+                                                        Spanned {
+                                                            span: 47..55,
+                                                            value: Application {
+                                                                target: Spanned {
+                                                                    span: 47..52,
+                                                                    value: Variable(
+                                                                        Ident(
+                                                                            "factr",
+                                                                        ),
+                                                                    ),
+                                                                },
+                                                                args: [
+                                                                    Spanned {
+                                                                        span: 53..54,
+                                                                        value: Literal(
+                                                                            Int(
+                                                                                7,
+                                                                            ),
+                                                                        ),
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    Spanned {
+                                        span: 61..71,
+                                        value: Return(
+                                            Some(
+                                                Spanned {
+                                                    span: 68..69,
+                                                    value: Literal(
+                                                        Int(
+                                                            0,
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    },
+                },
+                Spanned {
+                    span: 90..205,
+                    value: Fn {
+                        ty: Spanned {
+                            span: 90..93,
+                            value: Type(
+                                "int",
+                            ),
+                        },
+                        ident: Spanned {
+                            span: 94..98,
+                            value: Ident(
+                                "fact",
+                            ),
+                        },
+                        args: [
+                            Spanned {
+                                span: 100..105,
+                                value: Arg {
+                                    ty: Spanned {
+                                        span: 100..103,
+                                        value: Type(
+                                            "int",
+                                        ),
+                                    },
+                                    name: Spanned {
+                                        span: 104..105,
+                                        value: Ident(
+                                            "n",
+                                        ),
+                                    },
+                                },
+                            },
+                        ],
+                        body: Spanned {
+                            span: 107..205,
+                            value: Block(
+                                [
+                                    Spanned {
+                                        span: 111..120,
+                                        value: Decl(
+                                            Spanned {
+                                                span: 111..120,
+                                                value: Var {
+                                                    ty: Spanned {
+                                                        span: 111..114,
+                                                        value: Type(
+                                                            "int",
+                                                        ),
+                                                    },
+                                                    items: [
+                                                        Spanned {
+                                                            span: 115..116,
+                                                            value: Item {
+                                                                ident: Spanned {
+                                                                    span: 115..116,
+                                                                    value: Ident(
+                                                                        "i",
+                                                                    ),
+                                                                },
+                                                                init: None,
+                                                            },
+                                                        },
+                                                        Spanned {
+                                                            span: 117..118,
+                                                            value: Item {
+                                                                ident: Spanned {
+                                                                    span: 117..118,
+                                                                    value: Ident(
+                                                                        "r",
+                                                                    ),
+                                                                },
+                                                                init: None,
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    Spanned {
+                                        span: 123..130,
+                                        value: Assignment {
+                                            ident: Spanned {
+                                                span: 123..124,
+                                                value: Ident(
+                                                    "i",
+                                                ),
+                                            },
+                                            expr: Spanned {
+                                                span: 127..128,
+                                                value: Literal(
+                                                    Int(
+                                                        1,
+                                                    ),
+                                                ),
+                                            },
+                                        },
+                                    },
+                                    Spanned {
+                                        span: 133..140,
+                                        value: Assignment {
+                                            ident: Spanned {
+                                                span: 133..134,
+                                                value: Ident(
+                                                    "r",
+                                                ),
+                                            },
+                                            expr: Spanned {
+                                                span: 137..138,
+                                                value: Literal(
+                                                    Int(
+                                                        1,
+                                                    ),
+                                                ),
+                                            },
+                                        },
+                                    },
+                                    Spanned {
+                                        span: 143..190,
+                                        value: While {
+                                            cond: Spanned {
+                                                span: 150..157,
+                                                value: Binary {
+                                                    lhs: Spanned {
+                                                        span: 150..151,
+                                                        value: Variable(
+                                                            Ident(
+                                                                "i",
+                                                            ),
+                                                        ),
+                                                    },
+                                                    op: Spanned {
+                                                        span: 152..153,
+                                                        value: Lt,
+                                                    },
+                                                    rhs: Spanned {
+                                                        span: 154..157,
+                                                        value: Binary {
+                                                            lhs: Spanned {
+                                                                span: 154..155,
+                                                                value: Variable(
+                                                                    Ident(
+                                                                        "n",
+                                                                    ),
+                                                                ),
+                                                            },
+                                                            op: Spanned {
+                                                                span: 155..156,
+                                                                value: Add,
+                                                            },
+                                                            rhs: Spanned {
+                                                                span: 156..157,
+                                                                value: Literal(
+                                                                    Int(
+                                                                        1,
+                                                                    ),
+                                                                ),
+                                                            },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            body: Spanned {
+                                                span: 159..190,
+                                                value: Block(
+                                                    Spanned {
+                                                        span: 159..190,
+                                                        value: Block(
+                                                            [
+                                                                Spanned {
+                                                                    span: 165..176,
+                                                                    value: Assignment {
+                                                                        ident: Spanned {
+                                                                            span: 165..166,
+                                                                            value: Ident(
+                                                                                "r",
+                                                                            ),
+                                                                        },
+                                                                        expr: Spanned {
+                                                                            span: 169..174,
+                                                                            value: Binary {
+                                                                                lhs: Spanned {
+                                                                                    span: 169..170,
+                                                                                    value: Variable(
+                                                                                        Ident(
+                                                                                            "r",
+                                                                                        ),
+                                                                                    ),
+                                                                                },
+                                                                                op: Spanned {
+                                                                                    span: 171..172,
+                                                                                    value: Mul,
+                                                                                },
+                                                                                rhs: Spanned {
+                                                                                    span: 173..174,
+                                                                                    value: Variable(
+                                                                                        Ident(
+                                                                                            "i",
+                                                                                        ),
+                                                                                    ),
+                                                                                },
+                                                                            },
+                                                                        },
+                                                                    },
+                                                                },
+                                                                Spanned {
+                                                                    span: 181..186,
+                                                                    value: Incr(
+                                                                        Spanned {
+                                                                            span: 181..182,
+                                                                            value: Variable(
+                                                                                Ident(
+                                                                                    "i",
+                                                                                ),
+                                                                            ),
+                                                                        },
+                                                                    ),
+                                                                },
+                                                            ],
+                                                        ),
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                    Spanned {
+                                        span: 193..203,
+                                        value: Return(
+                                            Some(
+                                                Spanned {
+                                                    span: 200..201,
+                                                    value: Variable(
+                                                        Ident(
+                                                            "r",
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                    },
+                                ],
+                            ),
+                        },
+                    },
+                },
+                Spanned {
+                    span: 224..310,
+                    value: Fn {
+                        ty: Spanned {
+                            span: 224..227,
+                            value: Type(
+                                "int",
+                            ),
+                        },
+                        ident: Spanned {
+                            span: 228..233,
+                            value: Ident(
+                                "factr",
+                            ),
+                        },
+                        args: [
+                            Spanned {
+                                span: 235..240,
+                                value: Arg {
+                                    ty: Spanned {
+                                        span: 235..238,
+                                        value: Type(
+                                            "int",
+                                        ),
+                                    },
+                                    name: Spanned {
+                                        span: 239..240,
+                                        value: Ident(
+                                            "n",
+                                        ),
+                                    },
+                                },
+                            },
+                        ],
+                        body: Spanned {
+                            span: 242..310,
+                            value: Block(
+                                [
+                                    Spanned {
+                                        span: 246..308,
+                                        value: If {
+                                            cond: Spanned {
+                                                span: 250..255,
+                                                value: Binary {
+                                                    lhs: Spanned {
+                                                        span: 250..251,
+                                                        value: Variable(
+                                                            Ident(
+                                                                "n",
+                                                            ),
+                                                        ),
+                                                    },
+                                                    op: Spanned {
+                                                        span: 252..253,
+                                                        value: Lt,
+                                                    },
+                                                    rhs: Spanned {
+                                                        span: 254..255,
+                                                        value: Literal(
+                                                            Int(
+                                                                2,
+                                                            ),
+                                                        ),
+                                                    },
+                                                },
+                                            },
+                                            then: Spanned {
+                                                span: 261..271,
+                                                value: Return(
+                                                    Some(
+                                                        Spanned {
+                                                            span: 268..269,
+                                                            value: Literal(
+                                                                Int(
+                                                                    1,
+                                                                ),
+                                                            ),
+                                                        },
+                                                    ),
+                                                ),
+                                            },
+                                            otherwise: Some(
+                                                Spanned {
+                                                    span: 283..308,
+                                                    value: Return(
+                                                        Some(
+                                                            Spanned {
+                                                                span: 291..305,
+                                                                value: Binary {
+                                                                    lhs: Spanned {
+                                                                        span: 291..292,
+                                                                        value: Variable(
+                                                                            Ident(
+                                                                                "n",
+                                                                            ),
+                                                                        ),
+                                                                    },
+                                                                    op: Spanned {
+                                                                        span: 293..294,
+                                                                        value: Mul,
+                                                                    },
+                                                                    rhs: Spanned {
+                                                                        span: 295..305,
+                                                                        value: Application {
+                                                                            target: Spanned {
+                                                                                span: 295..300,
+                                                                                value: Variable(
+                                                                                    Ident(
+                                                                                        "factr",
+                                                                                    ),
+                                                                                ),
+                                                                            },
+                                                                            args: [
+                                                                                Spanned {
+                                                                                    span: 301..304,
+                                                                                    value: Binary {
+                                                                                        lhs: Spanned {
+                                                                                            span: 301..302,
+                                                                                            value: Variable(
+                                                                                                Ident(
+                                                                                                    "n",
+                                                                                                ),
+                                                                                            ),
+                                                                                        },
+                                                                                        op: Spanned {
+                                                                                            span: 302..303,
+                                                                                            value: Sub,
+                                                                                        },
+                                                                                        rhs: Spanned {
+                                                                                            span: 303..304,
+                                                                                            value: Literal(
+                                                                                                Int(
+                                                                                                    1,
+                                                                                                ),
+                                                                                            ),
+                                                                                        },
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                },
+                                                            },
+                                                        ),
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        },
+                    },
+                },
+            ],
+        ),
+    },
+)
