@@ -26,6 +26,7 @@ fn binary_expr_parser(
         })
 }
 
+// TODO: int literal with - sign
 fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
     recursive(|expr| {
         let literal = chumsky::primitive::filter_map(move |span, x| match x {
@@ -94,6 +95,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
             Token::Op(Op::Star) => BinaryOp::Mul,
             Token::Op(Op::Slash) => BinaryOp::Div,
             Token::Op(Op::Percent) => BinaryOp::Mod,
+            Token::Op(Op::AmpersandAmpersand) => BinaryOp::And
         }
         .labelled("product operator");
 
@@ -102,13 +104,14 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         let sum_op = select! {
             Token::Op(Op::Plus) => BinaryOp::Add,
             Token::Op(Op::Minus) => BinaryOp::Sub,
+            Token::Op(Op::PipePipe) => BinaryOp::Or // TODO: That's wrong
         }
         .labelled("sum operator");
 
         let sum = binary_expr_parser(product, sum_op.map_with_span(|e, s| Spanned::new(s, e)));
 
         let comparison_op = select! {
-            Token::Op(Op::Equal) => BinaryOp::Eq,
+            Token::Op(Op::EqualEqual) => BinaryOp::Eq,
             Token::Op(Op::BangEqual) => BinaryOp::Neq,
             Token::Op(Op::Less) => BinaryOp::Lt,
             Token::Op(Op::LessEqual) => BinaryOp::Lte,

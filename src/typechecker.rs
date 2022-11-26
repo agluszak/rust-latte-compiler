@@ -1,7 +1,7 @@
 use crate::ast::{Decl, Expr, Stmt};
 use crate::lexer::{Span, Spanned};
 use crate::{ast, lexer};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
@@ -120,6 +120,8 @@ pub enum TypecheckingErrorKind {
         found: Type,
     },
     IncrDecrOnNonInt,
+    DuplicateArgument(ast::Ident),
+    MissingReturn,
 }
 
 #[derive(Debug, Clone)]
@@ -187,6 +189,20 @@ impl TypecheckingError {
     fn incr_decr_on_non_int(location: lexer::Span) -> Self {
         Self {
             kind: TypecheckingErrorKind::IncrDecrOnNonInt,
+            location,
+        }
+    }
+
+    fn duplicate_argument(name: ast::Ident, location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::DuplicateArgument(name),
+            location,
+        }
+    }
+
+    fn missing_return(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::MissingReturn,
             location,
         }
     }
@@ -301,7 +317,9 @@ fn typecheck_expr(
             match &op.value {
                 // Both strings and ints can be added
                 ast::BinaryOp::Add => {
-                    ensure_type([Type::Int, Type::LatteString], &lhs_type, op.span.clone())
+                    ensure_type([Type::Int, Type::LatteString], &lhs_type, op.span.clone())?;
+                    ensure_type(&lhs_type, &rhs_type, op.span.clone())?;
+                    Ok(lhs_type)
                 }
                 ast::BinaryOp::Sub
                 | ast::BinaryOp::Mul
@@ -388,8 +406,9 @@ fn resolve_type(
     // TODO: And also if we implement string interning
     match name.value().0.as_str() {
         "int" => Ok(Type::Int),
-        "bool" => Ok(Type::Bool),
+        "boolean" => Ok(Type::Bool),
         "string" => Ok(Type::LatteString),
+        "void" => Ok(Type::Void),
         _ => Err(TypecheckingError::unknown_type(
             name.value().clone(),
             name.span(),
@@ -420,6 +439,17 @@ fn resolve_function_header(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Ensure that argument names are unique
+    let mut arg_names = HashSet::new();
+    for (arg_name, _) in &args {
+        if !arg_names.insert(arg_name.value().0.clone()) {
+            return Err(TypecheckingError::duplicate_argument(
+                arg_name.value().clone(),
+                arg_name.span(),
+            ));
+        }
+    }
+
     let function_type = Type::Function(
         args.clone().into_iter().map(|(_, ty)| ty).collect(),
         Box::new(return_type.clone()),
@@ -448,6 +478,8 @@ fn typecheck_decl(
         } => {
             let header = resolve_function_header(name, return_type, args, env)?;
 
+            let mut env = env.clone();
+
             // Define all the arguments in the environment
             for arg in header.args {
                 env.overwrite(arg.0, arg.1.clone());
@@ -456,7 +488,18 @@ fn typecheck_decl(
             // Define the function itself for recursive calls
             env.overwrite(name.clone(), header.function_type);
 
-            typecheck_block(body, env, &header.return_type)?;
+            let actual_return_type = typecheck_block(body, &mut env, &header.return_type)?;
+            if let Some(actual_return_type) = actual_return_type {
+                if actual_return_type != header.return_type {
+                    return Err(TypecheckingError::inconsistent_return_types(
+                        header.return_type,
+                        actual_return_type,
+                        body.span(),
+                    ));
+                }
+            } else if header.return_type != Type::Void {
+                return Err(TypecheckingError::missing_return(body.span()));
+            }
             Ok(())
         }
 
@@ -469,7 +512,7 @@ fn typecheck_decl(
                     let init_type = typecheck_expr(init, env)?;
                     ensure_type(ty.clone(), &init_type, init.span())?;
                 }
-                env.overwrite(name.clone(), ty.clone());
+                env.insert(name.clone(), ty.clone())?;
             }
             Ok(())
         }
@@ -489,8 +532,7 @@ fn typecheck_stmt(
             typecheck_block(block, &mut env, expected_return_type)
         }
         Stmt::Decl(decl) => {
-            let mut env = env.clone();
-            typecheck_decl(decl, &mut env)?;
+            typecheck_decl(decl, env)?;
             Ok(None)
         }
         Stmt::Assignment { target, expr } => {
@@ -537,7 +579,7 @@ fn typecheck_stmt(
                 }
                 Ok(then_type.or(otherwise_type))
             } else {
-                Ok(then_type)
+                Ok(None)
             }
         }
         Stmt::While { cond, body } => {
@@ -588,18 +630,7 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), TypecheckingError
 
     // Typecheck bodies
     for decl in &program.0 {
-        match decl.value() {
-            ast::Decl::Fn {
-                return_type,
-                name: _,
-                args: _,
-                body,
-            } => {
-                let return_type = resolve_type(return_type, &mut env)?;
-                typecheck_block(body, &mut env, &return_type)?;
-            }
-            _ => {}
-        }
+        typecheck_decl(decl, &mut env)?;
     }
 
     Ok(())

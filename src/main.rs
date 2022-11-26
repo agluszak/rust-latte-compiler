@@ -6,6 +6,7 @@ use crate::typechecker::typecheck_program;
 use chumsky::Parser;
 use chumsky::Stream;
 use std::io::Read;
+use std::process::exit;
 
 mod ast;
 mod example;
@@ -35,18 +36,21 @@ fn main() -> anyhow::Result<()> {
                         Err(err) => {
                             println!("ERROR");
                             eprintln!("Type error: {:?}", err);
+                            exit(1);
                         }
                     }
                 }
                 Err(err) => {
                     println!("ERROR");
                     eprintln!("Parse error: {:?}", err);
+                    exit(1);
                 }
             }
         }
         Err(err) => {
             println!("ERROR");
             println!("Lexing error: {:?}", err);
+            exit(1);
         }
     }
 
