@@ -1,4 +1,4 @@
-int main() {
+/* int main() {
   f(1,2);
   return 0;
 }
@@ -12,3 +12,9 @@ boolean e() {
   printString("NOOO");
   return false;
   }
+  */
+
+void f(int x, int y) {
+  if (y > x || e())
+    printString("yes");
+}

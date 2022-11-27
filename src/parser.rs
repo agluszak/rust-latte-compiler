@@ -54,7 +54,8 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         let items = expr
             .clone()
             .separated_by(just(Token::Ctrl(Ctrl::Comma)))
-            .allow_trailing();
+            .allow_trailing()
+            .labelled("items");
 
         let atom = literal
             .or(variable)
@@ -89,7 +90,8 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
                         args: args.value,
                     },
                 )
-            });
+            })
+            .labelled("call");
 
         let product_op = select! {
             Token::Op(Op::Star) => BinaryOp::Mul,
@@ -110,6 +112,26 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
 
         let sum = binary_expr_parser(product, sum_op.map_with_span(|e, s| Spanned::new(s, e)));
 
+        let logical_and_op = select! {
+            Token::Op(Op::AmpersandAmpersand) => BinaryOp::And
+        }
+        .labelled("logical and operator");
+
+        let logical_and =
+            binary_expr_parser(sum, logical_and_op.map_with_span(|e, s| Spanned::new(s, e)))
+                .labelled("logical and");
+
+        let logical_or_op = select! {
+            Token::Op(Op::PipePipe) => BinaryOp::Or
+        }
+        .labelled("logical or operator");
+
+        let logical_or = binary_expr_parser(
+            logical_and,
+            logical_or_op.map_with_span(|e, s| Spanned::new(s, e)),
+        )
+        .labelled("logical or");
+
         let comparison_op = select! {
             Token::Op(Op::EqualEqual) => BinaryOp::Eq,
             Token::Op(Op::BangEqual) => BinaryOp::Neq,
@@ -120,8 +142,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         }
         .labelled("comparison operator");
 
-        let comparison =
-            binary_expr_parser(sum, comparison_op.map_with_span(|e, s| Spanned::new(s, e)));
+        let comparison = binary_expr_parser(
+            logical_or,
+            comparison_op.map_with_span(|e, s| Spanned::new(s, e)),
+        )
+        .labelled("comparison");
 
         comparison
     })

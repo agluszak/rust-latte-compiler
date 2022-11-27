@@ -1,11 +1,85 @@
-use crate::ast::{Decl, Expr, Stmt};
 use crate::lexer::{Span, Spanned};
 use crate::{ast, lexer};
 use std::collections::{HashMap, HashSet};
+use std::ops::Not;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum TriLogic {
+    True,
+    False,
+    Unknown,
+}
+
+impl TriLogic {
+    fn trilogic_equal(self, other: TriLogic) -> TriLogic {
+        match (self, other) {
+            (TriLogic::True, TriLogic::True) => TriLogic::True,
+            (TriLogic::False, TriLogic::False) => TriLogic::True,
+            _ => TriLogic::Unknown,
+        }
+    }
+
+    fn trilogic_different(self, other: TriLogic) -> TriLogic {
+        match (self, other) {
+            (TriLogic::True, TriLogic::False) => TriLogic::True,
+            (TriLogic::False, TriLogic::True) => TriLogic::True,
+            _ => TriLogic::Unknown,
+        }
+    }
+
+    fn or(self, other: Self) -> Self {
+        match (self, other) {
+            (TriLogic::True, _) => TriLogic::True,
+            (_, TriLogic::True) => TriLogic::True,
+            (TriLogic::False, TriLogic::False) => TriLogic::False,
+            _ => TriLogic::Unknown,
+        }
+    }
+
+    fn and(self, other: Self) -> Self {
+        match (self, other) {
+            (TriLogic::True, TriLogic::True) => TriLogic::True,
+            (TriLogic::False, _) => TriLogic::False,
+            (_, TriLogic::False) => TriLogic::False,
+            _ => TriLogic::Unknown,
+        }
+    }
+}
+
+impl From<bool> for TriLogic {
+    fn from(b: bool) -> Self {
+        if b {
+            TriLogic::True
+        } else {
+            TriLogic::False
+        }
+    }
+}
+
+impl Not for TriLogic {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            TriLogic::True => TriLogic::False,
+            TriLogic::False => TriLogic::True,
+            TriLogic::Unknown => TriLogic::Unknown,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
+    parent: Option<Box<Environment>>,
     names: HashMap<ast::Ident, (Type, Span)>,
+    bools: HashMap<ast::Ident, TriLogic>,
+}
+
+fn predefined_fn(name: &str, args: Vec<Type>, ret: Type) -> (ast::Ident, (Type, Span)) {
+    (
+        ast::Ident::new(name),
+        (Type::Function(args, Box::new(ret)), Span::default()),
+    )
 }
 
 impl Environment {
@@ -15,60 +89,63 @@ impl Environment {
         // void error()
         // int readInt()
         // string readString()
-        let fictional_span = Span::from(0..0);
 
         let predefined = [
-            (
-                ast::Ident::new("printInt"),
-                (
-                    Type::Function(vec![Type::Int], Box::new(Type::Void)),
-                    fictional_span.clone(),
-                ),
-            ),
-            (
-                ast::Ident::new("printString"),
-                (
-                    Type::Function(vec![Type::LatteString], Box::new(Type::Void)),
-                    fictional_span.clone(),
-                ),
-            ),
-            (
-                ast::Ident::new("error"),
-                (
-                    Type::Function(vec![], Box::new(Type::Void)),
-                    fictional_span.clone(),
-                ),
-            ),
-            (
-                ast::Ident::new("readInt"),
-                (
-                    Type::Function(vec![], Box::new(Type::Int)),
-                    fictional_span.clone(),
-                ),
-            ),
-            (
-                ast::Ident::new("readString"),
-                (
-                    Type::Function(vec![], Box::new(Type::LatteString)),
-                    fictional_span.clone(),
-                ),
-            ),
+            predefined_fn("printInt", vec![Type::Int], Type::Void),
+            predefined_fn("printString", vec![Type::LatteString], Type::Void),
+            predefined_fn("error", vec![], Type::Void),
+            predefined_fn("readInt", vec![], Type::Int),
+            predefined_fn("readString", vec![], Type::LatteString),
         ];
 
         Environment {
-            names: HashMap::from(predefined), // TODO: predefined funcs?
+            parent: None,
+            names: HashMap::from(predefined),
+            bools: HashMap::new(),
+        }
+    }
+
+    fn local(&self) -> Self {
+        Environment {
+            parent: Some(Box::new(self.clone())),
+            names: HashMap::new(),
+            bools: HashMap::new(),
         }
     }
 
     fn get_type(&self, name: &ast::Ident) -> Option<&Type> {
-        self.names.get(name).map(|(ty, _)| ty)
+        self.names.get(name).map(|(ty, _)| ty).or_else(|| {
+            self.parent
+                .as_ref()
+                .and_then(|parent| parent.get_type(name))
+        })
     }
 
     fn get_span(&self, name: &ast::Ident) -> Option<&Span> {
-        self.names.get(name).map(|(_, span)| span)
+        self.names.get(name).map(|(_, span)| span).or_else(|| {
+            self.parent
+                .as_ref()
+                .and_then(|parent| parent.get_span(name))
+        })
     }
 
-    fn insert(&mut self, name: Spanned<ast::Ident>, ty: Type) -> Result<(), TypecheckingError> {
+    fn mark_bool(&mut self, name: &ast::Ident, value: TriLogic) {
+        self.bools.insert(name.clone(), value);
+    }
+
+    fn get_bool(&self, name: &ast::Ident) -> Option<TriLogic> {
+        self.bools.get(name).cloned().or_else(|| {
+            self.parent
+                .as_ref()
+                .and_then(|parent| parent.get_bool(name))
+        })
+    }
+
+    fn insert_type(
+        &mut self,
+        name: Spanned<ast::Ident>,
+        ty: Type,
+    ) -> Result<(), TypecheckingError> {
         let span = name.span;
         let name = name.value;
 
@@ -84,7 +161,7 @@ impl Environment {
         }
     }
 
-    fn overwrite(&mut self, name: Spanned<ast::Ident>, ty: Type) {
+    fn overwrite_type(&mut self, name: Spanned<ast::Ident>, ty: Type) {
         self.names.insert(name.value, (ty, name.span));
     }
 }
@@ -255,7 +332,7 @@ fn ensure_type(
     found: &Type,
     location: lexer::Span,
 ) -> Result<Type, TypecheckingError> {
-    if expected.matches(&found) {
+    if expected.matches(found) {
         Ok(found.clone())
     } else {
         Err(TypecheckingError::type_mismatch(
@@ -290,7 +367,7 @@ impl<T> SpannedAst<T> for Box<Spanned<T>> {
 }
 
 fn typecheck_expr(
-    expr: &impl SpannedAst<Expr>,
+    expr: &impl SpannedAst<ast::Expr>,
     env: &Environment,
 ) -> Result<Type, TypecheckingError> {
     match expr.value() {
@@ -378,6 +455,7 @@ fn typecheck_block(
     env: &mut Environment,
     expected_return_type: &Type,
 ) -> Result<Option<Type>, TypecheckingError> {
+    let env = &mut env.local();
     let mut return_type: Option<Type> = None;
     for stmt in &stmt.value().0 {
         let stmt_type = typecheck_stmt(stmt, env, expected_return_type)?;
@@ -465,6 +543,54 @@ fn resolve_function_header(
     Ok(header)
 }
 
+/// All variables *must* be declared before DFA
+fn data_flow_analysis(expr: &ast::Expr, env: &Environment) -> TriLogic {
+    match expr {
+        ast::Expr::Literal(ast::Literal::Bool(true)) => TriLogic::True,
+        ast::Expr::Literal(ast::Literal::Bool(false)) => TriLogic::False,
+        ast::Expr::Literal(_) => TriLogic::Unknown,
+        ast::Expr::Variable(ident) => {
+            match env
+                .get_type(ident)
+                .expect(&format!("variable {ident} not found during DFA"))
+            {
+                Type::Bool => env.get_bool(ident).expect(&format!(
+                    "variable {ident} not registered as a bool during DFA"
+                )),
+                _ => TriLogic::Unknown,
+            }
+        }
+        ast::Expr::Unary { op, expr } => {
+            let expr = data_flow_analysis(expr.value(), env);
+            match op.value() {
+                ast::UnaryOp::Not => !expr,
+                ast::UnaryOp::Neg => TriLogic::Unknown,
+            }
+        }
+        ast::Expr::Binary { op, lhs, rhs } => {
+            let lhs = data_flow_analysis(lhs.value(), env);
+            let rhs = data_flow_analysis(rhs.value(), env);
+            match op.value() {
+                ast::BinaryOp::Add
+                | ast::BinaryOp::Sub
+                | ast::BinaryOp::Mul
+                | ast::BinaryOp::Div
+                | ast::BinaryOp::Mod => TriLogic::Unknown,
+                // We could check for integers etc. here
+                ast::BinaryOp::Eq => lhs.trilogic_equal(rhs),
+                ast::BinaryOp::Neq => lhs.trilogic_different(rhs),
+                ast::BinaryOp::Lt | ast::BinaryOp::Lte | ast::BinaryOp::Gt | ast::BinaryOp::Gte => {
+                    TriLogic::Unknown
+                }
+                ast::BinaryOp::And => lhs.and(rhs),
+                ast::BinaryOp::Or => lhs.or(rhs),
+            }
+        }
+        ast::Expr::Error => unreachable!(),
+        ast::Expr::Application { .. } => TriLogic::Unknown,
+    }
+}
+
 fn typecheck_decl(
     decl: &impl SpannedAst<ast::Decl>,
     env: &mut Environment,
@@ -482,11 +608,11 @@ fn typecheck_decl(
 
             // Define all the arguments in the environment
             for arg in header.args {
-                env.overwrite(arg.0, arg.1.clone());
+                env.overwrite_type(arg.0, arg.1.clone());
             }
 
             // Define the function itself for recursive calls
-            env.overwrite(name.clone(), header.function_type);
+            env.overwrite_type(name.clone(), header.function_type);
 
             let actual_return_type = typecheck_block(body, &mut env, &header.return_type)?;
             if let Some(actual_return_type) = actual_return_type {
@@ -512,7 +638,7 @@ fn typecheck_decl(
                     let init_type = typecheck_expr(init, env)?;
                     ensure_type(ty.clone(), &init_type, init.span())?;
                 }
-                env.insert(name.clone(), ty.clone())?;
+                env.insert_type(name.clone(), ty.clone())?;
             }
             Ok(())
         }
@@ -526,27 +652,21 @@ fn typecheck_stmt(
     expected_return_type: &Type,
 ) -> Result<Option<Type>, TypecheckingError> {
     match stmt.value() {
-        Stmt::Error => unreachable!(),
-        Stmt::Block(block) => {
-            let mut env = env.clone();
-            typecheck_block(block, &mut env, expected_return_type)
-        }
-        Stmt::Decl(decl) => {
+        ast::Stmt::Error => unreachable!(),
+        ast::Stmt::Block(block) => typecheck_block(block, env, expected_return_type),
+        ast::Stmt::Decl(decl) => {
             typecheck_decl(decl, env)?;
             Ok(None)
         }
-        Stmt::Assignment { target, expr } => {
-            let target_type =
-                env.get_type(target.value())
-                    .ok_or(TypecheckingError::unknown_name(
-                        target.value().clone(),
-                        target.span(),
-                    ))?;
+        ast::Stmt::Assignment { target, expr } => {
+            let target_type = env.get_type(target.value()).ok_or_else(|| {
+                TypecheckingError::unknown_name(target.value().clone(), target.span())
+            })?;
             let expr_type = typecheck_expr(expr, env)?;
             ensure_type(target_type.clone(), &expr_type, expr.span())?;
             Ok(None)
         }
-        Stmt::Return(init) => {
+        ast::Stmt::Return(init) => {
             if let Some(init) = init {
                 let init_type = typecheck_expr(init, env)?;
                 ensure_type(expected_return_type.clone(), &init_type, init.span())?;
@@ -556,16 +676,24 @@ fn typecheck_stmt(
                 Ok(Some(expected_return_type.clone()))
             }
         }
-        Stmt::If {
+        ast::Stmt::If {
             cond,
             then,
             otherwise,
         } => {
+            // TODO: extract dfa to its own step
             let cond_type = typecheck_expr(cond, env)?;
             ensure_type(Type::Bool, &cond_type, cond.span())?;
+            let dfa_value = data_flow_analysis(cond.value(), env);
             let then_type = typecheck_stmt(then, env, expected_return_type)?;
             if let Some(otherwise) = otherwise {
                 let otherwise_type = typecheck_stmt(otherwise, env, expected_return_type)?;
+                if dfa_value == TriLogic::True {
+                    return Ok(then_type);
+                } else if dfa_value == TriLogic::False {
+                    return Ok(otherwise_type);
+                }
+
                 if let (Some(then_type), Some(otherwise_type)) =
                     (then_type.clone(), otherwise_type.clone())
                 {
@@ -578,25 +706,32 @@ fn typecheck_stmt(
                     }
                 }
                 Ok(then_type.or(otherwise_type))
+            } else if dfa_value == TriLogic::True {
+                Ok(then_type)
             } else {
                 Ok(None)
             }
         }
-        Stmt::While { cond, body } => {
+        ast::Stmt::While { cond, body } => {
             let cond_type = typecheck_expr(cond, env)?;
             ensure_type(Type::Bool, &cond_type, cond.span())?;
-            typecheck_stmt(body, env, expected_return_type)
+            let dfa_value = data_flow_analysis(cond.value(), env);
+            let body_type = typecheck_stmt(body, env, expected_return_type)?;
+            if dfa_value == TriLogic::False {
+                Ok(None)
+            } else {
+                Ok(body_type)
+            }
         }
-        Stmt::Expr(expr) => {
+        ast::Stmt::Expr(expr) => {
             typecheck_expr(expr, env)?;
             Ok(None)
         }
-        Stmt::Incr(target) | Stmt::Decr(target) => {
+        ast::Stmt::Incr(target) | ast::Stmt::Decr(target) => {
             if let ast::Expr::Variable(ident) = target.value() {
-                let target_type = env.get_type(ident).ok_or(TypecheckingError::unknown_name(
-                    ident.clone(),
-                    target.span(),
-                ))?;
+                let target_type = env
+                    .get_type(ident)
+                    .ok_or_else(|| TypecheckingError::unknown_name(ident.clone(), target.span()))?;
                 ensure_type(Type::Int, &target_type, target.span())?;
                 Ok(None)
             } else {
@@ -619,8 +754,8 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), TypecheckingError
                 args,
                 body: _,
             } => {
-                let header = resolve_function_header(name, return_type, args, &mut env)?;
-                env.insert(name.clone(), header.function_type)?;
+                let header = resolve_function_header(name, return_type, args, &env)?;
+                env.insert_type(name.clone(), header.function_type)?;
             }
             ast::Decl::Var { ty: _, items: _ } => {
                 // Skip globals for now
