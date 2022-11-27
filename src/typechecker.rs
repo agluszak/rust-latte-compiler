@@ -455,7 +455,6 @@ fn typecheck_block(
     env: &mut Environment,
     expected_return_type: &Type,
 ) -> Result<Option<Type>, TypecheckingError> {
-    let env = &mut env.local();
     let mut return_type: Option<Type> = None;
     for stmt in &stmt.value().0 {
         let stmt_type = typecheck_stmt(stmt, env, expected_return_type)?;
@@ -604,11 +603,15 @@ fn typecheck_decl(
         } => {
             let header = resolve_function_header(name, return_type, args, env)?;
 
-            let mut env = env.clone();
+            let mut env = env.local();
 
             // Define all the arguments in the environment
             for arg in header.args {
-                env.overwrite_type(arg.0, arg.1.clone());
+                env.overwrite_type(arg.0.clone(), arg.1.clone());
+
+                if arg.1 == Type::Bool {
+                    env.mark_bool(arg.0.value(), TriLogic::Unknown);
+                }
             }
 
             // Define the function itself for recursive calls
@@ -637,8 +640,13 @@ fn typecheck_decl(
                 if let Some(init) = init {
                     let init_type = typecheck_expr(init, env)?;
                     ensure_type(ty.clone(), &init_type, init.span())?;
+
+                    if ty == Type::Bool {
+                        env.mark_bool(name.value(), data_flow_analysis(init.value(), env));
+                    }
                 }
                 env.insert_type(name.clone(), ty.clone())?;
+                env.mark_bool(name.value(), TriLogic::False);
             }
             Ok(())
         }
@@ -653,7 +661,10 @@ fn typecheck_stmt(
 ) -> Result<Option<Type>, TypecheckingError> {
     match stmt.value() {
         ast::Stmt::Error => unreachable!(),
-        ast::Stmt::Block(block) => typecheck_block(block, env, expected_return_type),
+        ast::Stmt::Block(block) => {
+            let mut env = env.local();
+            typecheck_block(block, &mut env, expected_return_type)
+        }
         ast::Stmt::Decl(decl) => {
             typecheck_decl(decl, env)?;
             Ok(None)

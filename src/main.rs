@@ -33,13 +33,10 @@ fn main() -> anyhow::Result<()> {
                         Ok(program) => {
                             // Print
                             println!("OK");
-                            println!("{:#?}", program);
                         }
                         Err(err) => {
                             println!("ERROR");
                             eprintln!("Type error: {:?}", err);
-                            println!("{:#?}", program);
-                            println!("{}", program);
                             exit(1);
                         }
                     }

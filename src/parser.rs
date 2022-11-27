@@ -1,4 +1,6 @@
-use crate::ast::{Arg, BinaryOp, Block, Decl, Expr, Ident, Item, Literal, Program, Stmt, Type};
+use crate::ast::{
+    Arg, BinaryOp, Block, Decl, Expr, Ident, Item, Literal, Program, Stmt, Type, UnaryOp,
+};
 use crate::lexer::Ctrl::{LBrace, LBracket, LParen, RBrace, RBracket, RParen, Semicolon};
 use crate::lexer::Op::Equal;
 use crate::lexer::{Ctrl, Op, Spanned, Token};
@@ -24,6 +26,22 @@ fn binary_expr_parser(
                 },
             )
         })
+}
+
+fn unary_expr_parser(
+    lower_precedence: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+    op: impl Parser<Token, Spanned<UnaryOp>, Error = Simple<Token>> + Clone,
+) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+    op.repeated().then(lower_precedence).foldr(|op, rhs| {
+        let span = op.span.start..rhs.span.end;
+        Spanned::new(
+            span,
+            Expr::Unary {
+                op,
+                expr: Box::new(rhs),
+            },
+        )
+    })
 }
 
 // TODO: int literal with - sign
@@ -93,33 +111,59 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
             })
             .labelled("call");
 
+        let unary_op = select! {
+            Token::Op(Op::Minus) => UnaryOp::Neg,
+            Token::Op(Op::Bang) => UnaryOp::Not,
+        }
+        .labelled("unary operator");
+
+        let unary_expr = unary_expr_parser(call, unary_op.map_with_span(|e, s| Spanned::new(s, e)))
+            .labelled("unary expression");
+
         let product_op = select! {
             Token::Op(Op::Star) => BinaryOp::Mul,
             Token::Op(Op::Slash) => BinaryOp::Div,
             Token::Op(Op::Percent) => BinaryOp::Mod,
-            Token::Op(Op::AmpersandAmpersand) => BinaryOp::And
         }
         .labelled("product operator");
 
-        let product = binary_expr_parser(call, product_op.map_with_span(|e, s| Spanned::new(s, e)));
+        let product = binary_expr_parser(
+            unary_expr,
+            product_op.map_with_span(|e, s| Spanned::new(s, e)),
+        );
 
         let sum_op = select! {
             Token::Op(Op::Plus) => BinaryOp::Add,
             Token::Op(Op::Minus) => BinaryOp::Sub,
-            Token::Op(Op::PipePipe) => BinaryOp::Or // TODO: That's wrong
         }
         .labelled("sum operator");
 
         let sum = binary_expr_parser(product, sum_op.map_with_span(|e, s| Spanned::new(s, e)));
+
+        let comparison_op = select! {
+            Token::Op(Op::EqualEqual) => BinaryOp::Eq,
+            Token::Op(Op::BangEqual) => BinaryOp::Neq,
+            Token::Op(Op::Less) => BinaryOp::Lt,
+            Token::Op(Op::LessEqual) => BinaryOp::Lte,
+            Token::Op(Op::Greater) => BinaryOp::Gt,
+            Token::Op(Op::GreaterEqual) => BinaryOp::Gte,
+        }
+        .labelled("comparison operator");
+
+        let comparison =
+            binary_expr_parser(sum, comparison_op.map_with_span(|e, s| Spanned::new(s, e)))
+                .labelled("comparison");
 
         let logical_and_op = select! {
             Token::Op(Op::AmpersandAmpersand) => BinaryOp::And
         }
         .labelled("logical and operator");
 
-        let logical_and =
-            binary_expr_parser(sum, logical_and_op.map_with_span(|e, s| Spanned::new(s, e)))
-                .labelled("logical and");
+        let logical_and = binary_expr_parser(
+            comparison,
+            logical_and_op.map_with_span(|e, s| Spanned::new(s, e)),
+        )
+        .labelled("logical and");
 
         let logical_or_op = select! {
             Token::Op(Op::PipePipe) => BinaryOp::Or
@@ -132,23 +176,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         )
         .labelled("logical or");
 
-        let comparison_op = select! {
-            Token::Op(Op::EqualEqual) => BinaryOp::Eq,
-            Token::Op(Op::BangEqual) => BinaryOp::Neq,
-            Token::Op(Op::Less) => BinaryOp::Lt,
-            Token::Op(Op::LessEqual) => BinaryOp::Lte,
-            Token::Op(Op::Greater) => BinaryOp::Gt,
-            Token::Op(Op::GreaterEqual) => BinaryOp::Gte,
-        }
-        .labelled("comparison operator");
-
-        let comparison = binary_expr_parser(
-            logical_or,
-            comparison_op.map_with_span(|e, s| Spanned::new(s, e)),
-        )
-        .labelled("comparison");
-
-        comparison
+        logical_or
     })
 }
 
