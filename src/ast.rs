@@ -1,4 +1,4 @@
-use crate::lexer::{Span, Spanned};
+use crate::lexer::Spanned;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -11,6 +11,7 @@ pub struct Block(pub Vec<Spanned<Stmt>>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Error,
+    Empty,
     Block(Spanned<Block>),
     Decl(Spanned<Decl>),
     Assignment {
@@ -142,6 +143,7 @@ impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Stmt::Error => write!(f, "error"),
+            Stmt::Empty => write!(f, ";"),
             Stmt::Block(stmts) => {
                 write!(f, "{{")?;
                 for stmt in &stmts.value.0 {

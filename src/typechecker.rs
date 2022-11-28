@@ -1,6 +1,7 @@
 use crate::lexer::{Span, Spanned};
 use crate::{ast, lexer};
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Display, Formatter};
 use std::ops::Not;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -175,9 +176,30 @@ pub enum Type {
     Function(Vec<Type>, Box<Type>),
 }
 
-#[derive(Debug, Clone)]
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Bool => write!(f, "bool"),
+            Type::LatteString => write!(f, "string"),
+            Type::Void => write!(f, "void"),
+            Type::Function(args, ret) => {
+                write!(f, "function(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", arg)?;
+                }
+                write!(f, ") -> {}", ret)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypecheckingErrorKind {
-    UnknownName(ast::Ident),
+    UndefinedVariable(ast::Ident),
     TypeMismatch {
         expected: Vec<Type>,
         found: Type,
@@ -199,18 +221,21 @@ pub enum TypecheckingErrorKind {
     IncrDecrOnNonInt,
     DuplicateArgument(ast::Ident),
     MissingReturn,
+    VoidVariable,
+    VoidReturn,
+    NoMain,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypecheckingError {
-    kind: TypecheckingErrorKind,
-    location: lexer::Span,
+    pub kind: TypecheckingErrorKind,
+    pub location: lexer::Span,
 }
 
 impl TypecheckingError {
-    fn unknown_name(name: ast::Ident, location: lexer::Span) -> Self {
+    fn undefined_variable(name: ast::Ident, location: lexer::Span) -> Self {
         Self {
-            kind: TypecheckingErrorKind::UnknownName(name),
+            kind: TypecheckingErrorKind::UndefinedVariable(name),
             location,
         }
     }
@@ -280,6 +305,27 @@ impl TypecheckingError {
     fn missing_return(location: lexer::Span) -> Self {
         Self {
             kind: TypecheckingErrorKind::MissingReturn,
+            location,
+        }
+    }
+
+    fn void_variable(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::VoidVariable,
+            location,
+        }
+    }
+
+    fn void_return(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::VoidReturn,
+            location,
+        }
+    }
+
+    fn no_main(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::NoMain,
             location,
         }
     }
@@ -375,7 +421,7 @@ fn typecheck_expr(
         ast::Expr::Variable(ident) => env
             .get_type(ident)
             .cloned()
-            .ok_or(TypecheckingError::unknown_name(ident.clone(), expr.span())),
+            .ok_or_else(|| TypecheckingError::undefined_variable(ident.clone(), expr.span())),
         ast::Expr::Literal(literal) => match literal {
             ast::Literal::Int(_) => Ok(Type::Int),
             ast::Literal::Bool(_) => Ok(Type::Bool),
@@ -510,7 +556,13 @@ fn resolve_function_header(
     let args = args
         .iter()
         .map(|arg: &Spanned<ast::Arg>| {
-            let ty = resolve_type(&arg.value().ty, env);
+            let ty = resolve_type(&arg.value().ty, env).and_then(|ty| {
+                if ty == Type::Void {
+                    Err(TypecheckingError::void_variable(arg.span()))
+                } else {
+                    Ok(ty)
+                }
+            });
             let name = arg.value().name.clone();
             ty.map(|ty| (name, ty))
         })
@@ -551,11 +603,11 @@ fn data_flow_analysis(expr: &ast::Expr, env: &Environment) -> TriLogic {
         ast::Expr::Variable(ident) => {
             match env
                 .get_type(ident)
-                .expect(&format!("variable {ident} not found during DFA"))
+                .unwrap_or_else(|| panic!("variable {ident} not found during DFA"))
             {
-                Type::Bool => env.get_bool(ident).expect(&format!(
-                    "variable {ident} not registered as a bool during DFA"
-                )),
+                Type::Bool => env.get_bool(ident).unwrap_or_else(|| {
+                    panic!("variable {ident} not registered as a bool during DFA")
+                }),
                 _ => TriLogic::Unknown,
             }
         }
@@ -634,6 +686,10 @@ fn typecheck_decl(
 
         ast::Decl::Var { ty, items } => {
             let ty = resolve_type(ty, env)?;
+            if ty == Type::Void {
+                return Err(TypecheckingError::void_variable(decl.span()));
+            }
+
             for item in items {
                 let name = &item.value().ident;
                 let init = &item.value().init;
@@ -658,12 +714,16 @@ fn typecheck_stmt(
     stmt: &impl SpannedAst<ast::Stmt>,
     env: &mut Environment,
     expected_return_type: &Type,
+    must_return: bool, // TODO: A może to powinna być własność środowiska? I po prostu na koniec
+                       // bloku sprawdzić, czy to jest spełnione? Jeśli po ostatnim returnie dalej są instrukcje
+                       // to trudno
 ) -> Result<Option<Type>, TypecheckingError> {
     match stmt.value() {
         ast::Stmt::Error => unreachable!(),
+        ast::Stmt::Empty => Ok(None),
         ast::Stmt::Block(block) => {
             let mut env = env.local();
-            typecheck_block(block, &mut env, expected_return_type)
+            typecheck_block(block, &mut env, expected_return_type, must_return)
         }
         ast::Stmt::Decl(decl) => {
             typecheck_decl(decl, env)?;
@@ -671,7 +731,7 @@ fn typecheck_stmt(
         }
         ast::Stmt::Assignment { target, expr } => {
             let target_type = env.get_type(target.value()).ok_or_else(|| {
-                TypecheckingError::unknown_name(target.value().clone(), target.span())
+                TypecheckingError::undefined_variable(target.value().clone(), target.span())
             })?;
             let expr_type = typecheck_expr(expr, env)?;
             ensure_type(target_type.clone(), &expr_type, expr.span())?;
@@ -681,10 +741,13 @@ fn typecheck_stmt(
             if let Some(init) = init {
                 let init_type = typecheck_expr(init, env)?;
                 ensure_type(expected_return_type.clone(), &init_type, init.span())?;
+                if expected_return_type == &Type::Void {
+                    return Err(TypecheckingError::void_return(init.span()));
+                }
                 Ok(Some(expected_return_type.clone()))
             } else {
                 ensure_type(Type::Void, expected_return_type, stmt.span())?;
-                Ok(Some(expected_return_type.clone()))
+                Ok(Some(Type::Void))
             }
         }
         ast::Stmt::If {
@@ -710,7 +773,7 @@ fn typecheck_stmt(
                 {
                     if then_type != otherwise_type {
                         return Err(TypecheckingError::inconsistent_return_types(
-                            then_type.clone(),
+                            then_type,
                             otherwise_type,
                             stmt.span(),
                         ));
@@ -740,10 +803,10 @@ fn typecheck_stmt(
         }
         ast::Stmt::Incr(target) | ast::Stmt::Decr(target) => {
             if let ast::Expr::Variable(ident) = target.value() {
-                let target_type = env
-                    .get_type(ident)
-                    .ok_or_else(|| TypecheckingError::unknown_name(ident.clone(), target.span()))?;
-                ensure_type(Type::Int, &target_type, target.span())?;
+                let target_type = env.get_type(ident).ok_or_else(|| {
+                    TypecheckingError::undefined_variable(ident.clone(), target.span())
+                })?;
+                ensure_type(Type::Int, target_type, target.span())?;
                 Ok(None)
             } else {
                 Err(TypecheckingError::incr_decr_on_non_int(target.span()))
@@ -752,7 +815,8 @@ fn typecheck_stmt(
     }
 }
 
-pub fn typecheck_program(program: &ast::Program) -> Result<(), TypecheckingError> {
+pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingError>> {
+    let mut errors = HashSet::new();
     let mut env = Environment::global();
     // If we supported creating new types, we would have to add them to the environment here
 
@@ -765,8 +829,18 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), TypecheckingError
                 args,
                 body: _,
             } => {
-                let header = resolve_function_header(name, return_type, args, &env)?;
-                env.insert_type(name.clone(), header.function_type)?;
+                let header = resolve_function_header(name, return_type, args, &env);
+                match header {
+                    Ok(header) => {
+                        let result = env.insert_type(name.clone(), header.function_type);
+                        if let Err(err) = result {
+                            errors.insert(err);
+                        }
+                    }
+                    Err(err) => {
+                        errors.insert(err);
+                    }
+                }
             }
             ast::Decl::Var { ty: _, items: _ } => {
                 // Skip globals for now
@@ -776,8 +850,29 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), TypecheckingError
 
     // Typecheck bodies
     for decl in &program.0 {
-        typecheck_decl(decl, &mut env)?;
+        let typechecking_result = typecheck_decl(decl, &mut env);
+        if let Err(err) = typechecking_result {
+            errors.insert(err); // FIXME: this can cause duplicates because we extract headers again
+        }
     }
 
-    Ok(())
+    // Check if the main function exists and has the correct type
+    let main_ident = ast::Ident::new("main".to_string());
+    if let Some(main_type) = env.get_type(&main_ident) {
+        if let Err(err) = ensure_type(
+            Type::Function(Vec::new(), Box::new(Type::Int)),
+            main_type,
+            env.get_span(&main_ident).unwrap().clone(),
+        ) {
+            errors.insert(err);
+        }
+    } else {
+        errors.insert(TypecheckingError::no_main(Span::default()));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.into_iter().collect())
+    }
 }

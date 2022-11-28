@@ -1,0 +1,6 @@
+int main () {
+  int n;
+  while (n < 10) {
+    n++;
+  }
+}

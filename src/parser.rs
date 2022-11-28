@@ -2,10 +2,10 @@ use crate::ast::{
     Arg, BinaryOp, Block, Decl, Expr, Ident, Item, Literal, Program, Stmt, Type, UnaryOp,
 };
 use crate::lexer::Ctrl::{LBrace, LBracket, LParen, RBrace, RBracket, RParen, Semicolon};
-use crate::lexer::Op::Equal;
+
 use crate::lexer::{Ctrl, Op, Spanned, Token};
 use chumsky::error::Simple;
-use chumsky::prelude::{end, filter_map, just, nested_delimiters, recursive};
+use chumsky::prelude::{end, just, nested_delimiters, recursive};
 use chumsky::{select, Error, Parser};
 
 fn binary_expr_parser(
@@ -65,7 +65,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         .labelled("identifier");
 
         let variable = ident
-            .map_with_span(|ident, span| Expr::Variable(ident))
+            .map_with_span(|ident, _span| Expr::Variable(ident))
             .labelled("variable");
 
         // A list of expressions
@@ -271,13 +271,7 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             .map_with_span(|expr, span| Spanned::new(span, Stmt::Expr(expr)))
             .labelled("expression statement");
 
-        let block =
-            // stmt
-            // .clone()
-            // .repeated()
-            // .delimited_by(just(Token::Ctrl(LBrace)), just(Token::Ctrl(RBrace)))
-            // .collect::<Vec<_>>()
-            block_parser(stmt.clone())
+        let block = block_parser(stmt.clone())
             .map_with_span(|block, span| Spanned::new(span, Stmt::Block(block)))
             .labelled("block");
 
@@ -350,6 +344,10 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             .map_with_span(|ident, span| Spanned::new(span, Stmt::Decr(ident)))
             .labelled("decrement statement");
 
+        let empty = just(Token::Ctrl(Semicolon))
+            .map_with_span(|_, span| Spanned::new(span, Stmt::Empty))
+            .labelled("empty statement");
+
         decl.or(assignment)
             .or(expr_stmt)
             .or(if_)
@@ -358,6 +356,7 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             .or(block)
             .or(inc)
             .or(dec)
+            .or(empty)
     });
     stmt
 }
@@ -374,9 +373,9 @@ pub fn program_parser() -> impl Parser<Token, Spanned<Program>, Error = Simple<T
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::{Ctrl, Op, Token};
+
     use crate::parser::program_parser;
-    use chumsky::prelude::end;
+
     use chumsky::{Parser, Stream};
 
     macro_rules! parser_tests {

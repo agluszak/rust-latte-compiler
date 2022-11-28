@@ -1,59 +1,66 @@
 extern crate core;
 
-use crate::lexer::{lexer, Span, Token};
+use crate::errors::{parsing_reports, typechecking_reports};
+use crate::input::read_input;
+use crate::lexer::lexer;
 use crate::parser::program_parser;
 use crate::typechecker::typecheck_program;
+use ariadne::Source;
 use chumsky::Parser;
 use chumsky::Stream;
-use std::io::Read;
-use std::process::exit;
+
+use std::process::ExitCode;
 
 mod ast;
 mod dfa;
-mod example;
-mod grammar;
+mod errors;
+mod input;
 mod lexer;
 mod parser;
 mod typechecker;
 
-fn main() -> anyhow::Result<()> {
-    // Read stdin
-    let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input)?;
+fn main() -> ExitCode {
+    let mut error_reports = Vec::new();
+
+    let input = {
+        match read_input() {
+            Ok(input) => input,
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                return ExitCode::FAILURE;
+            }
+        }
+    };
+
     // Lex
-    let input_len = input.len();
-    match lexer().parse(input) {
-        Ok(tokens) => {
-            // Parse
-            let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
-            match program_parser().parse(stream) {
-                Ok(program) => {
-                    // Typecheck
-                    match typecheck_program(&program.value) {
-                        Ok(program) => {
-                            // Print
-                            println!("OK");
-                        }
-                        Err(err) => {
-                            println!("ERROR");
-                            eprintln!("Type error: {:?}", err);
-                            exit(1);
-                        }
+    let (tokens, lexer_errs) = lexer().parse_recovery(input.source.as_str());
+    error_reports.extend(parsing_reports(lexer_errs, input.source.as_str()));
+
+    if let Some(tokens) = tokens {
+        let input_len = input.source.len();
+        let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
+        let (ast, parser_errs) = program_parser().parse_recovery(stream);
+        error_reports.extend(parsing_reports(parser_errs, input.source.as_str()));
+        if let Some(ast) = ast {
+            if error_reports.is_empty() {
+                match typecheck_program(&ast.value) {
+                    Ok(_) => {}
+                    Err(errs) => {
+                        error_reports.extend(typechecking_reports(errs, &input.source));
                     }
-                }
-                Err(err) => {
-                    println!("ERROR");
-                    eprintln!("Parse error: {:?}", err);
-                    exit(1);
                 }
             }
         }
-        Err(err) => {
-            println!("ERROR");
-            println!("Lexing error: {:?}", err);
-            exit(1);
-        }
     }
 
-    Ok(())
+    if !error_reports.is_empty() {
+        println!("ERROR");
+        for report in error_reports {
+            report.eprint(Source::from(&input.source)).unwrap_or(()); // TODO: fix this?
+        }
+        ExitCode::FAILURE
+    } else {
+        println!("OK");
+        ExitCode::SUCCESS
+    }
 }

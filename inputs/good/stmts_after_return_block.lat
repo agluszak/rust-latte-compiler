@@ -1,0 +1,8 @@
+int main() {
+    {   
+        int x = 5;
+        return x;
+    }
+    int y = 6;
+    y++;
+}

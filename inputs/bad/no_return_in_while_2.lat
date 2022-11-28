@@ -1,0 +1,9 @@
+int main () {
+  int n;
+  while (n < 10) {
+    n++;
+    if (n == 5) {
+      return 2;
+    }
+  }
+}

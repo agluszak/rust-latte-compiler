@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::ops::Range;
 
 use chumsky::prelude::*;
@@ -67,9 +68,34 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // A parser for decimal numbers (only digits)
     let number = text::digits(10).map(Token::Num).labelled("number");
 
+    let escape = just('\\').ignore_then(
+        just('\\')
+            .or(just('/'))
+            .or(just('"'))
+            .or(just('b').to('\x08'))
+            .or(just('f').to('\x0C'))
+            .or(just('n').to('\n'))
+            .or(just('r').to('\r'))
+            .or(just('t').to('\t'))
+            .or(just('u').ignore_then(
+                filter(|c: &char| c.is_ascii_hexdigit())
+                    .repeated()
+                    .exactly(4)
+                    .collect::<String>()
+                    .validate(|digits, span, emit| {
+                        char::from_u32(u32::from_str_radix(&digits, 16).unwrap()).unwrap_or_else(
+                            || {
+                                emit(Simple::custom(span, "invalid unicode character"));
+                                '\u{FFFD}' // unicode replacement character
+                            },
+                        )
+                    }),
+            )),
+    );
+
     // A parser for strings (anything between double quotes)
     let string = just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
+        .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
         .then_ignore(just('"'))
         .collect::<String>()
         .map(Token::Str)
@@ -139,13 +165,72 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
 
     let multi_line_comment = just("/*").then(take_until(just("*/"))).ignored();
 
-    let comment = single_line_comment.or(multi_line_comment).padded();
+    let comment = single_line_comment
+        .or(multi_line_comment)
+        .padded()
+        .labelled("comment");
 
     token
         .map_with_span(|tok, span| (tok, span))
         .padded_by(comment.repeated())
         .padded()
         .repeated()
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Bool(b) => write!(f, "{}", b),
+            Token::Num(n) => write!(f, "{}", n),
+            Token::Str(s) => write!(f, "\"{}\"", s),
+            Token::Op(op) => write!(f, "{}", op),
+            Token::Ctrl(ctrl) => write!(f, "{}", ctrl),
+            Token::Ident(ident) => write!(f, "{}", ident),
+            Token::If => write!(f, "if"),
+            Token::Else => write!(f, "else"),
+            Token::While => write!(f, "while"),
+            Token::Return => write!(f, "return"),
+        }
+    }
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Op::Plus => write!(f, "+"),
+            Op::Minus => write!(f, "-"),
+            Op::Star => write!(f, "*"),
+            Op::Slash => write!(f, "/"),
+            Op::Percent => write!(f, "%"),
+            Op::Bang => write!(f, "!"),
+            Op::Equal => write!(f, "="),
+            Op::EqualEqual => write!(f, "=="),
+            Op::BangEqual => write!(f, "!="),
+            Op::Less => write!(f, "<"),
+            Op::LessEqual => write!(f, "<="),
+            Op::Greater => write!(f, ">"),
+            Op::GreaterEqual => write!(f, ">="),
+            Op::AmpersandAmpersand => write!(f, "&&"),
+            Op::PipePipe => write!(f, "||"),
+            Op::PlusPlus => write!(f, "++"),
+            Op::MinusMinus => write!(f, "--"),
+        }
+    }
+}
+
+impl Display for Ctrl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ctrl::LBrace => write!(f, "{{"),
+            Ctrl::RBrace => write!(f, "}}"),
+            Ctrl::LParen => write!(f, "("),
+            Ctrl::RParen => write!(f, ")"),
+            Ctrl::LBracket => write!(f, "["),
+            Ctrl::RBracket => write!(f, "]"),
+            Ctrl::Comma => write!(f, ","),
+            Ctrl::Semicolon => write!(f, ";"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -159,7 +244,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let input = include_str!(concat!("../inputs/", stringify!($name), ".lat"));
-                    let mut stream = Stream::from(input);
+                    let stream = Stream::from(input);
                     let tokens = lexer().parse(stream);
 
                     insta::with_settings!({
