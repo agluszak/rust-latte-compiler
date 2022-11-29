@@ -10,13 +10,13 @@ Ok(
                 Spanned {
                     span: 0..73,
                     value: Fn {
-                        ty: Spanned {
+                        return_type: Spanned {
                             span: 0..3,
                             value: Type(
                                 "int",
                             ),
                         },
-                        ident: Spanned {
+                        name: Spanned {
                             span: 4..8,
                             value: Ident(
                                 "main",
@@ -136,13 +136,13 @@ Ok(
                 Spanned {
                     span: 90..205,
                     value: Fn {
-                        ty: Spanned {
+                        return_type: Spanned {
                             span: 90..93,
                             value: Type(
                                 "int",
                             ),
                         },
-                        ident: Spanned {
+                        name: Spanned {
                             span: 94..98,
                             value: Ident(
                                 "fact",
@@ -216,7 +216,7 @@ Ok(
                                     Spanned {
                                         span: 123..130,
                                         value: Assignment {
-                                            ident: Spanned {
+                                            target: Spanned {
                                                 span: 123..124,
                                                 value: Ident(
                                                     "i",
@@ -235,7 +235,7 @@ Ok(
                                     Spanned {
                                         span: 133..140,
                                         value: Assignment {
-                                            ident: Spanned {
+                                            target: Spanned {
                                                 span: 133..134,
                                                 value: Ident(
                                                     "r",
@@ -306,7 +306,7 @@ Ok(
                                                                 Spanned {
                                                                     span: 165..176,
                                                                     value: Assignment {
-                                                                        ident: Spanned {
+                                                                        target: Spanned {
                                                                             span: 165..166,
                                                                             value: Ident(
                                                                                 "r",
@@ -382,13 +382,13 @@ Ok(
                 Spanned {
                     span: 224..310,
                     value: Fn {
-                        ty: Spanned {
+                        return_type: Spanned {
                             span: 224..227,
                             value: Type(
                                 "int",
                             ),
                         },
-                        ident: Spanned {
+                        name: Spanned {
                             span: 228..233,
                             value: Ident(
                                 "factr",

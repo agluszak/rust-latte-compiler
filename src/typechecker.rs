@@ -214,10 +214,6 @@ pub enum TypecheckingErrorKind {
         old_declaration: Span,
     },
     UnkownType(ast::Type),
-    InconsistentReturnTypes {
-        expected: Type,
-        found: Type,
-    },
     IncrDecrOnNonInt,
     DuplicateArgument(ast::Ident),
     MissingReturn,
@@ -277,13 +273,6 @@ impl TypecheckingError {
     fn unknown_type(ty: ast::Type, location: lexer::Span) -> Self {
         Self {
             kind: TypecheckingErrorKind::UnkownType(ty),
-            location,
-        }
-    }
-
-    fn inconsistent_return_types(expected: Type, found: Type, location: lexer::Span) -> Self {
-        Self {
-            kind: TypecheckingErrorKind::InconsistentReturnTypes { expected, found },
             location,
         }
     }
@@ -500,30 +489,18 @@ fn typecheck_block(
     stmt: &impl SpannedAst<ast::Block>,
     env: &mut Environment,
     expected_return_type: &Type,
-) -> Result<Option<Type>, TypecheckingError> {
-    let mut return_type: Option<Type> = None;
+) -> Result<bool, TypecheckingError> {
+    let mut always_returns = false;
     for stmt in &stmt.value().0 {
-        let stmt_type = typecheck_stmt(stmt, env, expected_return_type)?;
-        if let Some(stmt_type) = stmt_type {
-            if let Some(return_type) = return_type.as_ref() {
-                if return_type != &stmt_type {
-                    return Err(TypecheckingError::inconsistent_return_types(
-                        return_type.clone(),
-                        stmt_type,
-                        stmt.span(),
-                    ));
-                }
-            } else {
-                return_type = Some(stmt_type);
-            }
-        }
+        let stmt_always_returns = typecheck_stmt(stmt, env, expected_return_type)?;
+        always_returns = always_returns || stmt_always_returns;
     }
-    Ok(return_type)
+    Ok(always_returns)
 }
 
 fn resolve_type(
     name: &impl SpannedAst<ast::Type>,
-    env: &Environment,
+    _env: &Environment,
 ) -> Result<Type, TypecheckingError> {
     // TODO: This will change once we have classes
     // TODO: And also if we implement string interning
@@ -540,14 +517,12 @@ fn resolve_type(
 }
 
 struct FunctionHeader {
-    name: Spanned<ast::Ident>,
     function_type: Type,
     args: Vec<(Spanned<ast::Ident>, Type)>,
     return_type: Type,
 }
 
 fn resolve_function_header(
-    name: &Spanned<ast::Ident>,
     return_type: &Spanned<ast::Type>,
     args: &[Spanned<ast::Arg>],
     env: &Environment,
@@ -585,7 +560,6 @@ fn resolve_function_header(
     );
 
     let header = FunctionHeader {
-        name: name.clone(),
         function_type,
         args,
         return_type,
@@ -653,7 +627,7 @@ fn typecheck_decl(
             args,
             body,
         } => {
-            let header = resolve_function_header(name, return_type, args, env)?;
+            let header = resolve_function_header(return_type, args, env)?;
 
             let mut env = env.local();
 
@@ -669,19 +643,12 @@ fn typecheck_decl(
             // Define the function itself for recursive calls
             env.overwrite_type(name.clone(), header.function_type);
 
-            let actual_return_type = typecheck_block(body, &mut env, &header.return_type)?;
-            if let Some(actual_return_type) = actual_return_type {
-                if actual_return_type != header.return_type {
-                    return Err(TypecheckingError::inconsistent_return_types(
-                        header.return_type,
-                        actual_return_type,
-                        body.span(),
-                    ));
-                }
-            } else if header.return_type != Type::Void {
-                return Err(TypecheckingError::missing_return(body.span()));
+            let block_always_returns = typecheck_block(body, &mut env, &header.return_type)?;
+            if block_always_returns || header.return_type == Type::Void {
+                Ok(())
+            } else {
+                Err(TypecheckingError::missing_return(body.span()))
             }
-            Ok(())
         }
 
         ast::Decl::Var { ty, items } => {
@@ -709,25 +676,21 @@ fn typecheck_decl(
     }
 }
 
-// TODO: Change return type
+/// Returns a bool indicating whether the statement returns a value of the correct type on every path
 fn typecheck_stmt(
     stmt: &impl SpannedAst<ast::Stmt>,
     env: &mut Environment,
     expected_return_type: &Type,
-    must_return: bool, // TODO: A może to powinna być własność środowiska? I po prostu na koniec
-                       // bloku sprawdzić, czy to jest spełnione? Jeśli po ostatnim returnie dalej są instrukcje
-                       // to trudno
-) -> Result<Option<Type>, TypecheckingError> {
+) -> Result<bool, TypecheckingError> {
     match stmt.value() {
-        ast::Stmt::Error => unreachable!(),
-        ast::Stmt::Empty => Ok(None),
+        ast::Stmt::Empty => Ok(false),
         ast::Stmt::Block(block) => {
             let mut env = env.local();
-            typecheck_block(block, &mut env, expected_return_type, must_return)
+            typecheck_block(block, &mut env, expected_return_type)
         }
         ast::Stmt::Decl(decl) => {
             typecheck_decl(decl, env)?;
-            Ok(None)
+            Ok(false)
         }
         ast::Stmt::Assignment { target, expr } => {
             let target_type = env.get_type(target.value()).ok_or_else(|| {
@@ -735,7 +698,7 @@ fn typecheck_stmt(
             })?;
             let expr_type = typecheck_expr(expr, env)?;
             ensure_type(target_type.clone(), &expr_type, expr.span())?;
-            Ok(None)
+            Ok(false)
         }
         ast::Stmt::Return(init) => {
             if let Some(init) = init {
@@ -744,10 +707,10 @@ fn typecheck_stmt(
                 if expected_return_type == &Type::Void {
                     return Err(TypecheckingError::void_return(init.span()));
                 }
-                Ok(Some(expected_return_type.clone()))
+                Ok(true)
             } else {
                 ensure_type(Type::Void, expected_return_type, stmt.span())?;
-                Ok(Some(Type::Void))
+                Ok(true)
             }
         }
         ast::Stmt::If {
@@ -759,47 +722,47 @@ fn typecheck_stmt(
             let cond_type = typecheck_expr(cond, env)?;
             ensure_type(Type::Bool, &cond_type, cond.span())?;
             let dfa_value = data_flow_analysis(cond.value(), env);
-            let then_type = typecheck_stmt(then, env, expected_return_type)?;
-            if let Some(otherwise) = otherwise {
-                let otherwise_type = typecheck_stmt(otherwise, env, expected_return_type)?;
-                if dfa_value == TriLogic::True {
-                    return Ok(then_type);
-                } else if dfa_value == TriLogic::False {
-                    return Ok(otherwise_type);
-                }
-
-                if let (Some(then_type), Some(otherwise_type)) =
-                    (then_type.clone(), otherwise_type.clone())
-                {
-                    if then_type != otherwise_type {
-                        return Err(TypecheckingError::inconsistent_return_types(
-                            then_type,
-                            otherwise_type,
-                            stmt.span(),
-                        ));
+            // An if statement returns on all control paths if both
+            // the "if" and "else" branches return on all control paths
+            // or the "if" statement is always true.
+            let then_always_returns = typecheck_stmt(then, env, expected_return_type)?;
+            match otherwise {
+                None => {
+                    if dfa_value == TriLogic::True {
+                        Ok(then_always_returns)
+                    } else {
+                        Ok(false)
                     }
                 }
-                Ok(then_type.or(otherwise_type))
-            } else if dfa_value == TriLogic::True {
-                Ok(then_type)
-            } else {
-                Ok(None)
+                Some(otherwise) => {
+                    let otherwise_always_returns =
+                        typecheck_stmt(otherwise, env, expected_return_type)?;
+                    match dfa_value {
+                        TriLogic::True => Ok(then_always_returns),
+                        TriLogic::False => Ok(otherwise_always_returns),
+                        TriLogic::Unknown => Ok(then_always_returns && otherwise_always_returns),
+                    }
+                }
             }
         }
         ast::Stmt::While { cond, body } => {
+            // A while loop returns on all control paths only
+            // if the "while" condition is always true, because it loops
+            // forever and it doesn't matter if the body returns or not.
+            // TODO: recognize trivial infinite loops
             let cond_type = typecheck_expr(cond, env)?;
             ensure_type(Type::Bool, &cond_type, cond.span())?;
             let dfa_value = data_flow_analysis(cond.value(), env);
-            let body_type = typecheck_stmt(body, env, expected_return_type)?;
-            if dfa_value == TriLogic::False {
-                Ok(None)
-            } else {
-                Ok(body_type)
+            typecheck_stmt(body, env, expected_return_type)?;
+            match dfa_value {
+                TriLogic::True => Ok(true),
+                TriLogic::False => Ok(false),
+                TriLogic::Unknown => Ok(false),
             }
         }
         ast::Stmt::Expr(expr) => {
             typecheck_expr(expr, env)?;
-            Ok(None)
+            Ok(false)
         }
         ast::Stmt::Incr(target) | ast::Stmt::Decr(target) => {
             if let ast::Expr::Variable(ident) = target.value() {
@@ -807,7 +770,7 @@ fn typecheck_stmt(
                     TypecheckingError::undefined_variable(ident.clone(), target.span())
                 })?;
                 ensure_type(Type::Int, target_type, target.span())?;
-                Ok(None)
+                Ok(false)
             } else {
                 Err(TypecheckingError::incr_decr_on_non_int(target.span()))
             }
@@ -829,7 +792,7 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingE
                 args,
                 body: _,
             } => {
-                let header = resolve_function_header(name, return_type, args, &env);
+                let header = resolve_function_header(return_type, args, &env);
                 match header {
                     Ok(header) => {
                         let result = env.insert_type(name.clone(), header.function_type);

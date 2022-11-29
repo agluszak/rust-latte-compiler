@@ -10,13 +10,13 @@ Ok(
                 Spanned {
                     span: 0..185,
                     value: Fn {
-                        ty: Spanned {
+                        return_type: Spanned {
                             span: 0..4,
                             value: Type(
                                 "void",
                             ),
                         },
-                        ident: Spanned {
+                        name: Spanned {
                             span: 5..9,
                             value: Ident(
                                 "main",
@@ -176,13 +176,13 @@ Ok(
                                                                                                         Spanned {
                                                                                                             span: 142..152,
                                                                                                             value: Fn {
-                                                                                                                ty: Spanned {
+                                                                                                                return_type: Spanned {
                                                                                                                     span: 142..145,
                                                                                                                     value: Type(
                                                                                                                         "int",
                                                                                                                     ),
                                                                                                                 },
-                                                                                                                ident: Spanned {
+                                                                                                                name: Spanned {
                                                                                                                     span: 146..147,
                                                                                                                     value: Ident(
                                                                                                                         "x",

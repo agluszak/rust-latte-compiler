@@ -10,13 +10,13 @@ Ok(
                 Spanned {
                     span: 16..75,
                     value: Fn {
-                        ty: Spanned {
+                        return_type: Spanned {
                             span: 16..19,
                             value: Type(
                                 "int",
                             ),
                         },
-                        ident: Spanned {
+                        name: Spanned {
                             span: 20..24,
                             value: Ident(
                                 "main",

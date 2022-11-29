@@ -170,13 +170,11 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
         }
         .labelled("logical or operator");
 
-        let logical_or = binary_expr_parser(
+        binary_expr_parser(
             logical_and,
             logical_or_op.map_with_span(|e, s| Spanned::new(s, e)),
         )
-        .labelled("logical or");
-
-        logical_or
+        .labelled("logical or")
     })
 }
 
@@ -275,24 +273,21 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
             .map_with_span(|block, span| Spanned::new(span, Stmt::Block(block)))
             .labelled("block");
 
-        let if_ = recursive(|if_| {
-            just(Token::If)
-                .ignore_then(
-                    expr_parser()
-                        .delimited_by(just(Token::Ctrl(LParen)), just(Token::Ctrl(RParen))),
-                )
-                .then(stmt.clone())
-                .then(just(Token::Else).ignore_then(stmt.clone()).or_not())
-                .map_with_span(|((cond, then), otherwise), span| {
-                    let if_stmt = Stmt::If {
-                        cond,
-                        then: Box::new(then),
-                        otherwise: otherwise.map(Box::new),
-                    };
-                    Spanned::new(span, if_stmt)
-                })
-        })
-        .labelled("if statement");
+        let if_ = just(Token::If)
+            .ignore_then(
+                expr_parser().delimited_by(just(Token::Ctrl(LParen)), just(Token::Ctrl(RParen))),
+            )
+            .then(stmt.clone())
+            .then(just(Token::Else).ignore_then(stmt.clone()).or_not())
+            .map_with_span(|((cond, then), otherwise), span| {
+                let if_stmt = Stmt::If {
+                    cond,
+                    then: Box::new(then),
+                    otherwise: otherwise.map(Box::new),
+                };
+                Spanned::new(span, if_stmt)
+            })
+            .labelled("if statement");
 
         let while_ = just(Token::While)
             .ignore_then(
@@ -363,12 +358,10 @@ fn stmt_parser() -> impl Parser<Token, Spanned<Stmt>, Error = Simple<Token>> {
 
 pub fn program_parser() -> impl Parser<Token, Spanned<Program>, Error = Simple<Token>> {
     let decl = decl_parser(stmt_parser());
-    let program = decl
-        .repeated()
+    decl.repeated()
         .then_ignore(end())
         .map_with_span(|decls, span| Spanned::new(span, Program(decls)))
-        .labelled("program");
-    program
+        .labelled("program")
 }
 
 #[cfg(test)]

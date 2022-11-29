@@ -3,7 +3,7 @@ use ariadne::{Color, ColorGenerator, Fmt, Label, Report, ReportKind};
 use chumsky::error::SimpleReason;
 use std::hash::Hash;
 
-pub fn typechecking_reports(errs: Vec<TypecheckingError>, input: &str) -> Vec<Report> {
+pub fn typechecking_reports(errs: Vec<TypecheckingError>) -> Vec<Report> {
     let mut colors = ColorGenerator::new();
 
     errs.into_iter()
@@ -17,15 +17,6 @@ pub fn typechecking_reports(errs: Vec<TypecheckingError>, input: &str) -> Vec<Re
                         .with_message(format!("Duplicate argument `{}`", name))
                         .with_color(colors.next()),
                 ),
-                TypecheckingErrorKind::InconsistentReturnTypes { expected, found } => report
-                    .with_label(
-                        Label::new(err.location)
-                            .with_message(format!(
-                                "Inconsistent return types: expected `{}`, found `{}`",
-                                expected, found
-                            ))
-                            .with_color(colors.next()),
-                    ),
                 TypecheckingErrorKind::IncrDecrOnNonInt => report.with_label(
                     Label::new(err.location)
                         .with_message("Increment/decrement can only be applied to integers")
@@ -116,11 +107,9 @@ pub fn typechecking_reports(errs: Vec<TypecheckingError>, input: &str) -> Vec<Re
 
 pub fn parsing_reports<T: ToString + Hash + Eq>(
     errs: Vec<chumsky::error::Simple<T>>,
-    input: &str,
 ) -> Vec<Report> {
     let errs: Vec<chumsky::error::Simple<String>> =
         errs.into_iter().map(|e| e.map(|c| c.to_string())).collect();
-    let mut colors = ColorGenerator::new();
 
     errs.into_iter()
         .map(|err| {
