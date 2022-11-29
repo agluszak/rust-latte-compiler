@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1"
-thiserror = "1"
 ariadne = "0.1"
 chumsky = "0.8"
 
