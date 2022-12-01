@@ -1,34 +1,38 @@
 use crate::typechecker::{TypecheckingError, TypecheckingErrorKind};
-use ariadne::{Color, ColorGenerator, Fmt, Label, Report, ReportKind};
+use ariadne::{Color, ColorGenerator, Fmt, Label, Report, ReportBuilder, ReportKind};
 use chumsky::error::SimpleReason;
 use std::hash::Hash;
+use std::ops::Range;
 
-pub fn typechecking_reports(errs: Vec<TypecheckingError>) -> Vec<Report> {
+pub fn typechecking_reports(
+    errs: Vec<TypecheckingError>,
+    filename: &str,
+) -> Vec<Report<(String, Range<usize>)>> {
     let mut colors = ColorGenerator::new();
 
     errs.into_iter()
         .map(|err| {
-            let report = Report::build(ReportKind::Error, (), err.location.start)
+            let report = Report::build(ReportKind::Error, filename.to_string(), err.location.start)
                 .with_message("Type error".to_string());
 
             let report = match err.kind {
                 TypecheckingErrorKind::DuplicateArgument(name) => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!("Duplicate argument `{}`", name))
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::IncrDecrOnNonInt => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message("Increment/decrement can only be applied to integers")
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::NotCallable(found) => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!("`{}` is not callable", found))
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::MissingReturn => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message("Missing return statement")
                         .with_color(colors.next()),
                 ),
@@ -38,31 +42,31 @@ pub fn typechecking_reports(errs: Vec<TypecheckingError>) -> Vec<Report> {
                 } => {
                     if old_declaration == (0..0) {
                         report.with_label(
-                            Label::new(err.location)
+                            Label::new((filename.to_string(), err.location))
                                 .with_message(format!("Redeclaration of a built-in `{}`", name))
                                 .with_color(colors.next()),
                         )
                     } else {
                         report
                             .with_label(
-                                Label::new(err.location)
+                                Label::new((filename.to_string(), err.location.clone()))
                                     .with_message(format!("Redeclaration of `{}`", name))
                                     .with_color(colors.next()),
                             )
                             .with_label(
-                                Label::new(old_declaration)
+                                Label::new((filename.to_string(), err.location))
                                     .with_message(format!("Previous declaration of `{}`", name))
                                     .with_color(colors.next()),
                             )
                     }
                 }
                 TypecheckingErrorKind::UndefinedVariable(name) => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!("Unknown variable `{}`", name))
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::TypeMismatch { expected, found } => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!(
                             "Type mismatch: expected `{}`, found `{}`",
                             expected
@@ -75,22 +79,22 @@ pub fn typechecking_reports(errs: Vec<TypecheckingError>) -> Vec<Report> {
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::UnkownType(name) => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!("Unknown type `{}`", name))
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::VoidReturn => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message("Void functions cannot return a value")
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::VoidVariable => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message("Cannot assign to void variable")
                         .with_color(colors.next()),
                 ),
                 TypecheckingErrorKind::WrongArgumentCount { expected, found } => report.with_label(
-                    Label::new(err.location)
+                    Label::new((filename.to_string(), err.location))
                         .with_message(format!(
                             "Wrong number of arguments: expected {}, found {}",
                             expected, found
@@ -107,13 +111,15 @@ pub fn typechecking_reports(errs: Vec<TypecheckingError>) -> Vec<Report> {
 
 pub fn parsing_reports<T: ToString + Hash + Eq>(
     errs: Vec<chumsky::error::Simple<T>>,
-) -> Vec<Report> {
+    filename: &str,
+) -> Vec<Report<(String, Range<usize>)>> {
     let errs: Vec<chumsky::error::Simple<String>> =
         errs.into_iter().map(|e| e.map(|c| c.to_string())).collect();
 
     errs.into_iter()
         .map(|err| {
-            let report = Report::build(ReportKind::Error, (), err.span().start);
+            let report: ReportBuilder<(String, Range<usize>)> =
+                Report::build(ReportKind::Error, filename.to_string(), err.span().start);
             let report = match err.reason() {
                 SimpleReason::Unclosed { span, delimiter } => report
                     .with_message(format!(
@@ -121,7 +127,7 @@ pub fn parsing_reports<T: ToString + Hash + Eq>(
                         delimiter.fg(Color::Yellow)
                     ))
                     .with_label(
-                        Label::new(span.clone())
+                        Label::new((filename.to_string(), span.clone()))
                             .with_message(format!(
                                 "Unclosed delimiter {}",
                                 delimiter.fg(Color::Yellow)
@@ -149,7 +155,7 @@ pub fn parsing_reports<T: ToString + Hash + Eq>(
                         }
                     ))
                     .with_label(
-                        Label::new(err.span())
+                        Label::new((filename.to_string(), err.span()))
                             .with_message(format!(
                                 "Unexpected token {}",
                                 err.found()
@@ -159,7 +165,7 @@ pub fn parsing_reports<T: ToString + Hash + Eq>(
                             .with_color(Color::Red),
                     ),
                 SimpleReason::Custom(msg) => report.with_message(msg).with_label(
-                    Label::new(err.span())
+                    Label::new((filename.to_string(), err.span()))
                         .with_message(format!("{}", msg.fg(Color::Red)))
                         .with_color(Color::Red),
                 ),

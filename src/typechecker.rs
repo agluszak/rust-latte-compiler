@@ -709,7 +709,7 @@ fn typecheck_stmt(
                 }
                 Ok(true)
             } else {
-                ensure_type(Type::Void, expected_return_type, stmt.span())?;
+                ensure_type(expected_return_type, &Type::Void, stmt.span())?;
                 Ok(true)
             }
         }
