@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n    {   \n        int x = 5;\n        return x;\n    }\n    int y = 6;\n    y++;\n}"
+---
+

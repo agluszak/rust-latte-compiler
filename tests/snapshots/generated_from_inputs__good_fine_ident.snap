@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Wysocki 277696\nint main() {\n    int abcABC000___ = 0;\n    return abcABC000___;\n}\n"
+---
+

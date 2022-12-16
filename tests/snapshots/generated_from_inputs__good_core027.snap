@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n  f(\"bad\");\n  return 0;\n}\n\nvoid f(string arg) {\n  arg = \"good\";\n  printString(arg);\n}\n"
+---
+

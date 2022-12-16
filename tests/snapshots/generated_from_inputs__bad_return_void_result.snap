@@ -1,0 +1,12 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/**\n * @author Cezary Bartoszuk <cbart@students.mimuw.edu.pl>\n */\nint main() {\n    return 0;\n}\n\nvoid f() {\n    return g();\n}\n\nvoid g() {\n}"
+---
+[31mError:[0m Type error
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mreturn_void_result:9:12[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m9 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mr[0m[38;5;249me[0m[38;5;249mt[0m[38;5;249mu[0m[38;5;249mr[0m[38;5;249mn[0m[38;5;249m [0m[31mg[0m[31m([0m[31m)[0m[38;5;249m;[0m
+ [38;5;246m  ·[0m            [31m─[0m[31m┬[0m[31m─[0m  
+ [38;5;246m  ·[0m             [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Void functions cannot return a value
+[38;5;246m───╯[0m
+

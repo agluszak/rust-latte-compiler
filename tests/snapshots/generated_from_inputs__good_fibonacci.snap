@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/**\n * Iterative fibonacci.\n *\n * @param n a non-negative index in Fibonacci sequence.\n * @return value of `n`'th Fibonacci number\n *\n * @author cbart@students.mimuw.edu.pl (Cezary Bartoszuk)\n */\nint fibonacci(int n) {\n    if (n <= 1) {\n        return n;\n    }\n    int fib_a = 0;\n    int fib_b = 1;\n    int tmp;\n    int i = 2;\n    while (i <= n) {\n        tmp = fib_b + fib_a;\n        fib_a = fib_b;\n        fib_b = tmp;\n        i++;\n    }\n    return fib_b;\n}\n\n\nint main() {\n    int i = readInt();\n    if (i >= 0) {\n        printInt(fibonacci(i));\n        return 0;\n    } else {\n        printString(\"Expected a non-negative integer, but got:\");\n        printInt(i);\n        return 1;\n    }\n}\n"
+---
+

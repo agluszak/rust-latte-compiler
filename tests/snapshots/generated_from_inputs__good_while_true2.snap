@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Biczel 277568, Tomasz Wysocki 277696\nint main() {\n    while (true) {\n        int x;\n        x = readInt();\n        if (x == 1)\n            return 0;\n        else\n            printString(\"jeszcze raz\");\n    }\n}\n"
+---
+

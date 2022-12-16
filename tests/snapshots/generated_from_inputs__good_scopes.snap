@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Wysocki 277696\nint main() {\n    int i = 0;\n    printInt(i);\n    {\n        int i = 1;\n        printInt(i);\n    }\n    printInt(i);\n    {\n        int i = 2;\n        printInt(i);\n    }\n    printInt(i);\n    return 0;\n}\n"
+---
+

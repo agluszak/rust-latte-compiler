@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Declaration of multiple variables of the same type in one statement:\n\nint main () {\n  int x, y;\n  x = 45;\n  y = -36;\n  printInt(x);\n  printInt(y);\n  return 0 ;\n\n}"
+---
+

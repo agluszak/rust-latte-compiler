@@ -213,7 +213,7 @@ pub enum TypecheckingErrorKind {
         name: ast::Ident,
         old_declaration: Span,
     },
-    UnkownType(ast::Type),
+    UnknownType(ast::Type),
     IncrDecrOnNonInt,
     DuplicateArgument(ast::Ident),
     MissingReturn,
@@ -272,7 +272,7 @@ impl TypecheckingError {
 
     fn unknown_type(ty: ast::Type, location: lexer::Span) -> Self {
         Self {
-            kind: TypecheckingErrorKind::UnkownType(ty),
+            kind: TypecheckingErrorKind::UnknownType(ty),
             location,
         }
     }
@@ -779,7 +779,7 @@ fn typecheck_stmt(
 }
 
 pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingError>> {
-    let mut errors = HashSet::new();
+    let mut errors = Vec::new();
     let mut env = Environment::global();
     // If we supported creating new types, we would have to add them to the environment here
 
@@ -797,11 +797,11 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingE
                     Ok(header) => {
                         let result = env.insert_type(name.clone(), header.function_type);
                         if let Err(err) = result {
-                            errors.insert(err);
+                            errors.push(err);
                         }
                     }
                     Err(err) => {
-                        errors.insert(err);
+                        errors.push(err);
                     }
                 }
             }
@@ -815,7 +815,7 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingE
     for decl in &program.0 {
         let typechecking_result = typecheck_decl(decl, &mut env);
         if let Err(err) = typechecking_result {
-            errors.insert(err); // FIXME: this can cause duplicates because we extract headers again
+            errors.push(err); // FIXME: this can cause duplicates because we extract headers again
         }
     }
 
@@ -827,10 +827,10 @@ pub fn typecheck_program(program: &ast::Program) -> Result<(), Vec<TypecheckingE
             main_type,
             env.get_span(&main_ident).unwrap().clone(),
         ) {
-            errors.insert(err);
+            errors.push(err);
         }
     } else {
-        errors.insert(TypecheckingError::no_main(Span::default()));
+        errors.push(TypecheckingError::no_main(Span::default()));
     }
 
     if errors.is_empty() {

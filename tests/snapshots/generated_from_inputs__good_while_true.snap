@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Wysocki 277696\nint main() {\n    while(true) {\n        return 0;\n    }\n}\n"
+---
+

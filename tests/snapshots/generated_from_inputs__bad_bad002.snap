@@ -1,0 +1,10 @@
+---
+source: tests/generated_from_inputs.rs
+description: "a\n"
+---
+[31mError:[0m Unexpected end of input, expected one of: something else
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad002:1:3[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m  ·[0m 
+[38;5;246m───╯[0m
+

@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* allow comparing booleans. */\n\nint main() {\n  if (true == true) { printInt(42); }\n  return 0 ;\n\n}"
+---
+

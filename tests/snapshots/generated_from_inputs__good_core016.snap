@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* parity of positive integers by loop */\n\nint main () {\n  int y = 17;\n  while (y > 0)\n    y = y - 2;\n  if (y < 0) {\n    printInt(0);\n    return 0 ;\n    }\n  else {\n    printInt(1);\n    return 0 ;\n    }\n}\n"
+---
+

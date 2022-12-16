@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n  int i = 78;\n  {\n    int i = 1;\n    printInt(i);\n  }\n  printInt(i);\n  while (i > 76) {\n    i--;\n    printInt(i);\n   // this is a little tricky\n   // on the right hand side, i refers to the outer i\n   int i = i + 7;\n   printInt(i);\n  }\n  printInt(i);\n  if (i > 4) {\n    int i = 4;\n    printInt(i);\n  } else {\n    printString(\"foo\");\n  } \n  printInt(i);\n  return 0 ;\n\n}"
+---
+

@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n    if (false) {\n        printInt(2);\n    } else {\n        return 1;\n    }\n}"
+---
+

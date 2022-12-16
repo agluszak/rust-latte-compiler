@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* parity of positive integers by recursion */\n\nint main () {\n  printInt(ev(17)) ;\n  return 0 ;\n}\n\nint ev (int y) {\n  if (y > 0)\n    return ev (y-2) ;\n  else\n    if (y < 0)\n      return 0 ;\n    else\n      return 1 ;\n}"
+---
+

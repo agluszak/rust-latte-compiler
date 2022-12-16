@@ -11,6 +11,7 @@ use std::ops::Range;
 
 mod ast;
 mod errors;
+pub mod input;
 mod lexer;
 mod parser;
 mod typechecker;

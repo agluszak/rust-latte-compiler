@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* Test arithmetic and comparisons. */\n\nint main() {\n    int x = 56;\n    int y = -23;\n    printInt(x+y);\n    printInt(x-y);\n    printInt(x*y);\n    printInt(45/2);\n    printInt(78%3);\n    printBool(x-y > x+y);\n    printBool(x/y <= x*y);\n    printString(\"string\"+\" \"+\"concatenation\");\n    return 0 ;\n}\n\nvoid printBool(boolean b) {\n  if (b) {\n    printString(\"true\");\n    return;\n  } else {\n    printString(\"false\");\n    return;\n }\n}"
+---
+

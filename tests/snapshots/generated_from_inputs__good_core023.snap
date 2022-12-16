@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n  int a=1,b=2,c=1,d=2,e=1,f=2,g=1,h=2,i=1,j=2,k=1,l=2,m=1,n=2;\n  return foo(a,b,c,d,e,f,g,h,i,j,k,l,m,n);\n}\n\n\nint foo(int a,int b,int c,int d,int e,int f,int g,\n        int h,int i,int j,int k,int l,int m, int n) {\n\t\n  int r = (2*a+b/2+c+d+e+f+g+h+i+j/2+k+l+m+n)%10;\n  printInt(r);\n  return r;\n}"
+---
+

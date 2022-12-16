@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// count function parameters as initialized\n\nint main() {\n  printInt(fac(5));\n  return 0 ;\n}\n\nint fac (int a) {\n  int r;\n  int n;\n  r = 1;\n  n = a;\n  while (n > 0)\n  {\n    r = r * n;\n    n = n - 1;\n  }\n  return r;\n}\n"
+---
+

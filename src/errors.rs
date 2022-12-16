@@ -8,7 +8,7 @@ pub fn typechecking_reports(
     errs: Vec<TypecheckingError>,
     filename: &str,
 ) -> Vec<Report<(String, Range<usize>)>> {
-    let mut colors = ColorGenerator::new();
+    let color = Color::Red;
 
     errs.into_iter()
         .map(|err| {
@@ -19,22 +19,22 @@ pub fn typechecking_reports(
                 TypecheckingErrorKind::DuplicateArgument(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!("Duplicate argument `{}`", name))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::IncrDecrOnNonInt => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message("Increment/decrement can only be applied to integers")
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::NotCallable(found) => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!("`{}` is not callable", found))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::MissingReturn => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message("Missing return statement")
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::Redeclaration {
                     name,
@@ -44,26 +44,26 @@ pub fn typechecking_reports(
                         report.with_label(
                             Label::new((filename.to_string(), err.location))
                                 .with_message(format!("Redeclaration of a built-in `{}`", name))
-                                .with_color(colors.next()),
+                                .with_color(color),
                         )
                     } else {
                         report
                             .with_label(
                                 Label::new((filename.to_string(), err.location.clone()))
                                     .with_message(format!("Redeclaration of `{}`", name))
-                                    .with_color(colors.next()),
+                                    .with_color(color),
                             )
                             .with_label(
                                 Label::new((filename.to_string(), err.location))
                                     .with_message(format!("Previous declaration of `{}`", name))
-                                    .with_color(colors.next()),
+                                    .with_color(color),
                             )
                     }
                 }
                 TypecheckingErrorKind::UndefinedVariable(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!("Unknown variable `{}`", name))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::TypeMismatch { expected, found } => report.with_label(
                     Label::new((filename.to_string(), err.location))
@@ -76,22 +76,22 @@ pub fn typechecking_reports(
                                 .join(","),
                             found
                         ))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
-                TypecheckingErrorKind::UnkownType(name) => report.with_label(
+                TypecheckingErrorKind::UnknownType(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!("Unknown type `{}`", name))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::VoidReturn => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message("Void functions cannot return a value")
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::VoidVariable => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message("Cannot assign to void variable")
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::WrongArgumentCount { expected, found } => report.with_label(
                     Label::new((filename.to_string(), err.location))
@@ -99,7 +99,7 @@ pub fn typechecking_reports(
                             "Wrong number of arguments: expected {}, found {}",
                             expected, found
                         ))
-                        .with_color(colors.next()),
+                        .with_color(color),
                 ),
                 TypecheckingErrorKind::NoMain => report.with_message("No main function found"),
             };
@@ -145,13 +145,15 @@ pub fn parsing_reports<T: ToString + Hash + Eq>(
                         if err.expected().len() == 0 {
                             "something else".to_string()
                         } else {
-                            err.expected()
+                            let mut expected = err
+                                .expected()
                                 .map(|expected| match expected {
                                     Some(expected) => expected.to_string(),
                                     None => "end of input".to_string(),
                                 })
-                                .collect::<Vec<_>>()
-                                .join(", ")
+                                .collect::<Vec<_>>();
+                            expected.sort();
+                            expected.join(", ")
                         }
                     ))
                     .with_label(

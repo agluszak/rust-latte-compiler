@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* usage of variable initialized in both branches. */\n\nint main () {\n  int x;\n  int y = 56;\n  if (y + 45 <= 2) {\n    x = 1;\n  } else {\n    x = 2;\n  }\n  printInt(x);\n  return 0 ;\n\n}"
+---
+

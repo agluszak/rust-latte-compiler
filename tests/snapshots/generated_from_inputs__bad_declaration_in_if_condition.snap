@@ -1,0 +1,12 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Wysocki 277696\nint main() {\n    if(int i = 0) {\n    }\n    return 0;\n}\n"
+---
+[31mError:[0m Unexpected token in input, expected one of: (, )
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mdeclaration_in_if_condition:3:12[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m3 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mf[0m[38;5;249m([0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[31mi[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m0[0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m{[0m
+ [38;5;246m  ·[0m            [31m┬[0m  
+ [38;5;246m  ·[0m            [31m╰[0m[31m─[0m[31m─[0m Unexpected token [31mi[0m
+[38;5;246m───╯[0m
+
