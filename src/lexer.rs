@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
+use logos::Logos;
+use std::fmt::Display;
+use std::num::ParseIntError;
 use std::ops::Range;
-
-use chumsky::prelude::*;
 
 pub type Span = Range<usize>;
 
@@ -17,226 +17,180 @@ impl<T> Spanned<T> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum LexingError {
+    NumberTooLong,
+    UnexpectedEscape(char),
+    InvalidUnicodeEscape(String),
+    InvalidUnicodeChar(u32),
+    UnclosedEscape,
+    #[default]
+    Other,
+}
+
+impl From<ParseIntError> for LexingError {
+    fn from(_: ParseIntError) -> Self {
+        LexingError::NumberTooLong
+    }
+}
+
+fn escape_str(s: &str) -> Result<String, LexingError> {
+    let mut result = String::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                if let Some(c) = chars.next() {
+                    match c {
+                        'n' => result.push('\n'),
+                        'r' => result.push('\r'),
+                        't' => result.push('\t'),
+                        '0' => result.push('\0'),
+                        '\\' => result.push('\\'),
+                        '"' => result.push('"'),
+                        '\'' => result.push('\''),
+                        'u' => {
+                            let mut code = String::new();
+                            for _ in 0..4 {
+                                if let Some(c) = chars.next() {
+                                    code.push(c);
+                                } else {
+                                    return Err(LexingError::InvalidUnicodeEscape(code));
+                                }
+                            }
+                            let code = u32::from_str_radix(&code, 16)
+                                .map_err(|_| LexingError::InvalidUnicodeEscape(code))?;
+                            result.push(
+                                std::char::from_u32(code)
+                                    .ok_or(LexingError::InvalidUnicodeChar(code))?,
+                            );
+                        }
+                        _ => return Err(LexingError::UnexpectedEscape(c)),
+                    }
+                } else {
+                    return Err(LexingError::UnclosedEscape);
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+    Ok(result)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Logos)]
+#[logos(error = LexingError)]
 pub enum Token {
-    Bool(bool),
-    Num(String),
+    #[token("true")]
+    True,
+    #[token("false")]
+    False,
+    #[regex(r"[0-9]+", |lex| lex.slice().parse())]
+    Num(i64),
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| escape_str(lex.slice()))]
     Str(String),
-    Op(Op),
-    Ctrl(Ctrl),
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
     Ident(String),
+    #[token("if")]
     If,
+    #[token("else")]
     Else,
+    #[token("while")]
     While,
+    #[token("return")]
     Return,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Ctrl {
+    #[token("{")]
     LBrace,
+    #[token("}")]
     RBrace,
+    #[token("(")]
     LParen,
+    #[token(")")]
     RParen,
+    #[token("[")]
     LBracket,
+    #[token("]")]
     RBracket,
+    #[token(",")]
     Comma,
+    #[token(";")]
     Semicolon,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Op {
+    #[token("+")]
     Plus,
+    #[token("-")]
     Minus,
+    #[token("*")]
     Star,
+    #[token("/")]
     Slash,
+    #[token("%")]
     Percent,
+    #[token("!")]
     Bang,
+    #[token("=")]
     Equal,
+    #[token("==")]
     EqualEqual,
+    #[token("!=")]
     BangEqual,
+    #[token("<")]
     Less,
+    #[token("<=")]
     LessEqual,
+    #[token(">")]
     Greater,
+    #[token(">=")]
     GreaterEqual,
+    #[token("&&")]
     AmpersandAmpersand,
+    #[token("||")]
     PipePipe,
+    #[token("++")]
     PlusPlus,
+    #[token("--")]
     MinusMinus,
+    #[regex(r"[ \t\n\f]+", logos::skip)] // whitespace
+    #[regex(r"//[^\n\r]*", logos::skip)] // single line comment
+    #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)] // multi line comment
+    Ignored,
 }
 
-pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
-    // A parser for decimal numbers (only digits)
-    let number = text::digits(10).map(Token::Num).labelled("number");
+pub struct Lexer<'a> {
+    lexer: logos::Lexer<'a, Token>,
+}
 
-    let escape = just('\\').ignore_then(
-        just('\\')
-            .or(just('/'))
-            .or(just('"'))
-            .or(just('b').to('\x08'))
-            .or(just('f').to('\x0C'))
-            .or(just('n').to('\n'))
-            .or(just('r').to('\r'))
-            .or(just('t').to('\t'))
-            .or(just('u').ignore_then(
-                filter(|c: &char| c.is_ascii_hexdigit())
-                    .repeated()
-                    .exactly(4)
-                    .collect::<String>()
-                    .validate(|digits, span, emit| {
-                        char::from_u32(u32::from_str_radix(&digits, 16).unwrap()).unwrap_or_else(
-                            || {
-                                emit(Simple::custom(span, "invalid unicode character"));
-                                '\u{FFFD}' // unicode replacement character
-                            },
-                        )
-                    }),
-            )),
-    );
+impl<'a> Lexer<'a> {
+    pub fn new(input: &'a str) -> Self {
+        Self {
+            lexer: Token::lexer(input),
+        }
+    }
+}
 
-    // A parser for strings (anything between double quotes)
-    let string = just('"')
-        .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
-        .then_ignore(just('"'))
-        .collect::<String>()
-        .map(Token::Str)
-        .labelled("string");
+impl<'input> Iterator for Lexer<'input> {
+    type Item = Result<(usize, Token, usize), Spanned<LexingError>>;
 
-    // A parser for operators
-    let operator = just('+')
-        .then_ignore(just('+'))
-        .to(Op::PlusPlus)
-        .or(just('+').to(Op::Plus))
-        .or(just('-').then_ignore(just('-')).to(Op::MinusMinus))
-        .or(just('-').to(Op::Minus))
-        .or(just('*').to(Op::Star))
-        .or(just('/').to(Op::Slash))
-        .or(just('%').to(Op::Percent))
-        .or(just('!').then_ignore(just('=')).to(Op::BangEqual))
-        .or(just('!').to(Op::Bang))
-        .or(just('=').then_ignore(just('=')).to(Op::EqualEqual))
-        .or(just('=').to(Op::Equal))
-        .or(just('<').then_ignore(just('=')).to(Op::LessEqual))
-        .or(just('<').to(Op::Less))
-        .or(just('>').then_ignore(just('=')).to(Op::GreaterEqual))
-        .or(just('>').to(Op::Greater))
-        .or(just('&').then_ignore(just('&')).to(Op::AmpersandAmpersand))
-        .or(just('|').then_ignore(just('|')).to(Op::PipePipe))
-        .map(Token::Op)
-        .labelled("operator");
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.lexer.next()?;
+        let start = self.lexer.span().start;
+        let end = self.lexer.span().end;
 
-    // A parser for control characters
-    let control = just('{')
-        .to(Ctrl::LBrace)
-        .or(just('}').to(Ctrl::RBrace))
-        .or(just('(').to(Ctrl::LParen))
-        .or(just(')').to(Ctrl::RParen))
-        .or(just('[').to(Ctrl::LBracket))
-        .or(just(']').to(Ctrl::RBracket))
-        .or(just(',').to(Ctrl::Comma))
-        .or(just(';').to(Ctrl::Semicolon))
-        .map(Token::Ctrl)
-        .labelled("control character");
-
-    // A parser for identifiers and keywords
-    let identifier_or_keyword = text::ident()
-        .map(|s: String| match s.as_str() {
-            "true" => Token::Bool(true),
-            "false" => Token::Bool(false),
-            "if" => Token::If,
-            "else" => Token::Else,
-            "while" => Token::While,
-            "return" => Token::Return,
-            _ => Token::Ident(s),
-        })
-        .labelled("identifier or keyword");
-
-    // A single token can be any of the above
-    let token = number
-        .or(string)
-        .or(operator)
-        .or(control)
-        .or(identifier_or_keyword)
-        .recover_with(skip_then_retry_until([]));
-
-    let single_line_comment = just("#")
-        .or(just("//"))
-        .then(take_until(just("\n")))
-        .ignored();
-
-    let multi_line_comment = just("/*").then(take_until(just("*/"))).ignored();
-
-    let comment = single_line_comment
-        .or(multi_line_comment)
-        .padded()
-        .labelled("comment");
-
-    token
-        .map_with_span(|tok, span| (tok, span))
-        .padded_by(comment.repeated())
-        .padded()
-        .repeated()
+        Some(
+            token
+                .map(|token| (start, token, end))
+                .map_err(|err| Spanned::new(start..end, err)),
+        )
+    }
 }
 
 impl Display for Token {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Token::Bool(b) => write!(f, "{}", b),
-            Token::Num(n) => write!(f, "{}", n),
-            Token::Str(s) => write!(f, "\"{}\"", s),
-            Token::Op(op) => write!(f, "{}", op),
-            Token::Ctrl(ctrl) => write!(f, "{}", ctrl),
-            Token::Ident(ident) => write!(f, "{}", ident),
-            Token::If => write!(f, "if"),
-            Token::Else => write!(f, "else"),
-            Token::While => write!(f, "while"),
-            Token::Return => write!(f, "return"),
-        }
-    }
-}
-
-impl Display for Op {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Op::Plus => write!(f, "+"),
-            Op::Minus => write!(f, "-"),
-            Op::Star => write!(f, "*"),
-            Op::Slash => write!(f, "/"),
-            Op::Percent => write!(f, "%"),
-            Op::Bang => write!(f, "!"),
-            Op::Equal => write!(f, "="),
-            Op::EqualEqual => write!(f, "=="),
-            Op::BangEqual => write!(f, "!="),
-            Op::Less => write!(f, "<"),
-            Op::LessEqual => write!(f, "<="),
-            Op::Greater => write!(f, ">"),
-            Op::GreaterEqual => write!(f, ">="),
-            Op::AmpersandAmpersand => write!(f, "&&"),
-            Op::PipePipe => write!(f, "||"),
-            Op::PlusPlus => write!(f, "++"),
-            Op::MinusMinus => write!(f, "--"),
-        }
-    }
-}
-
-impl Display for Ctrl {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Ctrl::LBrace => write!(f, "{{"),
-            Ctrl::RBrace => write!(f, "}}"),
-            Ctrl::LParen => write!(f, "("),
-            Ctrl::RParen => write!(f, ")"),
-            Ctrl::LBracket => write!(f, "["),
-            Ctrl::RBracket => write!(f, "]"),
-            Ctrl::Comma => write!(f, ","),
-            Ctrl::Semicolon => write!(f, ";"),
-        }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chumsky::stream::Stream;
 
     macro_rules! lexer_tests {
             ($($name:ident),*) => {
@@ -244,8 +198,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let input = include_str!(concat!("../inputs/", stringify!($name), ".lat"));
-                    let stream = Stream::from(input);
-                    let tokens = lexer().parse(stream);
+                    let tokens = Lexer::new(input).collect::<Vec<_>>();
 
                     insta::with_settings!({
                         description => input,

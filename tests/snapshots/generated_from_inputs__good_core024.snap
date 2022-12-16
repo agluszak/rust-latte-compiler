@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n  f(1,2);\n  return 0;\n}\n\nvoid f(int x, int y) {\n  if (y > x || e())\n    printString(\"yes\");\n}\n\nboolean e() {\n  printString(\"NOOO\");\n  return false;\n  }\n\n"
+---
+

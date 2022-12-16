@@ -1,0 +1,12 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// 1 instead of 2 arguments\n\nint main() {\n\tint x = foo(1);\n\treturn 0 ;\n}\n\nint foo(int y,int z) {\n return y;\n}\n\n"
+---
+[31mError:[0m Type error
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad018:4:10[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m4 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mx[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[31mf[0m[31mo[0m[31mo[0m[38;5;249m([0m[38;5;249m1[0m[38;5;249m)[0m[38;5;249m;[0m
+ [38;5;246m  ·[0m             [31m─[0m[31m┬[0m[31m─[0m  
+ [38;5;246m  ·[0m              [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Wrong number of arguments: expected 2, found 1
+[38;5;246m───╯[0m
+

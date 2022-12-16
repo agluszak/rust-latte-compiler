@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Testing the return checker\n\nint f () {\n   if (true)\n     return 0;\n   else\n     {}\n}\n\nint g () {\n  if (false) \n      {}\n  else\n      return 0;\n}\n\nvoid p () {}\n  \n\nint main() {\n  p();\n  return 0;\n}\n"
+---
+

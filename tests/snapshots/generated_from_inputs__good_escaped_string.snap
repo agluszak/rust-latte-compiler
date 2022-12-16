@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Autor: Bolek Kulbabinski\n\nint f(int p){\n    int c = p + 2*p;\n    printString(\"\\\"\\npop\\npowrot:\\ngetstatic java/lang/System/out Ljava/io/PrintStream;\\nldc \\\"zle \\\"\\ninvokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\\ngoto powrot\\nldc \\\"\");\n    return c;\n}\n\nint main() {\n    return f(1) - 3;\n}\n\n"
+---
+

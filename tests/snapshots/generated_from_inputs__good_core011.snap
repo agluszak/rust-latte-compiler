@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* Test pushing -1. */\n\nint main() {\n  printInt(-1);\n  return 0 ;\n}"
+---
+

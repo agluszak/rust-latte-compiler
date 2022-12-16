@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* test input */\n\nint main() {\n  int x = readInt();\n  string y = readString();\n  string z = readString();\n\n  printInt(x-5);\n  printString(y+z);  \n  return 0 ;\n}"
+---
+

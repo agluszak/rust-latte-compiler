@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "/* Fibonacci. */\n\nint main () {\n  int lo,hi,mx ;\n  lo = 1 ;\n  hi = lo ;\n  mx = 5000000 ;\n  printInt(lo) ;\n  while (hi < mx) {\n    printInt(hi) ;\n    hi = lo + hi ;\n    lo = hi - lo ;\n  }\n  return 0 ;\n\n}\n\n"
+---
+

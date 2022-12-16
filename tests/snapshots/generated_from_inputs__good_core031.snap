@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main()\n{\n   printInt(f(1,-1));\n   return 0;\n}\n\nint f(int a, int b) {\n  if((a>0 &&b >0) || (a<0 && b <0)) {return 7;} else {return 42;}\n}  \n"
+---
+

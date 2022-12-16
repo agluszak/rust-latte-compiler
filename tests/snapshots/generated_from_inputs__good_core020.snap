@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n    p();\n    printInt(1);\n    return 0;\n}\n\nvoid p() {}\n"
+---
+

@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int d() { return 0;}\nint s(int x) {return x + 1;}\nint main() {\n   printInt(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(d()))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));\n  return 0;\n}\n"
+---
+

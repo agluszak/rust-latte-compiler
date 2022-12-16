@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// declaration and initialization in same statement\n\nint main() {\n int x = 7;\n printInt(x);\n return 0 ;\n\n}"
+---
+

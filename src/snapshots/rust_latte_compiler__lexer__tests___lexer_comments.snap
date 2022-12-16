@@ -2,37 +2,61 @@
 source: src/lexer.rs
 description: "1 + # comment\n// /* comment */\n// comment\n2 /* comment */ == 3 /*\nprobably\n*/"
 ---
-Ok(
-    [
+[
+    Ok(
         (
+            0,
             Num(
-                "1",
+                1,
             ),
-            0..1,
+            1,
         ),
+    ),
+    Ok(
         (
-            Op(
-                Plus,
+            2,
+            Plus,
+            3,
+        ),
+    ),
+    Err(
+        Spanned {
+            span: 4..5,
+            value: Other,
+        },
+    ),
+    Ok(
+        (
+            6,
+            Ident(
+                "comment",
             ),
-            2..3,
+            13,
         ),
+    ),
+    Ok(
         (
+            42,
             Num(
-                "2",
+                2,
             ),
-            42..43,
+            43,
         ),
+    ),
+    Ok(
         (
-            Op(
-                EqualEqual,
-            ),
-            58..60,
+            58,
+            EqualEqual,
+            60,
         ),
+    ),
+    Ok(
         (
+            61,
             Num(
-                "3",
+                3,
             ),
-            61..62,
+            62,
         ),
-    ],
-)
+    ),
+]

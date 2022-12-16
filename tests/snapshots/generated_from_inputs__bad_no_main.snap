@@ -1,0 +1,6 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Biczel 277568\nint f() {\n  return 0;\n}"
+---
+[31mError:[0m No main function found
+

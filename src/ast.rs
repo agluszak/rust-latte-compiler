@@ -132,7 +132,7 @@ where
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for def in &self.0 {
-            write!(f, "{}", def)?;
+            write!(f, "{def}")?;
         }
         Ok(())
     }
@@ -145,16 +145,16 @@ impl Display for Stmt {
             Stmt::Block(stmts) => {
                 write!(f, "{{")?;
                 for stmt in &stmts.value.0 {
-                    write!(f, "{}", stmt)?;
+                    write!(f, "{stmt}")?;
                 }
                 write!(f, "}}")
             }
             Stmt::Assignment {
                 target: ident,
                 expr,
-            } => write!(f, "{} = {};", ident, expr),
+            } => write!(f, "{ident} = {expr};"),
             Stmt::Return(expr) => match expr {
-                Some(expr) => write!(f, "return {};", expr),
+                Some(expr) => write!(f, "return {expr};"),
                 None => write!(f, "return;"),
             },
             Stmt::If {
@@ -162,17 +162,17 @@ impl Display for Stmt {
                 then,
                 otherwise,
             } => {
-                write!(f, "if ({}) {}", cond, then)?;
+                write!(f, "if ({cond}) {then}")?;
                 if let Some(otherwise) = otherwise {
-                    write!(f, " else {}", otherwise)?;
+                    write!(f, " else {otherwise}")?;
                 }
                 Ok(())
             }
-            Stmt::While { cond, body } => write!(f, "while ({}) {}", cond, body),
-            Stmt::Expr(expr) => write!(f, "{};", expr),
-            Stmt::Incr(expr) => write!(f, "{}++;", expr),
-            Stmt::Decr(expr) => write!(f, "{}--;", expr),
-            Stmt::Decl(decl) => write!(f, "{}", decl),
+            Stmt::While { cond, body } => write!(f, "while ({cond}) {body}"),
+            Stmt::Expr(expr) => write!(f, "{expr};"),
+            Stmt::Incr(expr) => write!(f, "{expr}++;"),
+            Stmt::Decr(expr) => write!(f, "{expr}--;"),
+            Stmt::Decl(decl) => write!(f, "{decl}"),
         }
     }
 }
@@ -181,12 +181,12 @@ impl Display for Decl {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Decl::Var { ty, items } => {
-                write!(f, "{} ", ty)?;
+                write!(f, "{ty} ")?;
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    write!(f, "{item}")?;
                 }
                 write!(f, ";")
             }
@@ -196,16 +196,16 @@ impl Display for Decl {
                 args,
                 body,
             } => {
-                write!(f, "{} {}(", ty, ident)?;
+                write!(f, "{ty} {ident}(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", arg)?;
+                    write!(f, "{arg}")?;
                 }
                 write!(f, ") {{")?;
                 for stmt in &body.value.0 {
-                    write!(f, "{}", stmt)?;
+                    write!(f, "{stmt}")?;
                 }
                 write!(f, "}}")
             }
@@ -217,17 +217,17 @@ impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Expr::Error => write!(f, "error"),
-            Expr::Variable(ident) => write!(f, "{}", ident),
-            Expr::Literal(lit) => write!(f, "{}", lit),
-            Expr::Binary { lhs, op, rhs } => write!(f, "({} {} {})", lhs, op, rhs),
-            Expr::Unary { op, expr } => write!(f, "({}{})", op, expr),
+            Expr::Variable(ident) => write!(f, "{ident}"),
+            Expr::Literal(lit) => write!(f, "{lit}"),
+            Expr::Binary { lhs, op, rhs } => write!(f, "({lhs} {op} {rhs})"),
+            Expr::Unary { op, expr } => write!(f, "({op}{expr})"),
             Expr::Application { target, args } => {
-                write!(f, "{}(", target)?;
+                write!(f, "{target}(")?;
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", arg)?;
+                    write!(f, "{arg}")?;
                 }
                 write!(f, ")")
             }
@@ -238,9 +238,9 @@ impl Display for Expr {
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Literal::Int(i) => write!(f, "{}", i),
-            Literal::String(s) => write!(f, "\"{}\"", s),
-            Literal::Bool(b) => write!(f, "{}", b),
+            Literal::Int(i) => write!(f, "{i}"),
+            Literal::String(s) => write!(f, "\"{s}\""),
+            Literal::Bool(b) => write!(f, "{b}"),
         }
     }
 }
@@ -284,7 +284,7 @@ impl Display for Item {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
         if let Some(init) = &self.init {
-            write!(f, " = {}", init)?;
+            write!(f, " = {init}")?;
         }
         Ok(())
     }

@@ -3,236 +3,233 @@ source: src/parser.rs
 description: "void main() {\n    if (a) {\n        b;\n    } else {\n        while (true) {\n            int test;\n            int test2 = 3, test8;\n            int x() {}\n            c;\n        }\n    }\n}"
 ---
 Ok(
-    Spanned {
-        span: 0..185,
-        value: Program(
-            [
-                Spanned {
-                    span: 0..185,
-                    value: Fn {
-                        return_type: Spanned {
-                            span: 0..4,
-                            value: Type(
-                                "void",
-                            ),
-                        },
-                        name: Spanned {
-                            span: 5..9,
-                            value: Ident(
-                                "main",
-                            ),
-                        },
-                        args: [],
-                        body: Spanned {
-                            span: 12..185,
-                            value: Block(
-                                [
-                                    Spanned {
-                                        span: 18..183,
-                                        value: If {
-                                            cond: Spanned {
-                                                span: 22..23,
-                                                value: Variable(
-                                                    Ident(
-                                                        "a",
-                                                    ),
+    Program(
+        [
+            Spanned {
+                span: 0..185,
+                value: Fn {
+                    return_type: Spanned {
+                        span: 0..4,
+                        value: Type(
+                            "void",
+                        ),
+                    },
+                    name: Spanned {
+                        span: 5..9,
+                        value: Ident(
+                            "main",
+                        ),
+                    },
+                    args: [],
+                    body: Spanned {
+                        span: 12..185,
+                        value: Block(
+                            [
+                                Spanned {
+                                    span: 18..183,
+                                    value: If {
+                                        cond: Spanned {
+                                            span: 22..23,
+                                            value: Variable(
+                                                Ident(
+                                                    "a",
                                                 ),
-                                            },
-                                            then: Spanned {
-                                                span: 25..43,
+                                            ),
+                                        },
+                                        then: Spanned {
+                                            span: 25..43,
+                                            value: Block(
+                                                Spanned {
+                                                    span: 25..43,
+                                                    value: Block(
+                                                        [
+                                                            Spanned {
+                                                                span: 35..37,
+                                                                value: Expr(
+                                                                    Spanned {
+                                                                        span: 35..36,
+                                                                        value: Variable(
+                                                                            Ident(
+                                                                                "b",
+                                                                            ),
+                                                                        ),
+                                                                    },
+                                                                ),
+                                                            },
+                                                        ],
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                        otherwise: Some(
+                                            Spanned {
+                                                span: 49..183,
                                                 value: Block(
                                                     Spanned {
-                                                        span: 25..43,
+                                                        span: 49..183,
                                                         value: Block(
                                                             [
                                                                 Spanned {
-                                                                    span: 35..37,
-                                                                    value: Expr(
-                                                                        Spanned {
-                                                                            span: 35..36,
-                                                                            value: Variable(
-                                                                                Ident(
-                                                                                    "b",
+                                                                    span: 59..177,
+                                                                    value: While {
+                                                                        cond: Spanned {
+                                                                            span: 66..70,
+                                                                            value: Literal(
+                                                                                Bool(
+                                                                                    true,
                                                                                 ),
                                                                             ),
                                                                         },
-                                                                    ),
+                                                                        body: Spanned {
+                                                                            span: 72..177,
+                                                                            value: Block(
+                                                                                Spanned {
+                                                                                    span: 72..177,
+                                                                                    value: Block(
+                                                                                        [
+                                                                                            Spanned {
+                                                                                                span: 86..95,
+                                                                                                value: Decl(
+                                                                                                    Spanned {
+                                                                                                        span: 86..95,
+                                                                                                        value: Var {
+                                                                                                            ty: Spanned {
+                                                                                                                span: 86..89,
+                                                                                                                value: Type(
+                                                                                                                    "int",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            items: [
+                                                                                                                Spanned {
+                                                                                                                    span: 90..94,
+                                                                                                                    value: Item {
+                                                                                                                        ident: Spanned {
+                                                                                                                            span: 90..94,
+                                                                                                                            value: Ident(
+                                                                                                                                "test",
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                        init: None,
+                                                                                                                    },
+                                                                                                                },
+                                                                                                            ],
+                                                                                                        },
+                                                                                                    },
+                                                                                                ),
+                                                                                            },
+                                                                                            Spanned {
+                                                                                                span: 108..129,
+                                                                                                value: Decl(
+                                                                                                    Spanned {
+                                                                                                        span: 108..129,
+                                                                                                        value: Var {
+                                                                                                            ty: Spanned {
+                                                                                                                span: 108..111,
+                                                                                                                value: Type(
+                                                                                                                    "int",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            items: [
+                                                                                                                Spanned {
+                                                                                                                    span: 112..121,
+                                                                                                                    value: Item {
+                                                                                                                        ident: Spanned {
+                                                                                                                            span: 112..117,
+                                                                                                                            value: Ident(
+                                                                                                                                "test2",
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                        init: Some(
+                                                                                                                            Spanned {
+                                                                                                                                span: 120..121,
+                                                                                                                                value: Literal(
+                                                                                                                                    Int(
+                                                                                                                                        3,
+                                                                                                                                    ),
+                                                                                                                                ),
+                                                                                                                            },
+                                                                                                                        ),
+                                                                                                                    },
+                                                                                                                },
+                                                                                                                Spanned {
+                                                                                                                    span: 123..128,
+                                                                                                                    value: Item {
+                                                                                                                        ident: Spanned {
+                                                                                                                            span: 123..128,
+                                                                                                                            value: Ident(
+                                                                                                                                "test8",
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                        init: None,
+                                                                                                                    },
+                                                                                                                },
+                                                                                                            ],
+                                                                                                        },
+                                                                                                    },
+                                                                                                ),
+                                                                                            },
+                                                                                            Spanned {
+                                                                                                span: 142..152,
+                                                                                                value: Decl(
+                                                                                                    Spanned {
+                                                                                                        span: 142..152,
+                                                                                                        value: Fn {
+                                                                                                            return_type: Spanned {
+                                                                                                                span: 142..145,
+                                                                                                                value: Type(
+                                                                                                                    "int",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            name: Spanned {
+                                                                                                                span: 146..147,
+                                                                                                                value: Ident(
+                                                                                                                    "x",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            args: [],
+                                                                                                            body: Spanned {
+                                                                                                                span: 150..152,
+                                                                                                                value: Block(
+                                                                                                                    [],
+                                                                                                                ),
+                                                                                                            },
+                                                                                                        },
+                                                                                                    },
+                                                                                                ),
+                                                                                            },
+                                                                                            Spanned {
+                                                                                                span: 165..167,
+                                                                                                value: Expr(
+                                                                                                    Spanned {
+                                                                                                        span: 165..166,
+                                                                                                        value: Variable(
+                                                                                                            Ident(
+                                                                                                                "c",
+                                                                                                            ),
+                                                                                                        ),
+                                                                                                    },
+                                                                                                ),
+                                                                                            },
+                                                                                        ],
+                                                                                    ),
+                                                                                },
+                                                                            ),
+                                                                        },
+                                                                    },
                                                                 },
                                                             ],
                                                         ),
                                                     },
                                                 ),
                                             },
-                                            otherwise: Some(
-                                                Spanned {
-                                                    span: 49..183,
-                                                    value: Block(
-                                                        Spanned {
-                                                            span: 49..183,
-                                                            value: Block(
-                                                                [
-                                                                    Spanned {
-                                                                        span: 59..177,
-                                                                        value: While {
-                                                                            cond: Spanned {
-                                                                                span: 66..70,
-                                                                                value: Literal(
-                                                                                    Bool(
-                                                                                        true,
-                                                                                    ),
-                                                                                ),
-                                                                            },
-                                                                            body: Spanned {
-                                                                                span: 72..177,
-                                                                                value: Block(
-                                                                                    Spanned {
-                                                                                        span: 72..177,
-                                                                                        value: Block(
-                                                                                            [
-                                                                                                Spanned {
-                                                                                                    span: 86..95,
-                                                                                                    value: Decl(
-                                                                                                        Spanned {
-                                                                                                            span: 86..95,
-                                                                                                            value: Var {
-                                                                                                                ty: Spanned {
-                                                                                                                    span: 86..89,
-                                                                                                                    value: Type(
-                                                                                                                        "int",
-                                                                                                                    ),
-                                                                                                                },
-                                                                                                                items: [
-                                                                                                                    Spanned {
-                                                                                                                        span: 90..94,
-                                                                                                                        value: Item {
-                                                                                                                            ident: Spanned {
-                                                                                                                                span: 90..94,
-                                                                                                                                value: Ident(
-                                                                                                                                    "test",
-                                                                                                                                ),
-                                                                                                                            },
-                                                                                                                            init: None,
-                                                                                                                        },
-                                                                                                                    },
-                                                                                                                ],
-                                                                                                            },
-                                                                                                        },
-                                                                                                    ),
-                                                                                                },
-                                                                                                Spanned {
-                                                                                                    span: 108..129,
-                                                                                                    value: Decl(
-                                                                                                        Spanned {
-                                                                                                            span: 108..129,
-                                                                                                            value: Var {
-                                                                                                                ty: Spanned {
-                                                                                                                    span: 108..111,
-                                                                                                                    value: Type(
-                                                                                                                        "int",
-                                                                                                                    ),
-                                                                                                                },
-                                                                                                                items: [
-                                                                                                                    Spanned {
-                                                                                                                        span: 112..121,
-                                                                                                                        value: Item {
-                                                                                                                            ident: Spanned {
-                                                                                                                                span: 112..117,
-                                                                                                                                value: Ident(
-                                                                                                                                    "test2",
-                                                                                                                                ),
-                                                                                                                            },
-                                                                                                                            init: Some(
-                                                                                                                                Spanned {
-                                                                                                                                    span: 120..121,
-                                                                                                                                    value: Literal(
-                                                                                                                                        Int(
-                                                                                                                                            3,
-                                                                                                                                        ),
-                                                                                                                                    ),
-                                                                                                                                },
-                                                                                                                            ),
-                                                                                                                        },
-                                                                                                                    },
-                                                                                                                    Spanned {
-                                                                                                                        span: 123..128,
-                                                                                                                        value: Item {
-                                                                                                                            ident: Spanned {
-                                                                                                                                span: 123..128,
-                                                                                                                                value: Ident(
-                                                                                                                                    "test8",
-                                                                                                                                ),
-                                                                                                                            },
-                                                                                                                            init: None,
-                                                                                                                        },
-                                                                                                                    },
-                                                                                                                ],
-                                                                                                            },
-                                                                                                        },
-                                                                                                    ),
-                                                                                                },
-                                                                                                Spanned {
-                                                                                                    span: 142..152,
-                                                                                                    value: Decl(
-                                                                                                        Spanned {
-                                                                                                            span: 142..152,
-                                                                                                            value: Fn {
-                                                                                                                return_type: Spanned {
-                                                                                                                    span: 142..145,
-                                                                                                                    value: Type(
-                                                                                                                        "int",
-                                                                                                                    ),
-                                                                                                                },
-                                                                                                                name: Spanned {
-                                                                                                                    span: 146..147,
-                                                                                                                    value: Ident(
-                                                                                                                        "x",
-                                                                                                                    ),
-                                                                                                                },
-                                                                                                                args: [],
-                                                                                                                body: Spanned {
-                                                                                                                    span: 150..152,
-                                                                                                                    value: Block(
-                                                                                                                        [],
-                                                                                                                    ),
-                                                                                                                },
-                                                                                                            },
-                                                                                                        },
-                                                                                                    ),
-                                                                                                },
-                                                                                                Spanned {
-                                                                                                    span: 165..167,
-                                                                                                    value: Expr(
-                                                                                                        Spanned {
-                                                                                                            span: 165..166,
-                                                                                                            value: Variable(
-                                                                                                                Ident(
-                                                                                                                    "c",
-                                                                                                                ),
-                                                                                                            ),
-                                                                                                        },
-                                                                                                    ),
-                                                                                                },
-                                                                                            ],
-                                                                                        ),
-                                                                                    },
-                                                                                ),
-                                                                            },
-                                                                        },
-                                                                    },
-                                                                ],
-                                                            ),
-                                                        },
-                                                    ),
-                                                },
-                                            ),
-                                        },
+                                        ),
                                     },
-                                ],
-                            ),
-                        },
+                                },
+                            ],
+                        ),
                     },
                 },
-            ],
-        ),
-    },
+            },
+        ],
+    ),
 )

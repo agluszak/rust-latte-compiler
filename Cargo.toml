@@ -5,10 +5,14 @@ edition = "2021"
 
 [dependencies]
 ariadne = "0.1"
-chumsky = "0.8"
+lalrpop-util = { version = "0.19", features = ["lexer"] }
+logos = { git = "https://github.com/agluszak/logos.git", branch = "private" }
 
 [dev-dependencies]
 insta = "1"
+
+[build-dependencies]
+lalrpop = "0.19"
 
 [profile.dev.package.insta]
 opt-level = 3

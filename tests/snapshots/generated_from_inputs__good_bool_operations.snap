@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "// Author: Tomasz Wysocki 277696\nint main() {\n    b(t(1) && f(2));\n    b(t(3) && t(4));\n    b(t(5) || t(6));\n    b(f(7) && t(8));\n    b(t(9) && t(10) && t(11));\n    b(f(12) || f(13) && t(14));\n    return 0;\n}\n\nboolean f(int a) {\n    printInt(a);\n    return false;\n}\nboolean t(int a) {\n    return !f(a);\n}\nvoid b(boolean a) {\n    if(a)\n        printString(\"true\");\n    else\n        printString(\"false\");\n}\n"
+---
+

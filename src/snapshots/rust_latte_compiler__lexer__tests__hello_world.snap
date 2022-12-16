@@ -2,89 +2,113 @@
 source: src/lexer.rs
 description: "// Hello world\n\nint main () {\n  printString(\"hello world\") ;\n  return 0 ;\n}"
 ---
-Ok(
-    [
+[
+    Ok(
         (
+            16,
             Ident(
                 "int",
             ),
-            16..19,
+            19,
         ),
+    ),
+    Ok(
         (
+            20,
             Ident(
                 "main",
             ),
-            20..24,
+            24,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                LParen,
-            ),
-            25..26,
+            25,
+            LParen,
+            26,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                RParen,
-            ),
-            26..27,
+            26,
+            RParen,
+            27,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                LBrace,
-            ),
-            28..29,
+            28,
+            LBrace,
+            29,
         ),
+    ),
+    Ok(
         (
+            32,
             Ident(
                 "printString",
             ),
-            32..43,
+            43,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                LParen,
-            ),
-            43..44,
+            43,
+            LParen,
+            44,
         ),
+    ),
+    Ok(
         (
+            44,
             Str(
-                "hello world",
+                "\"hello world\"",
             ),
-            44..57,
+            57,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                RParen,
-            ),
-            57..58,
+            57,
+            RParen,
+            58,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                Semicolon,
-            ),
-            59..60,
+            59,
+            Semicolon,
+            60,
         ),
+    ),
+    Ok(
         (
+            63,
             Return,
-            63..69,
+            69,
         ),
+    ),
+    Ok(
         (
+            70,
             Num(
-                "0",
+                0,
             ),
-            70..71,
+            71,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                Semicolon,
-            ),
-            72..73,
+            72,
+            Semicolon,
+            73,
         ),
+    ),
+    Ok(
         (
-            Ctrl(
-                RBrace,
-            ),
-            74..75,
+            74,
+            RBrace,
+            75,
         ),
-    ],
-)
+    ),
+]

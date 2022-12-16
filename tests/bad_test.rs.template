@@ -1,0 +1,7 @@
+#[test]
+fn bad_{name}() {{
+    let input_str = include_str!("{path}");
+    let input = Input::new(input_str.to_string(), "{path}".to_string());
+    let name = "{name}";
+    bad_test!(input, name);
+}}
