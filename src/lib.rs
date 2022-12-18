@@ -14,6 +14,7 @@ mod errors;
 pub mod input;
 mod lexer;
 mod parser;
+mod parser2;
 mod typechecker;
 
 pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)>> {

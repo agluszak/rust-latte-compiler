@@ -1,0 +1,338 @@
+use std::str::FromStr;
+use crate::lexer::Spanned;
+use crate::ast::*;
+
+grammar;
+
+//-- programs ------------------------------------------------
+//
+//entrypoints Program ;
+//
+//Program.   Program ::= [TopDef] ;
+//
+//FnDef.	   TopDef ::= Type Ident "(" [Arg] ")" Block ;
+//
+//separator nonempty TopDef "" ;
+//
+//Arg. 	   Arg ::= Type Ident;
+//
+//separator  Arg "," ;
+//
+//-- statements ----------------------------------------------
+//
+//Block.     Block ::= "{" [Stmt] "}" ;
+//
+//separator  Stmt "" ;
+//
+//Empty.     Stmt ::= ";" ;
+//
+//BStmt.     Stmt ::= Block ;
+//
+//Decl.      Stmt ::= Type [Item] ";" ;
+//
+//NoInit.    Item ::= Ident ;
+//
+//Init.      Item ::= Ident "=" Expr ;
+//
+//separator nonempty Item "," ;
+//
+//Ass.       Stmt ::= Ident "=" Expr  ";" ;
+//
+//Incr.      Stmt ::= Ident "++"  ";" ;
+//
+//Decr.      Stmt ::= Ident "--"  ";" ;
+//
+//Ret.       Stmt ::= "return" Expr ";" ;
+//
+//VRet.      Stmt ::= "return" ";" ;
+//
+//Cond.      Stmt ::= "if" "(" Expr ")" Stmt  ;
+//
+//CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
+//
+//While.     Stmt ::= "while" "(" Expr ")" Stmt ;
+//
+//SExp.      Stmt ::= Expr  ";" ;
+//
+//-- Types ---------------------------------------------------
+//
+//Int.       Type ::= "int" ;
+//
+//Str.       Type ::= "string" ;
+//
+//Bool.      Type ::= "boolean" ;
+//
+//Void.      Type ::= "void" ;
+//
+//internal   Fun. Type ::= Type "(" [Type] ")" ;
+//
+//separator  Type "," ;
+//
+//-- Expressions ---------------------------------------------
+//
+//EVar.      Expr6 ::= Ident ;
+//
+//ELitInt.   Expr6 ::= Integer ;
+//
+//ELitTrue.  Expr6 ::= "true" ;
+//
+//ELitFalse. Expr6 ::= "false" ;
+//
+//EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+//
+//EString.   Expr6 ::= String ;
+//
+//Neg.       Expr5 ::= "-" Expr6 ;
+//
+//Not.       Expr5 ::= "!" Expr6 ;
+//
+//EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
+//
+//EAdd.      Expr3 ::= Expr3 AddOp Expr4 ;
+//
+//ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
+//
+//EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
+//
+//EOr.       Expr ::= Expr1 "||" Expr ;
+//
+//coercions  Expr 6 ;
+//
+//separator  Expr "," ;
+//
+//-- operators -----------------------------------------------
+//
+//Plus.      AddOp ::= "+" ;
+//
+//Minus.     AddOp ::= "-" ;
+//
+//Times.     MulOp ::= "*" ;
+//
+//Div.       MulOp ::= "/" ;
+//
+//Mod.       MulOp ::= "%" ;
+//
+//LTH.       RelOp ::= "<" ;
+//
+//LE.        RelOp ::= "<=" ;
+//
+//GTH.       RelOp ::= ">" ;
+//
+//GE.        RelOp ::= ">=" ;
+//
+//EQU.       RelOp ::= "==" ;
+//
+//NE.        RelOp ::= "!=" ;
+//
+//-- comments ------------------------------------------------
+//
+//comment    "#" ;
+//
+//comment    "//" ;
+//
+//comment    "/*" "*/" ;
+
+pub Program = Decl*;
+
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+} else {
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => IdentString,
+    r"[0-9]+" => IntegerString,
+} else {
+    r#"([^"\\]|\\[\\'"bfnrt]|\\u[0-9a-fA-F]{4})*"# => StringString,
+    _
+}
+
+Comma<Rule>: Vec<Rule> = {
+    <mut v:(<Rule> ",")*> <e:Rule?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+
+CommaNonEmpty<Rule>: Vec<Rule> = {
+    <mut v:(<Rule> ",")*> <e:Rule> => {
+        v.push(e);
+        v
+    }
+};
+
+Spanned<Rule>: Spanned<Rule> =
+    <l: @L> <rule: Rule> <r: @R> =>
+        Spanned::new(l..r, rule);
+
+
+Type: Type = <s:IdentString> => Type(s.to_string());
+
+Ident: Ident = <s:IdentString> => Ident(s.to_string());
+
+Block: Block = "{" <stmts: Spanned<Stmt>*> "}" => Block(stmts);
+
+Item: Idem = {
+    <ident:Spanned<Ident>> "=" <e:Spanned<Expr>> => Item {
+          ident,
+          init: Some(e),
+     },
+    <ident:Spanned<Ident>> => Item {
+          ident,
+          init: None,
+     },
+};
+
+Arg: Arg = <ty:Spanned<Type>> <name:Spanned<Ident>> => Arg { ty, name };
+
+Decl: Decl = {
+    <ty: Spanned<Type>> <items: CommaNonEmpty<Spanned<Item>>> ";" => Decl::Var {
+        ty,
+        items,
+    },
+    <return_type: Spanned<Type>> <name: Spanned<Ident>> "(" <args: Comma<Spanned<Arg>>> ")" <body: Spanned<Block>> => Decl::Fn {
+          return_type,
+          name,
+          args,
+          body,
+     },
+};
+
+Stmt = Stmt_<"I">; // Handle dangling elses
+
+Stmt_<I>: Stmt = {
+    ";" => Stmt::Empty,
+    <b:Spanned<Block>> => Stmt::Block(b),
+    <target:Spanned<Ident>> "=" <expr:Spanned<Expr>> ";" => Stmt::Assignment { target, expr },
+    "return" <expr:Spanned<Expr>> ";" => Stmt::Return(Some(expr)),
+    "return" ";" => Stmt::Return(None),
+    "if" "(" <cond:Spanned<Expr>> ")" <then:Spanned<Stmt_<"I">>> if I != "" => Stmt::If { cond, then: Box::new(then), otherwise: None },
+    "if" "(" <cond:Spanned<Expr>> ")" <then:Spanned<Stmt_<"">>> "else" <otherwise:Spanned<Stmt_<I>>> =>
+         Stmt::If { cond, then: Box::new(then), otherwise: Some(Box::new(otherwise)) },
+    "while" "(" <cond:Spanned<Expr>> ")" <body:Spanned<Stmt_<I>>> => Stmt::While { cond, body: Box::new(body) },
+    <e:Spanned<Expr>> ";" => Stmt::Expr(e),
+    <target:Spanned<Expr>> "++" => Stmt::Incr(target),
+    <target:Spanned<Expr>> "--" => Stmt::Decr(target),
+
+};
+
+BinaryTier<Op, NextTier>: Expr = {
+    <lhs:Spanned<BinaryTier<Op, NextTier>>> <op:Spanned<Op>> <rhs:Spanned<NextTier>> => Expr::Binary {
+          op: lhs.value.op,
+          lhs: Box::new(lhs),
+          rhs: Box::new(rhs),
+     },
+    <e:NextTier> => e
+};
+
+UnaryTier<NextTier>: Expr = {
+    <op:Spanned<UnaryOp>> <e:Spanned<UnaryTier<NextTier>>> => Expr::Unary { op, expr: Box::new(e) },
+    <e:NextTier> => e,
+};
+
+Expr = LogicalOr;
+LogicalOr = BinaryTier<LogicalOrOp, LogicalAnd>;
+LogicalAnd = BinaryTier<LogicalAndOp, Comparison>;
+Comparison = BinaryTier<ComparisonOp, Sum>;
+Sum = BinaryTier<SumOp, Product>;
+Product = BinaryTier<ProductOp, Term>;
+//Unary = UnaryTier<Term>;
+
+UnaryOp: UnaryOp = {
+    "-" => UnaryOp::Neg,
+    "!" => UnaryOp::Not,
+};
+
+ProductOp: BinaryOp = {
+    "*" => BinaryOp::Mul,
+    "/" => BinaryOp::Div,
+    "%" => BinaryOp::Mod,
+};
+
+SumOp: BinaryOp = {
+    "+" => BinaryOp::Add,
+    "-" => BinaryOp::Sub,
+};
+
+ComparisonOp: BinaryOp = {
+    "<" => BinaryOp::Lt,
+    "<=" => BinaryOp::Lte,
+    ">" => BinaryOp::Gt,
+    ">=" => BinaryOp::Gte,
+    "==" => BinaryOp::Eq,
+    "!=" => BinaryOp::Neq,
+};
+
+LogicalAndOp: BinaryOp = {
+    "&&" => BinaryOp::And,
+};
+
+LogicalOrOp: BinaryOp = {
+    "||" => BinaryOp::Or,
+};
+
+Literal: Literal = {
+    <i:Integer> => Literal::Integer(i),
+    "true" => Literal::Bool(true),
+    "false" => Literal::Bool(false),
+    <s:String> => Literal::String(s),
+};
+
+Term: Expr = {
+    <i:Ident> => Expr::Variable(i),
+    <l:Literal> => Expr::Literal(l),
+    <target:Spanned<Expr>> "(" <args:Comma<Spanned<Expr>>> ")" => Expr::Call { target: Box::new(target), args },
+    "(" <e:Expr> ")" => e,
+};
+
+Integer: i64 = <s:IntegerString> => i64::from_str(s).unwrap();
+
+// Handle escaped chars
+String: String = "\"" <mut s:StringString> "\"" => {
+    let mut result = String::new();
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('r') => result.push('\r'),
+                Some('t') => result.push('\t'),
+                Some('b') => result.push('\x08'),
+                Some('f') => result.push('\x0c'),
+                Some('\'') => result.push('\''),
+                Some('\"') => result.push('\"'),
+                Some('\\') => result.push('\\'),
+                Some('u') => {
+                    let mut code = 0;
+                    for _ in 0..4 {
+                        code = code * 16 + match chars.next() {
+                            Some('0') => 0,
+                            Some('1') => 1,
+                            Some('2') => 2,
+                            Some('3') => 3,
+                            Some('4') => 4,
+                            Some('5') => 5,
+                            Some('6') => 6,
+                            Some('7') => 7,
+                            Some('8') => 8,
+                            Some('9') => 9,
+                            Some('a') | Some('A') => 10,
+                            Some('b') | Some('B') => 11,
+                            Some('c') | Some('C') => 12,
+                            Some('d') | Some('D') => 13,
+                            Some('e') | Some('E') => 14,
+                            Some('f') | Some('F') => 15,
+                            _ => panic!("Invalid unicode escape"),
+                        };
+                    }
+                    result.push(std::char::from_u32(code).unwrap());
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+};

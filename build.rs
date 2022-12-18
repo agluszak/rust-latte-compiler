@@ -1,3 +1,5 @@
+extern crate lalrpop;
+
 use std::fs::read_dir;
 use std::fs::File;
 use std::io::Write;
@@ -17,6 +19,8 @@ fn read_latte_inputs(directory: &str) -> Vec<PathBuf> {
 
 // build script's entry point
 fn main() {
+    lalrpop::process_root().unwrap();
+
     let mut test_file = File::create("./tests/generated_from_inputs.rs").unwrap();
 
     // write test file header, put `use`, `const` etc there
