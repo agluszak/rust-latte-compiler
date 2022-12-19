@@ -1,0 +1,13 @@
+---
+source: tests/generated_from_inputs.rs
+assertion_line: 477
+description: "foo() {}\n"
+---
+[31mError:[0m Unrecognized token
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad005:1:4[38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m1 │[0m [38;5;249mf[0m[38;5;249mo[0m[38;5;249mo[0m[31m([0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m{[0m[38;5;249m}[0m
+ [38;5;246m  ·[0m    [31m┬[0m  
+ [38;5;246m  ·[0m    [31m╰[0m[31m─[0m[31m─[0m Unrecognized token `LParen`
+[38;5;246m───╯[0m
+

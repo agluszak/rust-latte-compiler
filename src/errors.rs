@@ -1,5 +1,5 @@
 use crate::typechecker::{TypecheckingError, TypecheckingErrorKind};
-use ariadne::{Color, ColorGenerator, Fmt, Label, Report, ReportBuilder, ReportKind};
+use ariadne::{Color, Fmt, Label, Report, ReportBuilder, ReportKind};
 use chumsky::error::SimpleReason;
 use std::hash::Hash;
 use std::ops::Range;
@@ -18,7 +18,7 @@ pub fn typechecking_reports(
             let report = match err.kind {
                 TypecheckingErrorKind::DuplicateArgument(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
-                        .with_message(format!("Duplicate argument `{}`", name))
+                        .with_message(format!("Duplicate argument `{name}`"))
                         .with_color(color),
                 ),
                 TypecheckingErrorKind::IncrDecrOnNonInt => report.with_label(
@@ -28,7 +28,7 @@ pub fn typechecking_reports(
                 ),
                 TypecheckingErrorKind::NotCallable(found) => report.with_label(
                     Label::new((filename.to_string(), err.location))
-                        .with_message(format!("`{}` is not callable", found))
+                        .with_message(format!("`{found}` is not callable"))
                         .with_color(color),
                 ),
                 TypecheckingErrorKind::MissingReturn => report.with_label(
@@ -43,26 +43,26 @@ pub fn typechecking_reports(
                     if old_declaration == (0..0) {
                         report.with_label(
                             Label::new((filename.to_string(), err.location))
-                                .with_message(format!("Redeclaration of a built-in `{}`", name))
+                                .with_message(format!("Redeclaration of a built-in `{name}`"))
                                 .with_color(color),
                         )
                     } else {
                         report
                             .with_label(
                                 Label::new((filename.to_string(), err.location.clone()))
-                                    .with_message(format!("Redeclaration of `{}`", name))
+                                    .with_message(format!("Redeclaration of `{name}`"))
                                     .with_color(color),
                             )
                             .with_label(
                                 Label::new((filename.to_string(), err.location))
-                                    .with_message(format!("Previous declaration of `{}`", name))
+                                    .with_message(format!("Previous declaration of `{name}`"))
                                     .with_color(color),
                             )
                     }
                 }
                 TypecheckingErrorKind::UndefinedVariable(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
-                        .with_message(format!("Unknown variable `{}`", name))
+                        .with_message(format!("Unknown variable `{name}`"))
                         .with_color(color),
                 ),
                 TypecheckingErrorKind::TypeMismatch { expected, found } => report.with_label(
@@ -80,7 +80,7 @@ pub fn typechecking_reports(
                 ),
                 TypecheckingErrorKind::UnknownType(name) => report.with_label(
                     Label::new((filename.to_string(), err.location))
-                        .with_message(format!("Unknown type `{}`", name))
+                        .with_message(format!("Unknown type `{name}`"))
                         .with_color(color),
                 ),
                 TypecheckingErrorKind::VoidReturn => report.with_label(
@@ -96,8 +96,7 @@ pub fn typechecking_reports(
                 TypecheckingErrorKind::WrongArgumentCount { expected, found } => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!(
-                            "Wrong number of arguments: expected {}, found {}",
-                            expected, found
+                            "Wrong number of arguments: expected {expected}, found {found}"
                         ))
                         .with_color(color),
                 ),

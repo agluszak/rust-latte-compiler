@@ -180,12 +180,12 @@ pub fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Bool(b) => write!(f, "{}", b),
-            Token::Num(n) => write!(f, "{}", n),
-            Token::Str(s) => write!(f, "\"{}\"", s),
-            Token::Op(op) => write!(f, "{}", op),
-            Token::Ctrl(ctrl) => write!(f, "{}", ctrl),
-            Token::Ident(ident) => write!(f, "{}", ident),
+            Token::Bool(b) => write!(f, "{b}"),
+            Token::Num(n) => write!(f, "{n}"),
+            Token::Str(s) => write!(f, "\"{s}\""),
+            Token::Op(op) => write!(f, "{op}"),
+            Token::Ctrl(ctrl) => write!(f, "{ctrl}"),
+            Token::Ident(ident) => write!(f, "{ident}"),
             Token::If => write!(f, "if"),
             Token::Else => write!(f, "else"),
             Token::While => write!(f, "while"),

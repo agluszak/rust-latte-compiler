@@ -9,6 +9,7 @@ chumsky = "0.8"
 miette = { version = "5", features = ["fancy"] }
 thiserror = "1"
 lalrpop-util = { version = "0.19", features = ["lexer"] }
+logos = "0.12"
 
 [dev-dependencies]
 insta = "1"

@@ -53,7 +53,7 @@ fn expr_parser() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> {
             Token::Num(n) => n
                 .parse()
                 .map(|n| Expr::Literal(Literal::Int(n)))
-                .map_err(|e| Simple::custom(span, format!("invalid number: {}", e))),
+                .map_err(|e| Simple::custom(span, format!("invalid number: {e}"))),
 
             _ => Err(Error::expected_input_found(span, None, Some(x))),
         })

@@ -18,7 +18,7 @@ pub fn read_input() -> Result<Input, String> {
                 .map_err(|e| e.to_string())?;
             Ok(Input::new(source, "<stdin>".to_string()))
         }
-        [this, ..] => Err(format!("Usage: {} [file]", this)),
+        [this, ..] => Err(format!("Usage: {this} [file]")),
         &[] => unreachable!(),
     }
 }
@@ -28,7 +28,7 @@ fn main() -> ExitCode {
         match read_input() {
             Ok(input) => input,
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 return ExitCode::FAILURE;
             }
         }
