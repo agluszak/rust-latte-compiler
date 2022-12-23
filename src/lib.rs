@@ -9,11 +9,13 @@ use ariadne::Report;
 use std::ops::Range;
 
 mod ast;
+mod dfa;
 mod errors;
 pub mod input;
 pub mod lexer;
 pub mod parser;
 mod typechecker;
+mod typed_ast;
 
 pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)>> {
     // let mut error_reports = Vec::new();
@@ -46,7 +48,7 @@ pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)
 
     match actual {
         Ok(actual) => {
-            let errors = typecheck_program(&actual);
+            let errors = typecheck_program(actual);
 
             if let Err(errs) = errors {
                 typechecking_reports(errs, filename)

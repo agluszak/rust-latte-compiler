@@ -72,7 +72,7 @@ Spanned<Rule>: Spanned<Rule> =
         Spanned::new(l..r, rule);
 
 
-Type: Type = <s:"ident"> => Type(s.to_string());
+Type: TypeName = <s:"ident"> => TypeName(s.to_string());
 
 Ident: Ident = <s:"ident"> => Ident(s.to_string());
 

@@ -10,7 +10,7 @@ Ok(
                 value: Fn {
                     return_type: Spanned {
                         span: 16..19,
-                        value: Type(
+                        value: TypeName(
                             "int",
                         ),
                     },

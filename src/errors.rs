@@ -25,11 +25,6 @@ pub fn typechecking_reports(
                         .with_message(format!("Duplicate argument `{name}`"))
                         .with_color(color),
                 ),
-                TypecheckingErrorKind::IncrDecrOnNonInt => report.with_label(
-                    Label::new((filename.to_string(), err.location))
-                        .with_message("Increment/decrement can only be applied to integers")
-                        .with_color(color),
-                ),
                 TypecheckingErrorKind::NotCallable(found) => report.with_label(
                     Label::new((filename.to_string(), err.location))
                         .with_message(format!("`{found}` is not callable"))
@@ -105,6 +100,12 @@ pub fn typechecking_reports(
                         .with_color(color),
                 ),
                 TypecheckingErrorKind::NoMain => report.with_message("No main function found"),
+
+                TypecheckingErrorKind::InvalidLvalue => report.with_label(
+                    Label::new((filename.to_string(), err.location))
+                        .with_message("Invalid lvalue")
+                        .with_color(color),
+                ),
             };
 
             report.finish()

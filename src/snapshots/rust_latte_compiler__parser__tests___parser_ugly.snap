@@ -10,7 +10,7 @@ Ok(
                 value: Fn {
                     return_type: Spanned {
                         span: 0..4,
-                        value: Type(
+                        value: TypeName(
                             "void",
                         ),
                     },
@@ -95,7 +95,7 @@ Ok(
                                                                                                         value: Var {
                                                                                                             ty: Spanned {
                                                                                                                 span: 86..89,
-                                                                                                                value: Type(
+                                                                                                                value: TypeName(
                                                                                                                     "int",
                                                                                                                 ),
                                                                                                             },
@@ -125,7 +125,7 @@ Ok(
                                                                                                         value: Var {
                                                                                                             ty: Spanned {
                                                                                                                 span: 108..111,
-                                                                                                                value: Type(
+                                                                                                                value: TypeName(
                                                                                                                     "int",
                                                                                                                 ),
                                                                                                             },
@@ -176,7 +176,7 @@ Ok(
                                                                                                         value: Fn {
                                                                                                             return_type: Spanned {
                                                                                                                 span: 142..145,
-                                                                                                                value: Type(
+                                                                                                                value: TypeName(
                                                                                                                     "int",
                                                                                                                 ),
                                                                                                             },

@@ -10,7 +10,7 @@ Ok(
                 value: Fn {
                     return_type: Spanned {
                         span: 0..3,
-                        value: Type(
+                        value: TypeName(
                             "int",
                         ),
                     },
@@ -136,7 +136,7 @@ Ok(
                 value: Fn {
                     return_type: Spanned {
                         span: 90..93,
-                        value: Type(
+                        value: TypeName(
                             "int",
                         ),
                     },
@@ -152,7 +152,7 @@ Ok(
                             value: Arg {
                                 ty: Spanned {
                                     span: 100..103,
-                                    value: Type(
+                                    value: TypeName(
                                         "int",
                                     ),
                                 },
@@ -177,7 +177,7 @@ Ok(
                                             value: Var {
                                                 ty: Spanned {
                                                     span: 111..114,
-                                                    value: Type(
+                                                    value: TypeName(
                                                         "int",
                                                     ),
                                                 },
@@ -386,7 +386,7 @@ Ok(
                 value: Fn {
                     return_type: Spanned {
                         span: 224..227,
-                        value: Type(
+                        value: TypeName(
                             "int",
                         ),
                     },
@@ -402,7 +402,7 @@ Ok(
                             value: Arg {
                                 ty: Spanned {
                                     span: 235..238,
-                                    value: Type(
+                                    value: TypeName(
                                         "int",
                                     ),
                                 },

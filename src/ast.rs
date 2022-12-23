@@ -34,7 +34,6 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
-    Error,
     Variable(Ident),
     Literal(Literal),
     Binary {
@@ -85,11 +84,11 @@ pub enum Literal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decl {
     Var {
-        ty: Spanned<Type>,
+        ty: Spanned<TypeName>,
         items: Vec<Spanned<Item>>,
     },
     Fn {
-        return_type: Spanned<Type>,
+        return_type: Spanned<TypeName>,
         name: Spanned<Ident>,
         args: Vec<Spanned<Arg>>,
         body: Spanned<Block>,
@@ -104,7 +103,7 @@ pub struct Item {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arg {
-    pub ty: Spanned<Type>,
+    pub ty: Spanned<TypeName>,
     pub name: Spanned<Ident>,
 }
 
@@ -118,7 +117,7 @@ impl Ident {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Type(pub String); // TODO: interned
+pub struct TypeName(pub String); // TODO: interned
 
 impl<T> Display for Spanned<T>
 where
@@ -216,7 +215,6 @@ impl Display for Decl {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Expr::Error => write!(f, "error"),
             Expr::Variable(ident) => write!(f, "{ident}"),
             Expr::Literal(lit) => write!(f, "{lit}"),
             Expr::Binary { lhs, op, rhs } => write!(f, "({lhs} {op} {rhs})"),
@@ -290,7 +288,7 @@ impl Display for Item {
     }
 }
 
-impl Display for Type {
+impl Display for TypeName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }
