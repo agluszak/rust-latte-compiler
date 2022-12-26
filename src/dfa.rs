@@ -251,7 +251,7 @@ fn return_analysis_decl(
                         let dfa_value = data_flow_analysis(&expr.value, env);
                         env.mark_bool(&item.value.ident.value, dfa_value);
                     } else {
-                        env.mark_bool(&item.value.ident.value, TriLogic::Unknown);
+                        env.mark_bool(&item.value.ident.value, TriLogic::False);
                     }
                 }
             }

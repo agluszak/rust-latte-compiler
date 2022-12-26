@@ -12,6 +12,7 @@ mod ast;
 mod dfa;
 mod errors;
 pub mod input;
+mod ir;
 pub mod lexer;
 pub mod parser;
 mod typechecker;
