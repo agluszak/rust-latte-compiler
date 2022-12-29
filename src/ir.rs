@@ -1,7 +1,9 @@
-use crate::ir::Value::Constant;
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+use std::mem;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Instruction {
     UnconditionalJump(BlockId),
     ConditionalJump {
@@ -12,9 +14,12 @@ pub enum Instruction {
     DefineValue(ValueId),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub preds: HashSet<BlockId>,
     pub instructions: Vec<Instruction>,
+    pub sealed: bool,
+    incomplete_phis: HashMap<VariableId, ValueId>,
 }
 
 impl Block {
@@ -22,10 +27,27 @@ impl Block {
         Self {
             preds: HashSet::new(),
             instructions: Vec::new(),
+            sealed: false,
+            incomplete_phis: HashMap::new(),
         }
     }
 
+    fn add_incopmlete_phi(&mut self, var: VariableId, value: ValueId) {
+        self.incomplete_phis.insert(var, value);
+    }
+
+    fn take_incomplete_phis(&mut self) -> HashMap<VariableId, ValueId> {
+        mem::take(&mut self.incomplete_phis)
+    }
+
+    fn seal(&mut self) {
+        self.sealed = true;
+    }
+
     fn declare_pred(&mut self, pred: BlockId) {
+        if self.sealed {
+            panic!("Cannot add a predecessor to a sealed block");
+        }
         self.preds.insert(pred);
     }
 
@@ -34,50 +56,179 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct BlockId(u32);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct VariableId(u32);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum IrType {
+    Bool,
+    Int,
+    String,
+    Pointer(Box<IrType>),
+    Function {
+        args: Vec<IrType>,
+        return_type: Option<Box<IrType>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ValueContainer {
+    value: Value,
+    ty: IrType,
+    users: HashSet<ValueId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VariableContainer {
+    ty: IrType,
+    block_values: HashMap<BlockId, ValueId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BlockContainer {
+    block: Block,
+}
+
+#[derive(Debug, Default)]
+struct Blocks(HashMap<BlockId, BlockContainer>);
+
+impl Blocks {
+    fn all(&self) -> impl Iterator<Item = (BlockId, &Block)> {
+        self.0.iter().map(|(id, container)| (*id, &container.block))
+    }
+
+    fn get(&self, id: BlockId) -> &Block {
+        &self.0[&id].block
+    }
+
+    fn get_mut(&mut self, id: BlockId) -> &mut Block {
+        &mut self.0.get_mut(&id).unwrap().block
+    }
+
+    fn new(&mut self) -> BlockId {
+        let id = BlockId(self.0.len() as u32);
+        self.0.insert(
+            id,
+            BlockContainer {
+                block: Block::new(),
+            },
+        );
+        id
+    }
+
+    fn declare_predecessor(&mut self, block: BlockId, pred: BlockId) {
+        self.get_mut(block).declare_pred(pred);
+    }
+
+    fn predecessors(&self, block: BlockId) -> HashSet<BlockId> {
+        self.get(block).preds.clone()
+    }
+
+    fn single_predecessor(&self, block: BlockId) -> Option<BlockId> {
+        let preds = self.predecessors(block);
+        if preds.len() == 1 {
+            Some(preds.into_iter().next().unwrap())
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct Variables(HashMap<VariableId, VariableContainer>);
+
+#[derive(Debug, Default)]
+struct Values(HashMap<ValueId, ValueContainer>);
+
+impl Values {
+    fn new(&mut self, value: Value, ty: IrType) -> ValueId {
+        let id = ValueId(self.0.len() as u32);
+        self.0.insert(
+            id,
+            ValueContainer {
+                value,
+                ty,
+                users: HashSet::new(),
+            },
+        );
+        id
+    }
+
+    fn get(&self, id: ValueId) -> &Value {
+        &self.0[&id].value
+    }
+
+    fn get_mut(&mut self, id: ValueId) -> &mut Value {
+        &mut self.0.get_mut(&id).unwrap().value
+    }
+
+    fn ty(&self, id: ValueId) -> IrType {
+        self.0[&id].ty.clone()
+    }
+
+    fn add_user(&mut self, id: ValueId, user: ValueId) {
+        self.0.get_mut(&id).unwrap().users.insert(user);
+    }
+
+    fn users(&self, id: ValueId) -> HashSet<ValueId> {
+        self.0[&id].users.clone()
+    }
+}
+
+impl Variables {
+    fn new(&mut self, ty: IrType) -> VariableId {
+        let id = VariableId(self.0.len() as u32);
+        self.0.insert(
+            id,
+            VariableContainer {
+                ty,
+                block_values: HashMap::new(),
+            },
+        );
+        id
+    }
+
+    fn ty(&self, id: VariableId) -> IrType {
+        self.0[&id].ty.clone()
+    }
+
+    fn get_in_block(&self, id: VariableId, block: BlockId) -> Option<ValueId> {
+        self.0[&id].block_values.get(&block).cloned()
+    }
+
+    fn set_in_block(&mut self, id: VariableId, block: BlockId, value: ValueId) {
+        self.0
+            .get_mut(&id)
+            .unwrap()
+            .block_values
+            .insert(block, value);
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct Function {
     // pub name: String, // TODO: interning
-    pub blocks: HashMap<BlockId, Block>,
-    pub variables: HashMap<VariableId, HashMap<BlockId, ValueId>>,
-    pub incomplete_phis: HashMap<BlockId, HashMap<VariableId, ValueId>>,
-    pub sealed_blocks: HashSet<BlockId>,
-    pub values: HashMap<ValueId, Value>,
-    pub value_users: HashMap<ValueId, HashSet<ValueId>>,
+    blocks: Blocks,
+    variables: Variables,
+    values: Values,
 }
 
 impl Function {
-    pub fn new() -> Self {
-        Self {
-            blocks: HashMap::new(),
-            variables: HashMap::new(),
-            incomplete_phis: HashMap::new(),
-            sealed_blocks: HashSet::new(),
-            values: HashMap::new(),
-            value_users: HashMap::new(),
-        }
-    }
-
     pub fn add_instruction(&mut self, block: BlockId, instruction: Instruction) {
-        self.blocks
-            .get_mut(&block)
-            .unwrap()
-            .add_instruction(instruction);
+        self.blocks.get_mut(block).add_instruction(instruction);
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct ValueId(u32);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Phi {
     pub block: BlockId,
     pub operands: Vec<(BlockId, ValueId)>,
-    pub users: HashSet<ValueId>,
 }
 
 impl Phi {
@@ -85,20 +236,134 @@ impl Phi {
         Self {
             block,
             operands: Vec::new(),
-            users: HashSet::new(),
         }
-    }
-
-    fn add_user(&mut self, user: ValueId) {
-        self.users.insert(user);
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct Commutative {
+    lhs: ValueId,
+    rhs: ValueId,
+}
+
+impl Commutative {
+    fn new(lhs: ValueId, rhs: ValueId) -> Self {
+        if lhs < rhs {
+            Self { lhs, rhs }
+        } else {
+            Self { lhs: rhs, rhs: lhs }
+        }
+    }
+
+    fn replace_use(&mut self, old: ValueId, new: ValueId) {
+        if self.lhs == old {
+            self.lhs = new;
+        }
+        if self.rhs == old {
+            self.rhs = new;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct NonCommutative {
+    lhs: ValueId,
+    rhs: ValueId,
+}
+
+impl NonCommutative {
+    fn new(lhs: ValueId, rhs: ValueId) -> Self {
+        Self { lhs, rhs }
+    }
+
+    fn replace_use(&mut self, old: ValueId, new: ValueId) {
+        if self.lhs == old {
+            self.lhs = new;
+        }
+        if self.rhs == old {
+            self.rhs = new;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum BinaryOperation {
+    Add(Commutative),
+    Sub(NonCommutative),
+    Mul(Commutative),
+    Div(NonCommutative),
+    Mod(NonCommutative),
+    Eq(Commutative),
+    Neq(Commutative),
+    Lt(NonCommutative),
+    Gt(NonCommutative),
+    Lte(NonCommutative),
+    Gte(NonCommutative),
+    Or(Commutative),
+    And(Commutative),
+    Concat(NonCommutative),
+}
+
+impl BinaryOperation {
+    fn replace_use(&mut self, old: ValueId, new: ValueId) {
+        match self {
+            Self::Add(operands)
+            | Self::Mul(operands)
+            | Self::Eq(operands)
+            | Self::Neq(operands)
+            | Self::Or(operands)
+            | Self::And(operands) => operands.replace_use(old, new),
+            Self::Sub(operands)
+            | Self::Div(operands)
+            | Self::Mod(operands)
+            | Self::Lt(operands)
+            | Self::Gt(operands)
+            | Self::Lte(operands)
+            | Self::Gte(operands)
+            | Self::Concat(operands) => operands.replace_use(old, new),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum UnaryOperation {
+    Not(ValueId),
+    Neg(ValueId),
+}
+
+impl UnaryOperation {
+    fn replace_use(&mut self, old: ValueId, new: ValueId) {
+        match self {
+            Self::Not(value) | Self::Neg(value) => {
+                if *value == old {
+                    *value = new;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum Constant {
+    Int(i32),
+    Bool(bool),
+    String(String), // TODO: interning
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct FunctionId(u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct ArgumentId(u32);
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum Value {
     Phi(Phi),
-    Constant(i32),
-    Add(ValueId, ValueId),
+    Constant(Constant),
+    Argument(ArgumentId),
+    BinaryOperation(BinaryOperation),
+    UnaryOperation(UnaryOperation),
+    Call(FunctionId, Vec<ValueId>),
     Undefined,
 }
 
@@ -126,64 +391,133 @@ impl Value {
                     }
                 }
             }
-            _ => {}
+            Value::BinaryOperation(operation) => operation.replace_use(old, new),
+            Value::UnaryOperation(operation) => operation.replace_use(old, new),
+            Value::Call(_, operands) => {
+                for operand in operands.iter_mut() {
+                    if *operand == old {
+                        *operand = new;
+                    }
+                }
+            }
+            Value::Argument(_) | Value::Constant(_) | Value::Undefined => {}
         }
     }
 }
 
+struct ValueBuilder;
+
+impl ValueBuilder {
+    fn constant_int(value: i32) -> Value {
+        Value::Constant(Constant::Int(value))
+    }
+
+    fn constant_bool(value: bool) -> Value {
+        Value::Constant(Constant::Bool(value))
+    }
+
+    fn constant_string(value: String) -> Value {
+        Value::Constant(Constant::String(value))
+    }
+
+    fn add(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Add(Commutative::new(lhs, rhs)))
+    }
+
+    fn sub(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Sub(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn mul(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Mul(Commutative::new(lhs, rhs)))
+    }
+
+    fn div(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Div(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn mod_(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Mod(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn eq(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Eq(Commutative::new(lhs, rhs)))
+    }
+
+    fn neq(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Neq(Commutative::new(lhs, rhs)))
+    }
+
+    fn lt(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Lt(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn gt(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Gt(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn lte(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Lte(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn gte(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Gte(NonCommutative::new(lhs, rhs)))
+    }
+
+    fn concat(lhs: ValueId, rhs: ValueId) -> Value {
+        Value::BinaryOperation(BinaryOperation::Concat(NonCommutative::new(lhs, rhs)))
+    }
+}
+
 impl Function {
-    fn new_block(&mut self) -> BlockId {
-        let id = BlockId(self.blocks.len() as u32);
-        self.blocks.insert(id, Block::new());
-        id
-    }
-
-    fn declare_predecessor(&mut self, block: BlockId, pred: BlockId) {
-        self.blocks.get_mut(&block).unwrap().declare_pred(pred);
-    }
-
-    fn new_variable(&mut self) -> VariableId {
-        let id = VariableId(self.variables.len() as u32);
-        self.variables.insert(id, HashMap::new());
-        id
-    }
-
-    fn new_value(&mut self, value: Value) -> ValueId {
-        let id = ValueId(self.values.len() as u32);
-        self.values.insert(id, value);
-        id
+    pub fn new_variable(&mut self, ty: IrType) -> VariableId {
+        self.variables.new(ty)
     }
 
     pub fn write_variable(&mut self, var: VariableId, block: BlockId, value: Value) -> ValueId {
-        let value = self.new_value(value);
-        self.write_variable_with_id(var, block, value);
+        let ty = self.variables.ty(var);
+        let value = self.values.new(value, ty);
+        self.variables.set_in_block(var, block, value);
         value
     }
 
-    fn write_variable_with_id(&mut self, var: VariableId, block: BlockId, value: ValueId) {
-        self.variables.entry(var).or_default().insert(block, value);
-    }
-
-    pub fn read_variable(&mut self, var: VariableId, block: BlockId) -> ValueId {
-        if let Some(value) = self.variables[&var].get(&block) {
-            *value
+    pub fn read_variable(&mut self, var: VariableId, block_id: BlockId) -> ValueId {
+        let ty = self.variables.ty(var);
+        if let Some(value) = self.variables.get_in_block(var, block_id) {
+            value
         } else {
-            self.read_variable_recursive(var, block)
+            let block = &self.blocks.get(block_id);
+            let sealed = block.sealed;
+            let val = if !sealed {
+                // Incomplete CFG
+                let val = Value::Phi(Phi::new(block_id));
+                let val = self.values.new(val, ty);
+                self.blocks.get_mut(block_id).add_incopmlete_phi(var, val);
+                val
+            } else if let Some(pred) = self.blocks.single_predecessor(block_id) {
+                // Optimize the common case of one predecessor: No phi needed
+                self.read_variable(var, pred)
+            } else {
+                // Break potential cycles with operandless phi
+                let val = Value::Phi(Phi::new(block_id));
+                let val = self.write_variable(var, block_id, val);
+                self.add_phi_operands(var, val)
+            };
+            self.variables.set_in_block(var, block_id, val);
+            val
         }
     }
 
     fn add_phi_operand(&mut self, phi_id: ValueId, block: BlockId, value: ValueId) {
-        let phi = self.values.get_mut(&phi_id).unwrap().as_phi_mut();
+        let phi = self.values.get_mut(phi_id).as_phi_mut();
         phi.operands.push((block, value));
-        let value = self.values.get_mut(&value).unwrap();
-        if let Value::Phi(value_phi) = value {
-            value_phi.add_user(phi_id);
-        }
+        self.values.add_user(value, phi_id);
     }
 
     fn remove_trivial_phi(&mut self, phi: ValueId) -> ValueId {
         let mut same = None;
-        for (_, value) in &self.values[&phi].as_phi().operands {
+        for (_, value) in &self.values.get(phi).as_phi().operands {
+            debug_assert_eq!(self.values.ty(*value), self.values.ty(phi));
             if *value == phi {
                 continue; // ignore self-references
             }
@@ -201,20 +535,21 @@ impl Function {
         let same = if let Some(same) = same {
             same
         } else {
-            let undefined = self.new_value(Value::Undefined);
+            let ty = self.values.ty(phi);
+            let undefined = self.values.new(Value::Undefined, ty);
             undefined // this phi is unreachable or in start block
         };
 
         // Remember all users except the phi itself
         let users = {
-            let mut users = self.value_users[&phi].clone();
+            let mut users = self.values.users(phi);
             users.remove(&phi);
             users
         };
 
         for user_id in users {
             // Reroute all uses of phi to same
-            let user = self.values.get_mut(&user_id).unwrap();
+            let user = self.values.get_mut(user_id);
             user.replace_use(phi, same);
             if let Value::Phi(_) = user {
                 // Try to recursively remove all phi users, which might have become trivial
@@ -229,8 +564,8 @@ impl Function {
 
     fn add_phi_operands(&mut self, var: VariableId, phi_id: ValueId) -> ValueId {
         // Determine operands from predecessors
-        let phi = self.values.get_mut(&phi_id).unwrap().as_phi_mut();
-        let block = &self.blocks[&phi.block];
+        let phi = self.values.get_mut(phi_id).as_phi_mut();
+        let block = self.blocks.get(phi.block);
         for pred in &block.preds.clone() {
             let pred_value = self.read_variable(var, *pred);
             self.add_phi_operand(phi_id, *pred, pred_value);
@@ -239,49 +574,18 @@ impl Function {
         self.remove_trivial_phi(phi_id)
     }
 
-    fn single_pred(&self, block: BlockId) -> Option<BlockId> {
-        let preds = &self.blocks[&block].preds;
-        if preds.len() == 1 {
-            Some(*preds.iter().next().unwrap())
-        } else {
-            None
+    pub fn seal_block(&mut self, block_id: BlockId) {
+        let block = self.blocks.get_mut(block_id);
+        let phis = block.take_incomplete_phis();
+        for (var, phi) in phis {
+            self.add_phi_operands(var, phi);
         }
-    }
-
-    fn read_variable_recursive(&mut self, var: VariableId, block: BlockId) -> ValueId {
-        let val = if !self.sealed_blocks.contains(&block) {
-            // Incomplete CFG
-            let val = Value::Phi(Phi::new(block));
-            let val = self.new_value(val);
-            self.incomplete_phis
-                .entry(block)
-                .or_default()
-                .insert(var, val);
-            val
-        } else if let Some(pred) = self.single_pred(block) {
-            // Optimize the common case of one predecessor: No phi needed
-            self.read_variable(var, pred)
-        } else {
-            // Break potential cycles with operandless phi
-            let val = Value::Phi(Phi::new(block));
-            let val = self.write_variable(var, block, val);
-            self.add_phi_operands(var, val)
-        };
-        self.write_variable_with_id(var, block, val);
-        val
-    }
-
-    fn seal_block(&mut self, block: BlockId) {
-        if let Some(phis) = self.incomplete_phis.remove(&block) {
-            for (var, phi) in phis {
-                self.add_phi_operands(var, phi);
-            }
-        }
-        self.sealed_blocks.insert(block);
+        let block = self.blocks.get_mut(block_id);
+        block.seal();
     }
 
     fn dump(&self) {
-        for (id, block) in &self.blocks {
+        for (id, block) in self.blocks.all() {
             println!("Block {:?}:", id);
             println!("  preds: {:?}", block.preds);
 
@@ -293,14 +597,14 @@ impl Function {
                         true_block,
                         false_block,
                     } => {
-                        let value = &self.values[test_value];
+                        let value = self.values.get(*test_value);
                         println!(
                             "  if {:?} ({:?}) jump {:?} else {:?}",
                             value, test_value, true_block, false_block
                         )
                     }
                     Instruction::DefineValue(id) => {
-                        let value = &self.values[id];
+                        let value = &self.values.get(*id);
                         println!("  {:?} = {:?}", id, value);
                     }
                 }
@@ -311,19 +615,21 @@ impl Function {
 
 #[test]
 fn test() {
-    let mut function = Function::new();
-    let start = function.new_block();
-    let true_block = function.new_block();
-    function.declare_predecessor(true_block, start);
-    let false_block = function.new_block();
-    function.declare_predecessor(false_block, start);
-    let join_block = function.new_block();
-    function.declare_predecessor(join_block, true_block);
-    function.declare_predecessor(join_block, false_block);
+    let mut function = Function::default();
+    let start = function.blocks.new();
+    let true_block = function.blocks.new();
+    function.blocks.declare_predecessor(true_block, start);
+    let false_block = function.blocks.new();
+    function.blocks.declare_predecessor(false_block, start);
+    let join_block = function.blocks.new();
+    function.blocks.declare_predecessor(join_block, true_block);
+    function.blocks.declare_predecessor(join_block, false_block);
 
     // %1 = 1
     // if %1 goto true_block else false_block
-    let test_value = function.new_value(Constant(1));
+    let test_value = function
+        .values
+        .new(ValueBuilder::constant_int(1), IrType::Int);
     function.add_instruction(start, Instruction::DefineValue(test_value));
     function.add_instruction(
         start,
@@ -339,30 +645,35 @@ fn test() {
     // temp = var
     // var = 3
     // var = var + temp
-    let variable = function.new_variable();
-    function.write_variable(variable, true_block, Constant(2));
+    let variable = function.new_variable(IrType::Int);
+    function.write_variable(variable, true_block, ValueBuilder::constant_int(2));
     let last = function.read_variable(variable, true_block);
     function.add_instruction(true_block, Instruction::DefineValue(last));
-    function.write_variable(variable, true_block, Constant(3));
+    function.write_variable(variable, true_block, ValueBuilder::constant_int(3));
     let last_2 = function.read_variable(variable, true_block);
     function.add_instruction(true_block, Instruction::DefineValue(last_2));
 
-    let sum = function.write_variable(variable, true_block, Value::Add(last, last_2));
+    let sum = function.write_variable(variable, true_block, ValueBuilder::add(last, last_2));
     function.add_instruction(true_block, Instruction::DefineValue(sum));
     function.add_instruction(true_block, Instruction::UnconditionalJump(join_block));
     function.seal_block(true_block);
 
     // var = 4
-    let set_in_false = function.write_variable(variable, false_block, Constant(4));
+    let set_in_false =
+        function.write_variable(variable, false_block, ValueBuilder::constant_int(3));
     function.add_instruction(false_block, Instruction::DefineValue(set_in_false));
     function.seal_block(false_block);
 
     // var = var + 5
     let last = function.read_variable(variable, join_block);
     function.add_instruction(join_block, Instruction::DefineValue(last));
-    let const_5 = function.new_value(Constant(5));
+    let const_5 = function
+        .values
+        .new(ValueBuilder::constant_int(5), IrType::Int);
     function.add_instruction(join_block, Instruction::DefineValue(const_5));
-    let sum = function.new_value(Value::Add(last, const_5));
+    let sum = function
+        .values
+        .new(ValueBuilder::add(last, const_5), IrType::Int);
     function.add_instruction(join_block, Instruction::DefineValue(sum));
     function.seal_block(join_block);
 
