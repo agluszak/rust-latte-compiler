@@ -67,11 +67,12 @@ pub enum IrType {
     Bool,
     Int,
     String,
-    Pointer(Box<IrType>),
-    Function {
-        args: Vec<IrType>,
-        return_type: Option<Box<IrType>>,
-    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Default)]
+pub struct IrFunctionType {
+    pub args: Vec<IrType>,
+    pub return_ty: Option<IrType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,6 +226,7 @@ pub struct Function {
     blocks: Blocks,
     variables: Variables,
     values: Values,
+    ty: IrFunctionType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -410,77 +412,94 @@ impl Value {
     }
 }
 
-struct ValueBuilder;
+pub struct ValueBuilder;
 
 impl ValueBuilder {
-    fn constant_int(value: i32) -> Value {
+    pub fn constant_int(value: i32) -> Value {
         Value::Constant(Constant::Int(value))
     }
 
-    fn constant_bool(value: bool) -> Value {
+    pub fn constant_bool(value: bool) -> Value {
         Value::Constant(Constant::Bool(value))
     }
 
-    fn constant_string(value: String) -> Value {
+    pub fn constant_string(value: String) -> Value {
         Value::Constant(Constant::String(value))
     }
 
-    fn add(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn add(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Add(Commutative::new(lhs, rhs)))
     }
 
-    fn sub(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn sub(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Sub(NonCommutative::new(lhs, rhs)))
     }
 
-    fn mul(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn mul(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Mul(Commutative::new(lhs, rhs)))
     }
 
-    fn div(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn div(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Div(NonCommutative::new(lhs, rhs)))
     }
 
-    fn mod_(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn mod_(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Mod(NonCommutative::new(lhs, rhs)))
     }
 
-    fn eq(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn eq(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Eq(Commutative::new(lhs, rhs)))
     }
 
-    fn neq(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn neq(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Neq(Commutative::new(lhs, rhs)))
     }
 
-    fn lt(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn lt(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Lt(NonCommutative::new(lhs, rhs)))
     }
 
-    fn gt(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn gt(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Gt(NonCommutative::new(lhs, rhs)))
     }
 
-    fn lte(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn lte(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Lte(NonCommutative::new(lhs, rhs)))
     }
 
-    fn gte(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn gte(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Gte(NonCommutative::new(lhs, rhs)))
     }
 
-    fn concat(lhs: ValueId, rhs: ValueId) -> Value {
+    pub fn concat(lhs: ValueId, rhs: ValueId) -> Value {
         Value::BinaryOperation(BinaryOperation::Concat(NonCommutative::new(lhs, rhs)))
+    }
+
+    pub fn arg(id: u32) -> Value {
+        Value::Argument(ArgumentId(id))
     }
 }
 
 impl Function {
+    pub fn new(ty: IrFunctionType) -> Self {
+        Self {
+            blocks: Default::default(),
+            variables: Default::default(),
+            values: Default::default(),
+            ty,
+        }
+    }
+
     pub fn add_instruction(&mut self, block: BlockId, instruction: Instruction) {
         self.blocks.get_mut(block).add_instruction(instruction);
     }
 
     pub fn new_variable(&mut self, ty: IrType) -> VariableId {
         self.variables.new(ty)
+    }
+
+    pub fn new_block(&mut self) -> BlockId {
+        self.blocks.new()
     }
 
     pub fn write_variable(&mut self, var: VariableId, block: BlockId, value: Value) -> ValueId {

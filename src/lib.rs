@@ -17,6 +17,7 @@ pub mod lexer;
 pub mod parser;
 mod typechecker;
 mod typed_ast;
+mod typed_ast_lowering;
 
 pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)>> {
     // let mut error_reports = Vec::new();

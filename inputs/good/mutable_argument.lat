@@ -1,0 +1,10 @@
+void test(int arg) {
+    arg++;
+    printInt(arg);
+}
+
+int main() {
+    test(1);
+    test(42);
+    return 0;
+}
