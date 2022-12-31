@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::mem;
 use std::sync::Arc;
@@ -141,12 +141,22 @@ impl Blocks {
 struct Variables(HashMap<VariableId, VariableContainer>);
 
 #[derive(Debug, Default)]
-struct Values(HashMap<ValueId, ValueContainer>);
+struct Values {
+    map: HashMap<ValueId, ValueContainer>,
+    cache: HashMap<(IrType, Value), ValueId>,
+}
 
 impl Values {
     fn new(&mut self, value: Value, ty: IrType) -> ValueId {
-        let id = ValueId(self.0.len() as u32);
-        self.0.insert(
+        let pair = (ty, value);
+        if let Some(id) = self.cache.get(&pair) {
+            return *id;
+        }
+        let (ty, value) = pair;
+
+        let id = ValueId(self.map.len() as u32);
+        self.cache.insert((ty.clone(), value.clone()), id);
+        self.map.insert(
             id,
             ValueContainer {
                 value,
@@ -154,27 +164,28 @@ impl Values {
                 users: HashSet::new(),
             },
         );
+
         id
     }
 
     fn get(&self, id: ValueId) -> &Value {
-        &self.0[&id].value
+        &self.map[&id].value
     }
 
     fn get_mut(&mut self, id: ValueId) -> &mut Value {
-        &mut self.0.get_mut(&id).unwrap().value
+        &mut self.map.get_mut(&id).unwrap().value
     }
 
     fn ty(&self, id: ValueId) -> IrType {
-        self.0[&id].ty.clone()
+        self.map[&id].ty.clone()
     }
 
     fn add_user(&mut self, id: ValueId, user: ValueId) {
-        self.0.get_mut(&id).unwrap().users.insert(user);
+        self.map.get_mut(&id).unwrap().users.insert(user);
     }
 
     fn users(&self, id: ValueId) -> HashSet<ValueId> {
-        self.0[&id].users.clone()
+        self.map[&id].users.clone()
     }
 }
 
@@ -216,26 +227,20 @@ pub struct Function {
     values: Values,
 }
 
-impl Function {
-    pub fn add_instruction(&mut self, block: BlockId, instruction: Instruction) {
-        self.blocks.get_mut(block).add_instruction(instruction);
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct ValueId(u32);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Phi {
     pub block: BlockId,
-    pub operands: Vec<(BlockId, ValueId)>,
+    pub operands: BTreeMap<BlockId, ValueId>,
 }
 
 impl Phi {
     pub fn new(block: BlockId) -> Self {
         Self {
             block,
-            operands: Vec::new(),
+            operands: BTreeMap::new(),
         }
     }
 }
@@ -343,7 +348,7 @@ impl UnaryOperation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Constant {
     Int(i32),
     Bool(bool),
@@ -356,7 +361,7 @@ pub struct FunctionId(u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct ArgumentId(u32);
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Value {
     Phi(Phi),
     Constant(Constant),
@@ -470,6 +475,10 @@ impl ValueBuilder {
 }
 
 impl Function {
+    pub fn add_instruction(&mut self, block: BlockId, instruction: Instruction) {
+        self.blocks.get_mut(block).add_instruction(instruction);
+    }
+
     pub fn new_variable(&mut self, ty: IrType) -> VariableId {
         self.variables.new(ty)
     }
@@ -510,7 +519,7 @@ impl Function {
 
     fn add_phi_operand(&mut self, phi_id: ValueId, block: BlockId, value: ValueId) {
         let phi = self.values.get_mut(phi_id).as_phi_mut();
-        phi.operands.push((block, value));
+        phi.operands.insert(block, value);
         self.values.add_user(value, phi_id);
     }
 
@@ -613,69 +622,147 @@ impl Function {
     }
 }
 
-#[test]
-fn test() {
-    let mut function = Function::default();
-    let start = function.blocks.new();
-    let true_block = function.blocks.new();
-    function.blocks.declare_predecessor(true_block, start);
-    let false_block = function.blocks.new();
-    function.blocks.declare_predecessor(false_block, start);
-    let join_block = function.blocks.new();
-    function.blocks.declare_predecessor(join_block, true_block);
-    function.blocks.declare_predecessor(join_block, false_block);
+mod tests {
+    use super::*;
 
-    // %1 = 1
-    // if %1 goto true_block else false_block
-    let test_value = function
-        .values
-        .new(ValueBuilder::constant_int(1), IrType::Int);
-    function.add_instruction(start, Instruction::DefineValue(test_value));
-    function.add_instruction(
-        start,
-        Instruction::ConditionalJump {
-            test_value,
-            true_block,
-            false_block,
-        },
-    );
-    function.seal_block(start);
+    #[test]
+    fn local_value_numbering_constant() {
+        let mut function = Function::default();
+        let constant = function
+            .values
+            .new(ValueBuilder::constant_int(42), IrType::Int);
+        let constant2 = function
+            .values
+            .new(ValueBuilder::constant_int(42), IrType::Int);
+        assert_eq!(constant, constant2);
+    }
 
-    // var = 2
-    // temp = var
-    // var = 3
-    // var = var + temp
-    let variable = function.new_variable(IrType::Int);
-    function.write_variable(variable, true_block, ValueBuilder::constant_int(2));
-    let last = function.read_variable(variable, true_block);
-    function.add_instruction(true_block, Instruction::DefineValue(last));
-    function.write_variable(variable, true_block, ValueBuilder::constant_int(3));
-    let last_2 = function.read_variable(variable, true_block);
-    function.add_instruction(true_block, Instruction::DefineValue(last_2));
+    #[test]
+    fn local_value_numbering_variable() {
+        let mut function = Function::default();
+        let block = function.blocks.new();
+        let var = function.variables.new(IrType::Int);
+        let value_written = function.write_variable(var, block, ValueBuilder::constant_int(42));
+        let value_read = function.read_variable(var, block);
+        assert_eq!(value_written, value_read);
+        let value_written2 = function.write_variable(var, block, ValueBuilder::constant_int(42));
+        assert_eq!(value_written, value_written2);
 
-    let sum = function.write_variable(variable, true_block, ValueBuilder::add(last, last_2));
-    function.add_instruction(true_block, Instruction::DefineValue(sum));
-    function.add_instruction(true_block, Instruction::UnconditionalJump(join_block));
-    function.seal_block(true_block);
+        let var2 = function.variables.new(IrType::Int);
+        let value_written3 = function.write_variable(var2, block, ValueBuilder::constant_int(42));
+        assert_eq!(value_written, value_written3);
+    }
 
-    // var = 4
-    let set_in_false =
-        function.write_variable(variable, false_block, ValueBuilder::constant_int(3));
-    function.add_instruction(false_block, Instruction::DefineValue(set_in_false));
-    function.seal_block(false_block);
+    #[test]
+    fn global_value_numbering() {
+        let mut function = Function::default();
+        let changing = function.variables.new(IrType::Int);
+        let not_changing = function.variables.new(IrType::Int);
+        let not_changing_2 = function.variables.new(IrType::Int);
+        let start = function.blocks.new();
+        let value_changing_start =
+            function.write_variable(changing, start, ValueBuilder::constant_int(42));
+        let value_not_changing_start =
+            function.write_variable(not_changing, start, ValueBuilder::constant_int(314));
+        let value_not_changing_start_2 =
+            function.write_variable(not_changing_2, start, ValueBuilder::constant_int(42));
+        function.seal_block(start);
+        let pred1 = function.blocks.new();
+        let value_changing_pred1 =
+            function.write_variable(changing, pred1, ValueBuilder::constant_int(420));
+        function.blocks.declare_predecessor(pred1, start);
+        function.seal_block(pred1);
+        let pred2 = function.blocks.new();
+        function.blocks.declare_predecessor(pred2, start);
+        function.seal_block(pred2);
+        let join = function.blocks.new();
+        function.blocks.declare_predecessor(join, pred1);
+        function.blocks.declare_predecessor(join, pred2);
+        function.seal_block(join);
+        let value_changing_join = function.read_variable(changing, join);
+        let value_changing_join = function.values.get(value_changing_join);
+        assert_eq!(
+            value_changing_join,
+            &Value::Phi(Phi {
+                block: join,
+                operands: BTreeMap::from([
+                    (pred1, value_changing_pred1),
+                    (pred2, value_changing_start)
+                ])
+            })
+        );
 
-    // var = var + 5
-    let last = function.read_variable(variable, join_block);
-    function.add_instruction(join_block, Instruction::DefineValue(last));
-    let const_5 = function
-        .values
-        .new(ValueBuilder::constant_int(5), IrType::Int);
-    function.add_instruction(join_block, Instruction::DefineValue(const_5));
-    let sum = function
-        .values
-        .new(ValueBuilder::add(last, const_5), IrType::Int);
-    function.add_instruction(join_block, Instruction::DefineValue(sum));
-    function.seal_block(join_block);
+        let value_not_changing_join = function.read_variable(not_changing, join);
+        assert_eq!(value_not_changing_start, value_not_changing_join);
 
-    function.dump();
+        let value_not_changing_join_2 = function.read_variable(not_changing_2, join);
+        assert_eq!(value_not_changing_start_2, value_not_changing_join_2);
+    }
+
+    #[test]
+    fn test() {
+        let mut function = Function::default();
+        let start = function.blocks.new();
+        let true_block = function.blocks.new();
+        function.blocks.declare_predecessor(true_block, start);
+        let false_block = function.blocks.new();
+        function.blocks.declare_predecessor(false_block, start);
+        let join_block = function.blocks.new();
+        function.blocks.declare_predecessor(join_block, true_block);
+        function.blocks.declare_predecessor(join_block, false_block);
+
+        // %1 = 1
+        // if %1 goto true_block else false_block
+        let test_value = function
+            .values
+            .new(ValueBuilder::constant_int(1), IrType::Int);
+        function.add_instruction(start, Instruction::DefineValue(test_value));
+        function.add_instruction(
+            start,
+            Instruction::ConditionalJump {
+                test_value,
+                true_block,
+                false_block,
+            },
+        );
+        function.seal_block(start);
+
+        // var = 2
+        // temp = var
+        // var = 3
+        // var = var + temp
+        let variable = function.new_variable(IrType::Int);
+        function.write_variable(variable, true_block, ValueBuilder::constant_int(2));
+        let last = function.read_variable(variable, true_block);
+        function.add_instruction(true_block, Instruction::DefineValue(last));
+        function.write_variable(variable, true_block, ValueBuilder::constant_int(3));
+        let last_2 = function.read_variable(variable, true_block);
+        function.add_instruction(true_block, Instruction::DefineValue(last_2));
+
+        let sum = function.write_variable(variable, true_block, ValueBuilder::add(last, last_2));
+        function.add_instruction(true_block, Instruction::DefineValue(sum));
+        function.add_instruction(true_block, Instruction::UnconditionalJump(join_block));
+        function.seal_block(true_block);
+
+        // var = 4
+        let set_in_false =
+            function.write_variable(variable, false_block, ValueBuilder::constant_int(3));
+        function.add_instruction(false_block, Instruction::DefineValue(set_in_false));
+        function.seal_block(false_block);
+
+        // var = var + 5
+        let last = function.read_variable(variable, join_block);
+        function.add_instruction(join_block, Instruction::DefineValue(last));
+        let const_5 = function
+            .values
+            .new(ValueBuilder::constant_int(5), IrType::Int);
+        function.add_instruction(join_block, Instruction::DefineValue(const_5));
+        let sum = function
+            .values
+            .new(ValueBuilder::add(last, const_5), IrType::Int);
+        function.add_instruction(join_block, Instruction::DefineValue(sum));
+        function.seal_block(join_block);
+
+        function.dump();
+    }
 }
