@@ -35,12 +35,12 @@ impl Environment {
     }
 }
 
-fn lower_type(ty: &Type) -> Option<IrType> {
+fn lower_type(ty: &Type) -> IrType {
     match ty {
-        Type::Int => Some(IrType::Int),
-        Type::Bool => Some(IrType::Bool),
-        Type::LatteString => Some(IrType::String),
-        Type::Void => None,
+        Type::Int => IrType::Int,
+        Type::Bool => IrType::Bool,
+        Type::LatteString => IrType::String,
+        Type::Void => IrType::Void,
         Type::Function(_, _) => unimplemented!("Function types are not supported"),
     }
 }
@@ -61,26 +61,28 @@ fn lower_fn_decl(decl: &TypedDecl) -> (String, ir::Function) {
             // FIXME
             let args: Vec<IrType> = args
                 .into_iter()
-                .map(|arg| lower_type(&arg.value.ty).expect("Void type in arguments"))
+                .map(|arg| lower_type(&arg.value.ty))
                 .collect();
             let function_type = IrFunctionType {
                 return_ty,
                 args: args.clone(),
             };
 
-            let mut function = ir::Function::new(function_type);
-            let mut env = Environment::global();
-
-            let start_block = function.new_block();
-            function.seal_block(start_block);
-
-            for (i, (name, ty)) in arg_names.into_iter().zip(args).enumerate() {
-                let id = function.new_variable(ty);
-                env.add_variable(name, id);
-                function.write_variable(id, start_block, ValueBuilder::arg(i as u32));
-
-                // FIXME
-            }
+            // let
+            //
+            // let mut function = ir::Function::new(function_type);
+            // let mut env = Environment::global();
+            //
+            // let start_block = function.new_block();
+            // function.seal_block(start_block);
+            //
+            // for (i, (name, ty)) in arg_names.into_iter().zip(args).enumerate() {
+            //     let id = function.new_variable(ty);
+            //     env.add_variable(name, id);
+            //     function.write_variable(id, start_block, ValueBuilder::arg(i as u32));
+            //
+            //     // FIXME
+            // }
             todo!()
         }
         _ => panic!("Expected function declaration"),
