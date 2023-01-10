@@ -1,4 +1,4 @@
-int test(int param) {
+void test(int param) {
     param++;
     printInt(param);
 }
@@ -7,4 +7,5 @@ int main() {
     int a = 1;
     test(a);
     printInt(a);
+    return 0;
 }

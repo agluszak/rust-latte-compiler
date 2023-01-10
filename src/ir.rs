@@ -9,7 +9,7 @@ pub struct Context {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Instruction {
-    DefineValue(ValueId),
+    Define(SsaName, ValueId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -41,10 +41,14 @@ impl Terminator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct SsaName(u32);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub preds: BTreeSet<BlockId>,
     pub instructions: Vec<Instruction>,
+    pub sealed: bool,
     incomplete_phis: HashMap<VariableId, ValueId>,
 }
 
@@ -53,6 +57,7 @@ impl Block {
         Self {
             preds: BTreeSet::new(),
             instructions: Vec::new(),
+            sealed: false,
             incomplete_phis: HashMap::new(),
         }
     }
@@ -65,24 +70,20 @@ impl Block {
         mem::take(&mut self.incomplete_phis)
     }
 
+    fn seal(&mut self) {
+        self.sealed = true;
+    }
+
     fn declare_pred(&mut self, pred: BlockId) {
+        if self.sealed {
+            panic!("Cannot add a predecessor to a sealed block");
+        }
         self.preds.insert(pred);
     }
 
-    fn seal(self, terminator: Terminator) -> SealedBlock {
-        SealedBlock {
-            preds: self.preds,
-            instructions: self.instructions,
-            terminator,
-        }
+    fn add_instruction(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SealedBlock {
-    pub preds: BTreeSet<BlockId>,
-    pub instructions: Vec<Instruction>,
-    pub terminator: Terminator,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -127,10 +128,6 @@ struct BlockContainer {
 struct Blocks(HashMap<BlockId, BlockContainer>);
 
 impl Blocks {
-    fn sealed(&self, id: BlockId) -> bool {
-        !self.0.contains_key(&id)
-    }
-
     fn all(&self) -> impl Iterator<Item = (BlockId, &Block)> {
         self.0.iter().map(|(id, container)| (*id, &container.block))
     }
@@ -141,10 +138,6 @@ impl Blocks {
 
     fn get_mut(&mut self, id: BlockId) -> &mut Block {
         &mut self.0.get_mut(&id).unwrap().block
-    }
-
-    fn take(&mut self, id: BlockId) -> Block {
-        self.0.remove(&id).unwrap().block
     }
 
     fn new(&mut self) -> BlockId {
@@ -160,23 +153,6 @@ impl Blocks {
 
     fn declare_predecessor(&mut self, block: BlockId, pred: BlockId) {
         self.get_mut(block).declare_pred(pred);
-    }
-
-    fn add_instruction(&mut self, block: BlockId, instruction: Instruction) {
-        self.get_mut(block).instructions.push(instruction);
-    }
-}
-
-#[derive(Debug, Default)]
-struct SealedBlocks(HashMap<BlockId, SealedBlock>);
-
-impl SealedBlocks {
-    fn insert(&mut self, id: BlockId, block: SealedBlock) {
-        self.0.insert(id, block);
-    }
-
-    fn get(&self, id: BlockId) -> &SealedBlock {
-        &self.0[&id]
     }
 
     fn predecessors(&self, block: BlockId) -> BTreeSet<BlockId> {
@@ -203,27 +179,27 @@ struct Values {
 }
 
 impl Values {
-    // fn new(&mut self, value: Value, ty: IrType) -> ValueId {
-    //     let value = self.fold_constant(value);
-    //     let pair = (ty, value);
-    //     if let Some(id) = self.cache.get(&pair) {
-    //         return *id;
-    //     }
-    //     let (ty, value) = pair;
-    //
-    //     let id = ValueId(self.map.len() as u32);
-    //     self.cache.insert((ty.clone(), value.clone()), id);
-    //     self.map.insert(
-    //         id,
-    //         ValueContainer {
-    //             value,
-    //             ty,
-    //             users: HashSet::new(),
-    //         },
-    //     );
-    //
-    //     id
-    // }
+    fn new(&mut self, value: Value, ty: IrType) -> ValueId {
+        let value = self.fold_constant(value);
+        let pair = (ty, value);
+        if let Some(id) = self.cache.get(&pair) {
+            return *id;
+        }
+        let (ty, value) = pair;
+
+        let id = ValueId(self.map.len() as u32);
+        self.cache.insert((ty.clone(), value.clone()), id);
+        self.map.insert(
+            id,
+            ValueContainer {
+                value,
+                ty,
+                users: HashSet::new(),
+            },
+        );
+
+        id
+    }
 
     fn fold_constant(&mut self, value: Value) -> Value {
         match value {
@@ -507,11 +483,11 @@ impl Variables {
 #[derive(Debug)]
 pub struct Function<'a> {
     // pub name: String, // TODO: interning
-    sealed_blocks: SealedBlocks,
     blocks: Blocks,
     variables: Variables,
     values: Values,
     call_counter: u32,
+    ssa_counter: u32,
     context: &'a Context,
 }
 
@@ -803,11 +779,11 @@ impl ValueBuilder {
 impl<'a> Function<'a> {
     pub fn new(context: &'a Context) -> Function<'a> {
         Self {
-            sealed_blocks: Default::default(),
             blocks: Default::default(),
             variables: Default::default(),
             values: Default::default(),
             call_counter: 0,
+            ssa_counter: 0,
             context,
         }
     }
@@ -832,7 +808,7 @@ impl<'a> Function<'a> {
             .cloned()
             .unwrap()
             .return_ty;
-        self.new_value(value, ty, block)
+        self.values.new(value, ty)
     }
 
     pub fn new_variable(&mut self, ty: IrType) -> VariableId {
@@ -843,59 +819,33 @@ impl<'a> Function<'a> {
         self.blocks.new()
     }
 
-    pub fn new_value(&mut self, value: Value, ty: IrType, block: BlockId) -> ValueId {
-        let value = self.values.fold_constant(value);
-        let pair = (ty, value);
-        if let Some(id) = self.values.cache.get(&pair) {
-            return *id;
-        }
-        let (ty, value) = pair;
-
-        let id = ValueId(self.values.map.len() as u32);
-        self.values.cache.insert((ty.clone(), value.clone()), id);
-        self.values.map.insert(
-            id,
-            ValueContainer {
-                value,
-                ty,
-                users: HashSet::new(),
-            },
-        );
-        self.blocks
-            .add_instruction(block, Instruction::DefineValue(id));
-
-        id
+    pub fn new_ssa_name(&mut self) -> SsaName {
+        let id = self.ssa_counter;
+        self.ssa_counter += 1;
+        SsaName(id)
     }
 
     pub fn write_variable(&mut self, var: VariableId, block: BlockId, value: Value) -> ValueId {
-        println!("write_variable {:?} {:?} {:?}", var, block, value);
         let ty = self.variables.ty(var);
-        let value = self.new_value(value, ty, block);
+        let value = self.values.new(value, ty);
         self.variables.set_in_block(var, block, value);
         value
     }
 
-    pub fn peek_variable(&self, var: VariableId, block: BlockId) -> ValueId {
-        assert!(self.blocks.sealed(block));
-        self.variables
-            .get_in_block(var, block)
-            .expect("variable not defined")
-    }
-
     pub fn read_variable(&mut self, var: VariableId, block_id: BlockId) -> ValueId {
-        println!("read_variable {:?} {:?}", var, block_id);
         let ty = self.variables.ty(var);
         if let Some(value) = self.variables.get_in_block(var, block_id) {
             value
         } else {
-            let sealed = self.blocks.sealed(block_id);
+            let block = &self.blocks.get(block_id);
+            let sealed = block.sealed;
             let val = if !sealed {
                 // Incomplete CFG
                 let val = Value::Phi(Phi::new(block_id));
-                let val = self.new_value(val, ty, block_id);
+                let val = self.values.new(val, ty);
                 self.blocks.get_mut(block_id).add_incopmlete_phi(var, val);
                 val
-            } else if let Some(pred) = self.sealed_blocks.single_predecessor(block_id) {
+            } else if let Some(pred) = self.blocks.single_predecessor(block_id) {
                 // Optimize the common case of one predecessor: No phi needed
                 self.read_variable(var, pred)
             } else {
@@ -937,7 +887,7 @@ impl<'a> Function<'a> {
             same
         } else {
             let ty = self.values.ty(phi);
-            let undefined = self.new_value(Value::Undefined, ty, BlockId(0));
+            let undefined = self.values.new(Value::Undefined, ty);
             undefined // this phi is unreachable or in start block
         };
 
@@ -975,17 +925,14 @@ impl<'a> Function<'a> {
         self.remove_trivial_phi(phi_id)
     }
 
-    pub fn seal_block(&mut self, block_id: BlockId, terminator: Terminator) {
+    pub fn seal_block(&mut self, block_id: BlockId) {
         let block = self.blocks.get_mut(block_id);
         let phis = block.take_incomplete_phis();
         for (var, phi) in phis {
-            dbg!(block_id, var, phi);
             self.add_phi_operands(var, phi);
         }
-        let block = self.blocks.take(block_id);
-        let sealed = block.seal(terminator);
-        debug_assert!(self.blocks.sealed(block_id));
-        self.sealed_blocks.insert(block_id, sealed);
+        let block = self.blocks.get_mut(block_id);
+        block.seal();
     }
 
     // fn dump(&self) {
@@ -1026,30 +973,44 @@ mod tests {
 
         let mut function = Function::new(&context);
         let block = function.new_block();
-        let lhs = function.new_value(ValueBuilder::constant_int(7), IrType::Int, block);
-        let rhs = function.new_value(ValueBuilder::constant_int(3), IrType::Int, block);
+        let lhs = function
+            .values
+            .new(ValueBuilder::constant_int(7), IrType::Int);
+        let rhs = function
+            .values
+            .new(ValueBuilder::constant_int(3), IrType::Int);
 
-        let sum = function.new_value(ValueBuilder::add(lhs, rhs), IrType::Int, block);
+        let sum = function
+            .values
+            .new(ValueBuilder::add(lhs, rhs), IrType::Int);
         let sum = function.values.get(sum);
         assert_eq!(sum, &ValueBuilder::constant_int(10));
 
-        let diff = function.new_value(ValueBuilder::sub(lhs, rhs), IrType::Int, block);
+        let diff = function
+            .values
+            .new(ValueBuilder::sub(lhs, rhs), IrType::Int);
         let diff = function.values.get(diff);
         assert_eq!(diff, &ValueBuilder::constant_int(4));
 
-        let prod = function.new_value(ValueBuilder::mul(lhs, rhs), IrType::Int, block);
+        let prod = function
+            .values
+            .new(ValueBuilder::mul(lhs, rhs), IrType::Int);
         let prod = function.values.get(prod);
         assert_eq!(prod, &ValueBuilder::constant_int(21));
 
-        let quot = function.new_value(ValueBuilder::div(lhs, rhs), IrType::Int, block);
+        let quot = function
+            .values
+            .new(ValueBuilder::div(lhs, rhs), IrType::Int);
         let quot = function.values.get(quot);
         assert_eq!(quot, &ValueBuilder::constant_int(2));
 
-        let rem = function.new_value(ValueBuilder::mod_(lhs, rhs), IrType::Int, block);
+        let rem = function
+            .values
+            .new(ValueBuilder::mod_(lhs, rhs), IrType::Int);
         let rem = function.values.get(rem);
         assert_eq!(rem, &ValueBuilder::constant_int(1));
 
-        let neg = function.new_value(ValueBuilder::neg(lhs), IrType::Int, block);
+        let neg = function.values.new(ValueBuilder::neg(lhs), IrType::Int);
         let neg = function.values.get(neg);
         assert_eq!(neg, &ValueBuilder::constant_int(-7));
     }
@@ -1060,18 +1021,26 @@ mod tests {
 
         let mut function = Function::new(&context);
         let block = function.new_block();
-        let lhs = function.new_value(ValueBuilder::constant_bool(true), IrType::Bool, block);
-        let rhs = function.new_value(ValueBuilder::constant_bool(false), IrType::Bool, block);
+        let lhs = function
+            .values
+            .new(ValueBuilder::constant_bool(true), IrType::Bool);
+        let rhs = function
+            .values
+            .new(ValueBuilder::constant_bool(false), IrType::Bool);
 
-        let and = function.new_value(ValueBuilder::and(lhs, rhs), IrType::Bool, block);
+        let and = function
+            .values
+            .new(ValueBuilder::and(lhs, rhs), IrType::Bool);
         let and = function.values.get(and);
         assert_eq!(and, &ValueBuilder::constant_bool(false));
 
-        let or = function.new_value(ValueBuilder::or(lhs, rhs), IrType::Bool, block);
+        let or = function
+            .values
+            .new(ValueBuilder::or(lhs, rhs), IrType::Bool);
         let or = function.values.get(or);
         assert_eq!(or, &ValueBuilder::constant_bool(true));
 
-        let not = function.new_value(ValueBuilder::not(lhs), IrType::Bool, block);
+        let not = function.values.new(ValueBuilder::not(lhs), IrType::Bool);
         let not = function.values.get(not);
         assert_eq!(not, &ValueBuilder::constant_bool(false));
     }
@@ -1082,30 +1051,46 @@ mod tests {
 
         let mut function = Function::new(&context);
         let block = function.new_block();
-        let lhs = function.new_value(ValueBuilder::constant_int(7), IrType::Int, block);
-        let rhs = function.new_value(ValueBuilder::constant_int(3), IrType::Int, block);
+        let lhs = function
+            .values
+            .new(ValueBuilder::constant_int(7), IrType::Int);
+        let rhs = function
+            .values
+            .new(ValueBuilder::constant_int(3), IrType::Int);
 
-        let eq = function.new_value(ValueBuilder::eq(lhs, rhs), IrType::Bool, block);
+        let eq = function
+            .values
+            .new(ValueBuilder::eq(lhs, rhs), IrType::Bool);
         let eq = function.values.get(eq);
         assert_eq!(eq, &ValueBuilder::constant_bool(false));
 
-        let neq = function.new_value(ValueBuilder::neq(lhs, rhs), IrType::Bool, block);
+        let neq = function
+            .values
+            .new(ValueBuilder::neq(lhs, rhs), IrType::Bool);
         let neq = function.values.get(neq);
         assert_eq!(neq, &ValueBuilder::constant_bool(true));
 
-        let lt = function.new_value(ValueBuilder::lt(lhs, rhs), IrType::Bool, block);
+        let lt = function
+            .values
+            .new(ValueBuilder::lt(lhs, rhs), IrType::Bool);
         let lt = function.values.get(lt);
         assert_eq!(lt, &ValueBuilder::constant_bool(false));
 
-        let gt = function.new_value(ValueBuilder::gt(lhs, rhs), IrType::Bool, block);
+        let gt = function
+            .values
+            .new(ValueBuilder::gt(lhs, rhs), IrType::Bool);
         let gt = function.values.get(gt);
         assert_eq!(gt, &ValueBuilder::constant_bool(true));
 
-        let leq = function.new_value(ValueBuilder::lte(lhs, rhs), IrType::Bool, block);
+        let leq = function
+            .values
+            .new(ValueBuilder::lte(lhs, rhs), IrType::Bool);
         let leq = function.values.get(leq);
         assert_eq!(leq, &ValueBuilder::constant_bool(false));
 
-        let geq = function.new_value(ValueBuilder::gte(lhs, rhs), IrType::Bool, block);
+        let geq = function
+            .values
+            .new(ValueBuilder::gte(lhs, rhs), IrType::Bool);
         let geq = function.values.get(geq);
         assert_eq!(geq, &ValueBuilder::constant_bool(true));
     }
@@ -1116,23 +1101,39 @@ mod tests {
 
         let mut function = Function::new(&context);
         let block = function.new_block();
-        let arg1 = function.new_value(ValueBuilder::constant_int(7), IrType::Int, block);
-        let arg2 = function.new_value(ValueBuilder::constant_int(3), IrType::Int, block);
-        let arg3 = function.new_value(ValueBuilder::constant_int(2), IrType::Int, block);
+        let arg1 = function
+            .values
+            .new(ValueBuilder::constant_int(7), IrType::Int);
+        let arg2 = function
+            .values
+            .new(ValueBuilder::constant_int(3), IrType::Int);
+        let arg3 = function
+            .values
+            .new(ValueBuilder::constant_int(2), IrType::Int);
 
-        let sum1_2 = function.new_value(ValueBuilder::add(arg1, arg2), IrType::Int, block);
+        let sum1_2 = function
+            .values
+            .new(ValueBuilder::add(arg1, arg2), IrType::Int);
 
-        let sum1_2_3 = function.new_value(ValueBuilder::add(sum1_2, arg3), IrType::Int, block);
+        let sum1_2_3 = function
+            .values
+            .new(ValueBuilder::add(sum1_2, arg3), IrType::Int);
 
-        let comp = function.new_value(ValueBuilder::eq(sum1_2_3, arg1), IrType::Bool, block);
+        let comp = function
+            .values
+            .new(ValueBuilder::eq(sum1_2_3, arg1), IrType::Bool);
         assert_eq!(
             function.values.get(comp),
             &ValueBuilder::constant_bool(false)
         );
 
-        let false_ = function.new_value(ValueBuilder::constant_bool(false), IrType::Bool, block);
+        let false_ = function
+            .values
+            .new(ValueBuilder::constant_bool(false), IrType::Bool);
 
-        let or = function.new_value(ValueBuilder::or(comp, false_), IrType::Bool, block);
+        let or = function
+            .values
+            .new(ValueBuilder::or(comp, false_), IrType::Bool);
 
         let or = function.values.get(or);
         assert_eq!(or, &ValueBuilder::constant_bool(false));
@@ -1144,8 +1145,12 @@ mod tests {
 
         let mut function = Function::new(&context);
         let block = function.new_block();
-        let constant = function.new_value(ValueBuilder::constant_int(7), IrType::Int, block);
-        let constant2 = function.new_value(ValueBuilder::constant_int(7), IrType::Int, block);
+        let constant = function
+            .values
+            .new(ValueBuilder::constant_int(7), IrType::Int);
+        let constant2 = function
+            .values
+            .new(ValueBuilder::constant_int(7), IrType::Int);
         assert_eq!(constant, constant2);
     }
 
@@ -1176,9 +1181,6 @@ mod tests {
         let not_changing = function.variables.new(IrType::Int);
         let not_changing_2 = function.variables.new(IrType::Int);
         let start = function.blocks.new();
-        let pred1 = function.blocks.new();
-        let pred2 = function.blocks.new();
-        let join = function.blocks.new();
         let value_changing_start =
             function.write_variable(changing, start, ValueBuilder::constant_int(42));
         let value_not_changing_start =
@@ -1186,30 +1188,23 @@ mod tests {
         let value_not_changing_start_2 =
             function.write_variable(not_changing_2, start, ValueBuilder::constant_int(42));
 
-        let true_ = function.new_value(ValueBuilder::constant_bool(true), IrType::Bool, start);
-        function.seal_block(start, Terminator::conditional_jump(true_, pred1, pred2));
-
+        let true_ = function
+            .values
+            .new(ValueBuilder::constant_bool(true), IrType::Bool);
+        function.seal_block(start);
+        let pred1 = function.blocks.new();
         let value_changing_pred1 =
             function.write_variable(changing, pred1, ValueBuilder::constant_int(420));
         function.blocks.declare_predecessor(pred1, start);
-        function.seal_block(pred1, Terminator::jump(join));
-
+        function.seal_block(pred1);
+        let pred2 = function.blocks.new();
         function.blocks.declare_predecessor(pred2, start);
-        function.seal_block(pred2, Terminator::jump(join));
-
+        function.seal_block(pred2);
+        let join = function.blocks.new();
         function.blocks.declare_predecessor(join, pred1);
         function.blocks.declare_predecessor(join, pred2);
-
+        function.seal_block(join);
         let value_changing_join = function.read_variable(changing, join);
-
-        let value_not_changing_join = function.read_variable(not_changing, join);
-
-        let value_not_changing_join_2 = function.read_variable(not_changing_2, join);
-
-        let void = function.new_value(ValueBuilder::void(), IrType::Void, join);
-
-        function.seal_block(join, Terminator::return_(void));
-        dbg!("void");
         let value_changing_join = function.values.get(value_changing_join);
         assert_eq!(
             value_changing_join,
@@ -1221,7 +1216,11 @@ mod tests {
                 ])
             })
         );
+
+        let value_not_changing_join = function.read_variable(not_changing, join);
         assert_eq!(value_not_changing_start, value_not_changing_join);
+
+        let value_not_changing_join_2 = function.read_variable(not_changing_2, join);
         assert_eq!(value_not_changing_start_2, value_not_changing_join_2);
     }
 
