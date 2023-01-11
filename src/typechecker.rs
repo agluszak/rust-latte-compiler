@@ -4,13 +4,13 @@ use crate::typed_ast::{
     TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
 };
 use crate::{ast, lexer};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
     parent: Option<Box<Environment>>,
-    names: HashMap<ast::Ident, (Type, Span)>,
+    names: BTreeMap<ast::Ident, (Type, Span)>,
 }
 
 fn predefined_fn(name: &str, args: Vec<Type>, ret: Type) -> (ast::Ident, (Type, Span)) {
@@ -38,14 +38,14 @@ impl Environment {
 
         Environment {
             parent: None,
-            names: HashMap::from(predefined),
+            names: BTreeMap::from(predefined),
         }
     }
 
     fn local(&self) -> Self {
         Environment {
             parent: Some(Box::new(self.clone())),
-            names: HashMap::new(),
+            names: BTreeMap::new(),
         }
     }
 
@@ -553,7 +553,7 @@ fn resolve_function_header(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Ensure that argument names are unique
-    let mut arg_names = HashSet::new();
+    let mut arg_names = BTreeSet::new();
     for (arg_name, _) in &args {
         if !arg_names.insert(arg_name.value().0.clone()) {
             return Err(TypecheckingError::duplicate_argument(

@@ -1,7 +1,7 @@
 use crate::ast::Ident;
 use crate::ir::{Function, IrFunctionType, IrType, ValueBuilder, VariableId};
 use crate::typechecker::Type;
-use crate::typed_ast::TypedDecl;
+use crate::typed_ast::{TypedDecl, TypedStmt};
 use crate::{ast, ir};
 use std::collections::HashMap;
 
@@ -45,6 +45,21 @@ fn lower_type(ty: &Type) -> IrType {
     }
 }
 
+fn lower_stmt(function: &mut ir::Function, env: &mut Environment, stmt: TypedStmt) {
+    match stmt {
+        TypedStmt::Block(block) => {
+            let mut local_env = env.local();
+            for stmt in block.value.0 {
+                lower_stmt(function, &mut local_env, stmt.value);
+            }
+        }
+        TypedStmt::Empty => {}
+        TypedStmt::Expr(expr) => {
+            lower_expr(function, env, expr);
+        }
+
+}
+
 fn lower_fn_decl(decl: &TypedDecl) -> (String, ir::Function) {
     match decl {
         TypedDecl::Fn {
@@ -68,21 +83,22 @@ fn lower_fn_decl(decl: &TypedDecl) -> (String, ir::Function) {
                 args: args.clone(),
             };
 
-            // let
-            //
-            // let mut function = ir::Function::new(function_type);
-            // let mut env = Environment::global();
-            //
-            // let start_block = function.new_block();
-            // function.seal_block(start_block);
-            //
-            // for (i, (name, ty)) in arg_names.into_iter().zip(args).enumerate() {
-            //     let id = function.new_variable(ty);
-            //     env.add_variable(name, id);
-            //     function.write_variable(id, start_block, ValueBuilder::arg(i as u32));
-            //
-            //     // FIXME
-            // }
+            let mut context = ir::Context::default();
+            let mut function = ir::Function::new(&context);
+            let mut env = Environment::global();
+
+            let start_block = function.new_block();
+            function.seal_block(start_block);
+
+            for (i, (name, ty)) in arg_names.into_iter().zip(args).enumerate() {
+                let id = function.new_variable(ty);
+                env.add_variable(name, id);
+                function.write_variable(id, start_block, ValueBuilder::arg(i as u32));
+            }
+
+            for stmt in body.value.0 {
+                lower_stmt(&mut function, &mut env, stmt.value);
+            }
             todo!()
         }
         _ => panic!("Expected function declaration"),
