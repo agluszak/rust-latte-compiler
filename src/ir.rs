@@ -1,34 +1,42 @@
+use crate::ast;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::mem;
 
 #[derive(Debug, Default)]
 pub struct Context {
+    pub names: BTreeMap<ast::Ident, FunctionId>,
     pub functions: BTreeMap<FunctionId, IrFunctionType>,
+}
+
+impl Context {
+    pub fn get_function(&self, name: &ast::Ident) -> FunctionId {
+        self.names.get(name).cloned().unwrap()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Instruction {
-    Define(SsaName, ValueId),
+    Define(SsaName),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum Terminator {
     UnconditionalJump(BlockId),
     ConditionalJump {
-        condition: ValueId,
+        condition: SsaName,
         then_block: BlockId,
-        else_block: BlockId,
+        otherwise_block: BlockId,
     },
-    Return(ValueId),
+    Return(SsaName),
 }
 
 impl Terminator {
-    pub fn conditional_jump(condition: ValueId, then_block: BlockId, else_block: BlockId) -> Self {
+    pub fn conditional_jump(condition: SsaName, then_block: BlockId, else_block: BlockId) -> Self {
         Terminator::ConditionalJump {
             condition,
             then_block,
-            else_block,
+            otherwise_block: else_block,
         }
     }
 
@@ -36,7 +44,7 @@ impl Terminator {
         Terminator::UnconditionalJump(block)
     }
 
-    pub fn return_(value: ValueId) -> Self {
+    pub fn return_(value: SsaName) -> Self {
         Terminator::Return(value)
     }
 }
@@ -49,6 +57,7 @@ pub struct Block {
     pub preds: BTreeSet<BlockId>,
     pub instructions: Vec<Instruction>,
     pub sealed: bool,
+    pub terminator: Option<Terminator>,
     incomplete_phis: BTreeMap<VariableId, SsaName>,
 }
 
@@ -59,6 +68,7 @@ impl Block {
             instructions: Vec::new(),
             sealed: false,
             incomplete_phis: BTreeMap::new(),
+            terminator: None,
         }
     }
 
@@ -74,15 +84,18 @@ impl Block {
         self.sealed = true;
     }
 
-    fn declare_pred(&mut self, pred: BlockId) {
-        if self.sealed {
-            panic!("Cannot add a predecessor to a sealed block");
-        }
+    fn declare_predecessor(&mut self, pred: BlockId) {
+        assert!(!self.sealed);
         self.preds.insert(pred);
     }
 
     fn add_instruction(&mut self, instruction: Instruction) {
         self.instructions.push(instruction);
+    }
+
+    fn fill(&mut self, terminator: Terminator) {
+        assert!(self.terminator.is_none());
+        self.terminator = Some(terminator);
     }
 }
 
@@ -152,7 +165,7 @@ impl Blocks {
     }
 
     fn declare_predecessor(&mut self, block: BlockId, pred: BlockId) {
-        self.get_mut(block).declare_pred(pred);
+        self.get_mut(block).declare_predecessor(pred);
     }
 
     fn predecessors(&self, block: BlockId) -> BTreeSet<BlockId> {
@@ -429,7 +442,7 @@ impl UnaryOperation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Constant {
-    Int(i32),
+    Int(i64),
     Bool(bool),
     String(String), // TODO: interning
 }
@@ -510,7 +523,16 @@ impl Value {
 pub struct ValueBuilder;
 
 impl ValueBuilder {
-    pub fn constant_int(value: i32) -> Value {
+    pub fn zero_value(ty: &IrType) -> Value {
+        match ty {
+            IrType::Bool => Self::constant_bool(false),
+            IrType::Int => Self::constant_int(0),
+            IrType::String => Self::constant_string("".to_string()),
+            IrType::Void => Self::void(),
+        }
+    }
+
+    pub fn constant_int(value: i64) -> Value {
         Value::Constant(Constant::Int(value))
     }
 
@@ -605,6 +627,19 @@ impl<'a> Function<'a> {
             call_counter: 0,
             context,
         }
+    }
+
+    pub fn declare_predecessor(&mut self, block: BlockId, predecessor: BlockId) {
+        self.blocks.get_mut(block).declare_predecessor(predecessor);
+    }
+
+    pub fn fill_block(&mut self, block: BlockId, terminator: Terminator) {
+        self.blocks.get_mut(block).fill(terminator);
+    }
+
+    pub fn define_ssa_name(&mut self, block: BlockId, name: SsaName) {
+        let define = Instruction::Define(name);
+        self.blocks.get_mut(block).instructions.push(define);
     }
 
     fn fold_constant(&mut self, value: Value) -> Value {
@@ -835,12 +870,7 @@ impl<'a> Function<'a> {
         }
     }
 
-    pub fn call(
-        &mut self,
-        block: BlockId,
-        function: FunctionId,
-        arguments: Vec<SsaName>,
-    ) -> ValueId {
+    pub fn new_call(&mut self, function: FunctionId, arguments: Vec<SsaName>) -> ValueId {
         let id = self.call_counter;
         self.call_counter += 1;
         let value = Value::Call(Call {
@@ -875,7 +905,11 @@ impl<'a> Function<'a> {
         self.ssa_names.new(value)
     }
 
-    pub fn write_variable(&mut self, var: VariableId, block: BlockId, value: Value) -> SsaName {
+    pub fn set_variable(&mut self, variable: VariableId, block: BlockId, value: SsaName) {
+        self.variables.set_in_block(variable, block, value);
+    }
+
+    fn write_variable(&mut self, var: VariableId, block: BlockId, value: Value) -> SsaName {
         let ty = self.variables.ty(var);
         let value = self.new_value(value, ty);
         let ssa_name = self.new_ssa_name(value);
@@ -997,33 +1031,45 @@ impl<'a> Function<'a> {
         block.seal();
     }
 
-    // fn dump(&self) {
-    //     for (id, block) in self.blocks.all() {
-    //         println!("Block {:?}:", id);
-    //         println!("  preds: {:?}", block.preds);
-    //
-    //         for instr in &block.instructions {
-    //             match instr {
-    //                 Instruction::UnconditionalJump(b) => println!("  jump {:?}", b),
-    //                 Instruction::ConditionalJump {
-    //                     test_value,
-    //                     true_block,
-    //                     false_block,
-    //                 } => {
-    //                     let value = self.values.get(*test_value);
-    //                     println!(
-    //                         "  if {:?} ({:?}) jump {:?} else {:?}",
-    //                         value, test_value, true_block, false_block
-    //                     )
-    //                 }
-    //                 Instruction::DefineValue(id) => {
-    //                     let value = &self.values.get(*id);
-    //                     println!("  {:?} = {:?}", id, value);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    pub fn dump(&self) {
+        for (id, block) in self.blocks.all() {
+            assert!(block.sealed);
+            assert!(block.incomplete_phis.is_empty());
+            assert!(block.terminator.is_some());
+
+            println!("Block {:?}:", id);
+            println!("  preds: {:?}", block.preds);
+
+            for definition in &block.instructions {
+                match definition {
+                    Instruction::Define(ssa_name) => {
+                        let value = self.ssa_names.get(ssa_name.clone());
+                        let value = self.values.get(value);
+                        println!("  {:?} = {:?}", ssa_name, value);
+                    }
+                }
+            }
+
+            match block.terminator.as_ref().unwrap() {
+                Terminator::UnconditionalJump(block) => {
+                    println!("  jump {:?}", block);
+                }
+                Terminator::ConditionalJump {
+                    condition,
+                    then_block,
+                    otherwise_block,
+                } => {
+                    println!(
+                        "  if {:?} then {:?} else {:?}",
+                        condition, then_block, otherwise_block
+                    );
+                }
+                Terminator::Return(ret) => {
+                    println!("  return {:?}", ret);
+                }
+            }
+        }
+    }
 }
 
 mod tests {

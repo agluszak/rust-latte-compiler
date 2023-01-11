@@ -3,9 +3,11 @@ extern crate core;
 use crate::errors::{parsing_reports, typechecking_reports};
 use crate::lexer::Lexer;
 use crate::parser::latte::ProgramParser;
-use crate::typechecker::typecheck_program;
+use crate::typechecker::{typecheck_program, TypecheckingError};
 use ariadne::Report;
 
+use crate::typed_ast::TypedProgram;
+use crate::typed_ast_lowering::lower_fn_decl;
 use std::ops::Range;
 
 mod ast;
@@ -49,15 +51,16 @@ pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)
     let actual = ProgramParser::new().parse(lexer);
 
     match actual {
-        Ok(actual) => {
-            let errors = typecheck_program(actual);
-
-            if let Err(errs) = errors {
-                typechecking_reports(errs, filename)
-            } else {
-                Vec::new()
+        Ok(actual) => match typecheck_program(actual) {
+            Ok(program) => {
+                for f in program.0 {
+                    lower_fn_decl(f.value);
+                }
+                todo!("compile")
             }
-        }
+
+            Err(errors) => typechecking_reports(errors, filename),
+        },
         Err(err) => parsing_reports(err, filename),
     }
 }
