@@ -142,7 +142,7 @@ pub fn parsing_reports(err: ParsingError, filename: &str) -> Vec<Report<(String,
                     .with_message(format!("Expected one of: {}", expected.join(", ")))
                     .with_color(color),
             ),
-        ParseError::UnrecognizedEOF { location, expected } => syntax_error(filename, location)
+        ParseError::UnrecognizedEof { location, expected } => syntax_error(filename, location)
             .with_label(
                 Label::new((filename.to_string(), location..location))
                     .with_message("Unexpected end of file")

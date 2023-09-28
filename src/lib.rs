@@ -21,7 +21,7 @@ mod typechecker;
 mod typed_ast;
 mod typed_ast_lowering;
 
-pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)>> {
+pub fn compile<'a>(input: &'a str, filename: &'a str) -> Vec<Report<'a, (String, Range<usize>)>> {
     // let mut error_reports = Vec::new();
     //
     // // Lex
