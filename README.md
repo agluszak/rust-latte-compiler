@@ -10,13 +10,10 @@ cargo run -- <ścieżka/do/pliku.lat>
 ```
 
 ## Biblioteki
-- chumsky - parser i lexer
-- ariadne - ładne wypisywanie błędów
-
+- logos - lexer
+- lalrpop - generator parserów
+- insta - snapshot testing
+- ariadne - ładne raportowanie błędów
 
 ## Struktura
-- `src/ast.rs` - AST
-- `src/parser.rs` - parser 
-- `src/lexer.rs` - lexer
-- `src/errors.rs` - obsługa błędów
-- `src/typechecker.rs` - typechecker
+Projekt podzielony na moduły. Przepływ informacji jest standardowy: lexer -> parser -> typechecker -> dfa.
