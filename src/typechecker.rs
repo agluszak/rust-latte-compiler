@@ -22,12 +22,6 @@ fn predefined_fn(name: &str, args: Vec<Type>, ret: Type) -> (ast::Ident, (Type, 
 
 impl Environment {
     fn global() -> Self {
-        // void printInt(int)
-        // void printString(string)
-        // void error()
-        // int readInt()
-        // string readString()
-
         let predefined = [
             predefined_fn("printInt", vec![Type::Int], Type::Void),
             predefined_fn("printString", vec![Type::LatteString], Type::Void),

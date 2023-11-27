@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n    int x = 10;\n    int y = x + 5;\n    x = x - 1;\n    if (x < 3) {\n       x = 4;\n    }\n    return 0;\n}"
+---
+

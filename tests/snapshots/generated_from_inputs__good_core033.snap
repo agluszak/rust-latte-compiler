@@ -1,0 +1,5 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int funkcja_ifbooltrudny (boolean f, boolean t) {\n  if ((!f && f) || !(f || !t)) {\n    printInt(1042);\n  } else {\n    printInt(2042);\n  }\n  return 0;\n}\n\nint main () {\n  funkcja_ifbooltrudny (false, true);\n  return 0;\n}\n"
+---
+
