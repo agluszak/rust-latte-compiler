@@ -2,6 +2,15 @@ use crate::ast::{BinaryOp, Ident, Literal, UnaryOp};
 use crate::lexer::Spanned;
 use crate::typechecker::Type;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct VariableId(u32);
+
+impl VariableId {
+    pub fn new(id: u32) -> Self {
+        VariableId(id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedProgram(pub Vec<Spanned<TypedDecl>>);
 
@@ -15,6 +24,7 @@ pub enum TypedStmt {
     Decl(Spanned<TypedDecl>),
     Assignment {
         target: Spanned<Ident>,
+        target_id: VariableId,
         expr: Spanned<TypedExpr>,
     },
     Return(Option<Spanned<TypedExpr>>),
@@ -40,7 +50,7 @@ pub struct TypedExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedExprKind {
-    Variable(Ident),
+    Variable(Ident, VariableId),
     Literal(Literal),
     Binary {
         lhs: Box<Spanned<TypedExpr>>,
@@ -66,7 +76,7 @@ pub enum TypedDecl {
     Fn {
         return_type: Type,
         name: Spanned<Ident>,
-        args: Vec<Spanned<TypedArg>>,
+        args: Vec<Spanned<TypedArg>>, // TODO: or params?
         body: Spanned<TypedBlock>,
     },
 }
@@ -75,6 +85,7 @@ pub enum TypedDecl {
 pub struct TypedItem {
     pub ty: Type,
     pub ident: Spanned<Ident>,
+    pub var_id: VariableId,
     pub init: Option<Spanned<TypedExpr>>,
 }
 
@@ -82,4 +93,5 @@ pub struct TypedItem {
 pub struct TypedArg {
     pub ty: Type,
     pub name: Spanned<Ident>,
+    pub var_id: VariableId,
 }

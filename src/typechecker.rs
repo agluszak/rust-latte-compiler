@@ -1,8 +1,6 @@
 use crate::dfa::top_level_return_analysis;
 use crate::lexer::{Span, Spanned};
-use crate::typed_ast::{
-    TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
-};
+use crate::typed_ast::{TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt, VariableId};
 use crate::{ast, lexer};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
@@ -10,53 +8,95 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
     parent: Option<Box<Environment>>,
-    names: BTreeMap<ast::Ident, (Type, Span)>,
+    names: BTreeMap<ast::Ident, VariableData>,
+    next_variable_id: u32
 }
 
-fn predefined_fn(name: &str, args: Vec<Type>, ret: Type) -> (ast::Ident, (Type, Span)) {
-    (
-        ast::Ident::new(name),
-        (Type::Function(args, Box::new(ret)), Span::default()),
-    )
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VariableData {
+    ty: Type,
+    span: Span, // built-ins don't have span
+    id: VariableId
+}
+
+impl VariableData {
+    fn new(ty: Type, span: Span, id: VariableId) -> Self {
+        Self {
+            ty,
+            span,
+            id
+        }
+    }
 }
 
 impl Environment {
-    fn global() -> Self {
-        let predefined = [
-            predefined_fn("printInt", vec![Type::Int], Type::Void),
-            predefined_fn("printString", vec![Type::LatteString], Type::Void),
-            predefined_fn("error", vec![], Type::Void),
-            predefined_fn("readInt", vec![], Type::Int),
-            predefined_fn("readString", vec![], Type::LatteString),
-        ];
 
-        Environment {
+    fn fresh_variable_id(&mut self) -> VariableId {
+        let id = self.next_variable_id;
+        self.next_variable_id += 1;
+        VariableId::new(id)
+    }
+
+    fn add_predefined_fn(&mut self, name: &str, args: Vec<Type>, ret: Type) {
+        let id = self.fresh_variable_id();
+        self.names.insert(
+            ast::Ident::new(name),
+            VariableData {
+                ty: Type::Function(args, Box::new(ret)),
+                span: 0..0,
+                id
+            }
+        );
+    }
+
+    fn global() -> Self {
+        let mut env = Environment {
             parent: None,
-            names: BTreeMap::from(predefined),
-        }
+            names: BTreeMap::new(),
+            next_variable_id: 0
+        };
+
+        env.add_predefined_fn("printInt", vec![Type::Int], Type::Void);
+        env.add_predefined_fn("printString", vec![Type::LatteString], Type::Void);
+        env.add_predefined_fn("error", vec![], Type::Void);
+        env.add_predefined_fn("readInt", vec![], Type::Int);
+        env.add_predefined_fn("readString", vec![], Type::LatteString);
+
+        env
     }
 
     fn local(&self) -> Self {
         Environment {
             parent: Some(Box::new(self.clone())),
             names: BTreeMap::new(),
+            next_variable_id: self.next_variable_id
         }
     }
 
-    fn get_type(&self, name: &ast::Ident) -> Option<&Type> {
-        self.names.get(name).map(|(ty, _)| ty).or_else(|| {
+    fn with_local<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, TypecheckingError>) -> Result<T, TypecheckingError> {
+        let mut local = self.local();
+
+        let result = f(&mut local);
+
+        self.next_variable_id = local.next_variable_id;
+
+        result
+    }
+
+    fn get_type(&self, name: &ast::Ident) -> Option<Type> {
+        self.get_data(name).map(|data| data.ty.clone())
+    }
+
+    fn get_data(&self, name: &ast::Ident) -> Option<&VariableData> {
+        self.names.get(name).or_else(|| {
             self.parent
                 .as_ref()
-                .and_then(|parent| parent.get_type(name))
+                .and_then(|parent| parent.get_data(name))
         })
     }
 
     fn get_span(&self, name: &ast::Ident) -> Option<&Span> {
-        self.names.get(name).map(|(_, span)| span).or_else(|| {
-            self.parent
-                .as_ref()
-                .and_then(|parent| parent.get_span(name))
-        })
+        self.get_data(name).map(|data| &data.span)
     }
 
     fn insert_type(
@@ -64,14 +104,14 @@ impl Environment {
         name: Spanned<ast::Ident>,
         ty: Type,
     ) -> Result<(), TypecheckingError> {
+        let spanned_name = name.clone();
         let span = name.span;
-        let name = name.value;
 
-        let already_present = self.names.insert(name.clone(), (ty, span.clone()));
-        if let Some((_, old_declaration)) = already_present {
+        let already_present = self.overwrite_type(spanned_name, ty.clone());
+        if let Some(old_data) = already_present {
             Err(TypecheckingError::redeclaration(
-                name,
-                old_declaration,
+                name.value,
+                old_data.span,
                 span,
             ))
         } else {
@@ -79,8 +119,9 @@ impl Environment {
         }
     }
 
-    fn overwrite_type(&mut self, name: Spanned<ast::Ident>, ty: Type) {
-        self.names.insert(name.value, (ty, name.span));
+    fn overwrite_type(&mut self, name: Spanned<ast::Ident>, ty: Type) -> Option<VariableData> {
+        let id = self.fresh_variable_id();
+        self.names.insert(name.value, VariableData::new(ty, name.span, id))
     }
 }
 
@@ -354,16 +395,18 @@ impl<T> SpannedAst for Box<Spanned<T>> {
 
 fn typecheck_expr(
     expr: impl SpannedAst<Inner = ast::Expr>,
-    env: &Environment,
+    env: &mut Environment,
 ) -> Result<Spanned<TypedExpr>, TypecheckingError> {
     let span = expr.span();
     let typed_expr = match expr.into_value() {
         ast::Expr::Variable(ident) => {
-            let ty = env.get_type(&ident).cloned().ok_or_else(|| {
+            let data = env.get_data(&ident).cloned().ok_or_else(|| {
                 TypecheckingError::undefined_variable(ident.clone(), span.clone())
             })?;
+            let ty = data.ty;
+            let expr = TypedExprKind::Variable(ident, data.id);
             Ok(TypedExpr {
-                expr: TypedExprKind::Variable(ident),
+                expr,
                 ty,
             })
         }
@@ -591,21 +634,23 @@ fn typecheck_decl(
                 .into_iter()
                 .map(|(name, ty)| {
                     let span = name.span();
-                    Spanned::new(span, TypedArg { name, ty })
+                    let var_id = env.fresh_variable_id();
+                    Spanned::new(span, TypedArg { name, ty, var_id })
                 })
                 .collect();
 
-            let mut env = env.local();
+            let typed_block = env.with_local(|env| {
 
-            // Define all the arguments in the environment
-            for arg in header.args {
-                env.overwrite_type(arg.0.clone(), arg.1.clone());
-            }
+                // Define all the arguments in the environment
+                for arg in header.args {
+                    env.overwrite_type(arg.0.clone(), arg.1.clone());
+                }
 
-            // Define the function itself for recursive calls
-            env.overwrite_type(name.clone(), header.function_type);
+                // Define the function itself for recursive calls
+                env.overwrite_type(name.clone(), header.function_type);
 
-            let typed_block = typecheck_block(body, &mut env, &header.return_type)?;
+                typecheck_block(body, env, &header.return_type)
+                })?;
 
             TypedDecl::Fn {
                 return_type: header.return_type,
@@ -636,11 +681,13 @@ fn typecheck_decl(
                         None
                     };
                     env.insert_type(ident.clone(), ty.clone())?;
+                    let var_id = env.fresh_variable_id();
                     Ok(Spanned::new(
                         span,
                         TypedItem {
                             ident,
                             ty,
+                            var_id,
                             init: typed_init,
                         },
                     ))
@@ -656,7 +703,6 @@ fn typecheck_decl(
     Ok(Spanned::new(span, typed_decl))
 }
 
-/// Returns a bool indicating whether the statement returns a value of the correct type on every path
 fn typecheck_stmt(
     stmt: impl SpannedAst<Inner = ast::Stmt>,
     env: &mut Environment,
@@ -666,8 +712,9 @@ fn typecheck_stmt(
     let typed_stmt = match stmt.into_value() {
         ast::Stmt::Empty => TypedStmt::Empty,
         ast::Stmt::Block(block) => {
-            let mut env = env.local();
-            let typed_block = typecheck_block(block, &mut env, expected_return_type)?;
+            let typed_block = env.with_local(|env| {
+                typecheck_block(block, env, expected_return_type)
+            })?;
             TypedStmt::Block(typed_block)
         }
         ast::Stmt::Decl(decl) => {
@@ -675,14 +722,16 @@ fn typecheck_stmt(
             TypedStmt::Decl(typed_decl)
         }
         ast::Stmt::Assignment { target, expr } => {
-            let target_type = env.get_type(target.value()).ok_or_else(|| {
+            let target_type = env.get_data(target.value()).ok_or_else(|| {
                 TypecheckingError::undefined_variable(target.value().clone(), target.span())
-            })?;
+            })?.clone();
             let typed_expr = typecheck_expr(expr, env)?;
             let expr_ty = typed_expr.value().ty.clone();
-            ensure_type(target_type.clone(), &expr_ty, typed_expr.span())?;
+            ensure_type(target_type.ty.clone(), &expr_ty, typed_expr.span())?;
+            let target_id = target_type.id;
             TypedStmt::Assignment {
                 target,
+                target_id,
                 expr: typed_expr,
             }
         }
@@ -756,11 +805,11 @@ fn typecheck_incr_decr_target(
 ) -> Result<Spanned<TypedExpr>, TypecheckingError> {
     // TODO: Lvalues...
     let typed_target = typecheck_expr(target, env)?;
-    if let TypedExprKind::Variable(ident) = &typed_target.value().expr {
+    if let TypedExprKind::Variable(ident, _) = &typed_target.value().expr {
         let target_type = env.get_type(ident).ok_or_else(|| {
             TypecheckingError::undefined_variable(ident.clone(), typed_target.span())
         })?;
-        ensure_type(Type::Int, target_type, typed_target.span())?;
+        ensure_type(Type::Int, &target_type, typed_target.span())?;
         Ok(typed_target)
     } else {
         Err(TypecheckingError::invalid_lvalue(typed_target.span()))?
@@ -815,7 +864,7 @@ pub fn typecheck_program(program: ast::Program) -> Result<TypedProgram, Vec<Type
     if let Some(main_type) = env.get_type(&main_ident) {
         if let Err(err) = ensure_type(
             Type::Function(Vec::new(), Box::new(Type::Int)),
-            main_type,
+            &main_type,
             env.get_span(&main_ident).unwrap().clone(),
         ) {
             errors.push(err);

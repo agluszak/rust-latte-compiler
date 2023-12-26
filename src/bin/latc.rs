@@ -36,7 +36,7 @@ fn main() -> ExitCode {
 
     let error_reports = compile(&input.text, &input.filename);
 
-    if !error_reports.is_empty() {
+    if let Err(error_reports) = error_reports {
         println!("ERROR");
         for report in error_reports {
             report.eprint(&input).unwrap_or(());
