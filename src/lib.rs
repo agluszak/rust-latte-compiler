@@ -45,6 +45,26 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<(), Vec<AriadneR
         codegen.generate(&name, &func);
     }
 
-    codegen.print();
+    let new_filename = tempfile::Builder::new().suffix(".ll").tempfile().unwrap();
+
+    let compiled_filename = new_filename.path().to_str().unwrap().to_string().replace(".ll", ".bc");
+
+    codegen.compile(&new_filename);
+
+    // spawn llvm-as
+    let output = std::process::Command::new("llvm-as")
+        .arg(new_filename.path())
+        .output()
+        .expect("failed to execute process");
+
+
+    if !output.status.success() {
+        println!("llvm-as failed");
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        return Err(vec![]);
+    }
+
+    println!("llvm-as succeeded");
+    println!("{}", compiled_filename);
     Ok(())
 }

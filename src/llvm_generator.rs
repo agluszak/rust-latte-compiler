@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 use either::Left;
 use inkwell::AddressSpace;
 use inkwell::builder::Builder;
@@ -34,8 +35,9 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn add_builtins(&self) {
         let i32_type = self.context.i32_type();
+        let void = self.context.void_type();
         let printf = self.module.add_function("printf", i32_type.fn_type(&[i32_type.ptr_type(AddressSpace::default()).into()], true), Some(Linkage::External));
-        let printInt = self.module.add_function("printInt", i32_type.fn_type(&[i32_type.into()], false), None);
+        let printInt = self.module.add_function("printInt", void.fn_type(&[i32_type.into()], false), None);
         let basic_block = self.context.append_basic_block(printInt, "entry");
         self.builder.position_at_end(basic_block);
         // define void @printInt(i32 %x) {
@@ -240,5 +242,9 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn print(&self) {
         self.module.print_to_stderr();
+    }
+
+    pub fn compile<P: AsRef<Path>>(&self, path: P) {
+        self.module.print_to_file(path).unwrap();
     }
 }

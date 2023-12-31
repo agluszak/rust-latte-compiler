@@ -8,6 +8,7 @@ ariadne = "0.3"
 lalrpop-util = { version = "0.20", features = ["lexer"] }
 logos = "0.13"
 either = "1"
+tempfile = "3"
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"] }
 
 [dev-dependencies]
