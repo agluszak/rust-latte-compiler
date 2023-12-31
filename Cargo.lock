@@ -554,6 +554,7 @@ name = "rust-latte-compiler"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "either",
  "inkwell",
  "insta",
  "lalrpop",

@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Display;
 use std::ops::ControlFlow;
 use crate::ast;
 use crate::ast::Literal;
@@ -8,13 +9,25 @@ use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt, VariableId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct BlockId(u32);
+pub struct BlockId(u32);
+
+impl Display for BlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("b{}", self.0))
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct ValueId(u32);
+pub struct ValueId(u32);
+
+impl Display for ValueId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("v{}", self.0))
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum BinaryOpCode {
+pub enum BinaryOpCode {
     Add,
     Sub,
     Mul,
@@ -31,16 +44,22 @@ enum BinaryOpCode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum UnaryOpCode {
+pub enum UnaryOpCode {
     Neg,
     Not
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Phi {
+pub struct Phi {
     incoming: BTreeMap<BlockId, ValueId>,
     block: BlockId,
     users: BTreeSet<ValueId>,
+}
+
+impl Phi {
+    pub fn incoming(&self) -> impl Iterator<Item = (BlockId, ValueId)> + '_ {
+        self.incoming.iter().map(|(block, value)| (*block, *value))
+    }
 }
 
 impl Phi {
@@ -54,7 +73,7 @@ impl Phi {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Value {
+pub enum Value {
     Int(i64),
     String(String),
     Bool(bool),
@@ -75,8 +94,20 @@ struct Block {
     sealed: bool,
 }
 
+impl Block {
+    fn ready(self) -> ReadyBlock {
+        assert!(self.sealed);
+        assert!(self.terminator.is_some());
+        ReadyBlock {
+            instructions: self.instructions,
+            terminator: self.terminator.unwrap(),
+            preds: self.preds,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Terminator {
+pub enum Terminator {
     Return(ValueId),
     ReturnNoValue,
     Branch(ValueId, BlockId, BlockId),
@@ -84,7 +115,8 @@ enum Terminator {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct IrContext {
+pub struct IrContext {
+    variable_names: BTreeMap<VariableId, String>,
     values_in_blocks: BTreeMap<VariableId, BTreeMap<BlockId, ValueId>>,
     variable_types: BTreeMap<VariableId, Type>,
     values: BTreeMap<ValueId, Value>,
@@ -93,9 +125,24 @@ struct IrContext {
     incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, Phi>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyBlock {
+    pub instructions: Vec<ValueId>,
+    pub terminator: Terminator,
+    pub preds: BTreeSet<BlockId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyIr {
+    pub values: BTreeMap<ValueId, Value>,
+    pub types: BTreeMap<ValueId, Type>,
+    pub blocks: BTreeMap<BlockId, ReadyBlock>,
+}
+
 impl IrContext {
     pub fn new() -> IrContext {
         IrContext {
+            variable_names: BTreeMap::new(),
             values_in_blocks: BTreeMap::new(),
             variable_types: BTreeMap::new(),
             values: BTreeMap::new(),
@@ -103,6 +150,20 @@ impl IrContext {
             blocks: BTreeMap::new(),
             incomplete_phis: BTreeMap::new(),
         }
+    }
+
+    pub fn ready(self) -> ReadyIr {
+        assert!(self.incomplete_phis.is_empty());
+        let blocks = self.blocks.into_iter().map(|(id, block)| (id, block.ready())).collect();
+        ReadyIr {
+            values: self.values,
+            types: self.value_types,
+            blocks,
+        }
+    }
+
+    pub fn blocks(&self) -> impl Iterator<Item = (BlockId, &Block)> {
+        self.blocks.iter().map(|(id, block)| (*id, block))
     }
 
     fn add_instruction(&mut self, block: BlockId, value: ValueId) {
@@ -266,46 +327,23 @@ enum BasicBlockContinuation {
     Stop
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ir {
-    ir: IrContext,
-    ty: Type,
+    pub names: BTreeMap<VariableId, String>,
+    pub functions: BTreeMap<String, FunctionIr>
 }
 
 impl Ir {
-    pub fn dump(&self) {
-        // print values
-        for value in self.ir.values.keys() {
-            println!("Value {:?}: {:?}", value, self.ir.values.get(value).unwrap());
-        }
-
-        for (var, values) in &self.ir.values_in_blocks {
-            println!("Var {:?}", var);
-            for (block, value) in values {
-                println!("  {:?} - {:?}", block, value);
-            }
-        }
-
-        for block in self.ir.blocks.keys() {
-            println!("Block {:?}", block);
-            let block = self.ir.blocks.get(block).unwrap();
-            let sealed = if block.sealed { "sealed" } else { "unsealed" };
-            println!("  {}", sealed);
-            let preds = block.preds.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
-            println!("  preds: {:?}", preds);
-            for instr in &block.instructions {
-                println!("    {:?}: {:?}", instr.0, self.ir.values.get(instr).unwrap());
-            }
-            if let Some(terminator) = &block.terminator {
-                println!("  {:?}", terminator);
-            }
-
+    pub fn new() -> Self {
+        Ir {
+            names: BTreeMap::new(),
+            functions: BTreeMap::new()
         }
     }
 
-    pub fn translate_function(decl: TypedDecl) -> Ir {
+    pub fn translate_function(&mut self, decl: TypedDecl) {
         let mut ir = IrContext::new();
         let ty = decl.ty();
+        let function_name;
         match decl {
             TypedDecl::Var { .. } => panic!("Global variables are not supported yet"),
             TypedDecl::Fn { name, body, args, .. } => {
@@ -316,17 +354,59 @@ impl Ir {
                     ir.write_variable(arg.value.var_id, entry_block, undef);
                 }
 
-                let continuation = Self::translate_block(&mut ir, body.value, entry_block);
+                let continuation = FunctionIr::translate_block(&mut ir, body.value, entry_block);
                 if let ChangeBlock(block_id) = continuation {
                     ir.add_terminator(block_id, Terminator::ReturnNoValue);
                 }
+                function_name = name.value.0;
             }
         }
-        Ir {
+        let ir = ir.ready();
+        let function_ir = FunctionIr {
             ir,
-            ty
-        }
+            ty,
+        };
+
+        self.functions.insert(function_name, function_ir);
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionIr {
+    pub ir: ReadyIr,
+    pub ty: Type,
+}
+
+impl FunctionIr {
+    // pub fn dump(&self) {
+    //     // print values
+    //     for value in self.ir.values.keys() {
+    //         println!("Value {:?}: {:?}", value, self.ir.values.get(value).unwrap());
+    //     }
+    //
+    //     for (var, values) in &self.ir.values_in_blocks {
+    //         println!("Var {:?}", var);
+    //         for (block, value) in values {
+    //             println!("  {:?} - {:?}", block, value);
+    //         }
+    //     }
+    //
+    //     for block in self.ir.blocks.keys() {
+    //         println!("Block {:?}", block);
+    //         let block = self.ir.blocks.get(block).unwrap();
+    //         let sealed = if block.sealed { "sealed" } else { "unsealed" };
+    //         println!("  {}", sealed);
+    //         let preds = block.preds.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
+    //         println!("  preds: {:?}", preds);
+    //         for instr in &block.instructions {
+    //             println!("    {:?}: {:?}", instr.0, self.ir.values.get(instr).unwrap());
+    //         }
+    //         if let Some(terminator) = &block.terminator {
+    //             println!("  {:?}", terminator);
+    //         }
+    //
+    //     }
+    // }
 
     fn translate_expr(context: &mut IrContext, expr: TypedExpr, block_id: BlockId) -> ValueId {
         let id = match expr.expr {
@@ -403,6 +483,7 @@ impl Ir {
             TypedStmt::Decl(decl) => match decl.value {
                 TypedDecl::Var { items, .. } => {
                     for item in items {
+                        context.variable_names.insert(item.value.var_id, item.value.ident.value.0);
                         if let Some(expr) = item.value.init {
                             let expr = Self::translate_expr(context, expr.value, block_id);
                             context.write_variable(item.value.var_id, block_id, expr);

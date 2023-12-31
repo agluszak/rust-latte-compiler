@@ -1,0 +1,27 @@
+; ModuleID = 'sum'
+source_filename = "sum"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr %0, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i64 @sum(i64 %0, i64 %1, i64 %2) {
+entry:
+  %sum = add i64 %0, %1
+  %sum1 = add i64 %sum, %2
+  ret i64 %sum1
+}
+
+define i32 @main() {
+entry:
+  %call = call i64 @sum(i64 1, i64 2, i64 3)
+  %conv = trunc i64 %call to i32
+  call void @printInt(i32 %conv)
+  ret i32 0
+}

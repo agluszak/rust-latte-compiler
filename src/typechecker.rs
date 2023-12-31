@@ -13,6 +13,29 @@ struct Environment {
     next_variable_id: u32
 }
 
+impl Environment {
+    pub fn ready(self) -> ReadyEnvironment {
+        let mut globals = BTreeMap::new();
+        let mut names = BTreeMap::new();
+
+        for (name, data) in self.names {
+            let id = data.id;
+            globals.insert(name.0.clone(), data.ty);
+            names.insert(id, name.0);
+        }
+
+        ReadyEnvironment {
+            globals,
+            names
+        }
+    }
+}
+
+pub struct ReadyEnvironment {
+    pub globals: BTreeMap<String, Type>,
+    pub names: BTreeMap<VariableId, String>
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct VariableData {
     ty: Type,
@@ -822,7 +845,7 @@ fn typecheck_incr_decr_target(
     }
 }
 
-pub fn typecheck_program(program: ast::Program) -> Result<TypedProgram, Vec<TypecheckingError>> {
+pub fn typecheck_program(program: ast::Program) -> Result<(TypedProgram, ReadyEnvironment), Vec<TypecheckingError>> {
     let mut errors = Vec::new();
     let mut env = Environment::global();
     // If we supported creating new types, we would have to add them to the environment here
@@ -889,7 +912,7 @@ pub fn typecheck_program(program: ast::Program) -> Result<TypedProgram, Vec<Type
     }
 
     if errors.is_empty() {
-        Ok(TypedProgram(typed_decls))
+        Ok((TypedProgram(typed_decls), env.ready()))
     } else {
         Err(errors)
     }
