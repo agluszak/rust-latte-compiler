@@ -3,6 +3,7 @@ use crate::lexer::{Span, Spanned};
 use crate::typed_ast::{TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt, VariableId};
 use crate::{ast, lexer};
 use std::collections::{BTreeMap, BTreeSet};
+use std::env::var;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,29 +100,26 @@ impl Environment {
         self.get_data(name).map(|data| &data.span)
     }
 
-    fn insert_type(
+    fn insert_data(
         &mut self,
-        name: Spanned<ast::Ident>,
-        ty: Type,
+        name: ast::Ident,
+        data: VariableData
     ) -> Result<(), TypecheckingError> {
-        let spanned_name = name.clone();
-        let span = name.span;
-
-        let already_present = self.overwrite_type(spanned_name, ty.clone());
+        let new_span = data.span.clone();
+        let already_present = self.overwrite_data(name.clone(), data);
         if let Some(old_data) = already_present {
             Err(TypecheckingError::redeclaration(
-                name.value,
+                name,
                 old_data.span,
-                span,
+                new_span,
             ))
         } else {
             Ok(())
         }
     }
 
-    fn overwrite_type(&mut self, name: Spanned<ast::Ident>, ty: Type) -> Option<VariableData> {
-        let id = self.fresh_variable_id();
-        self.names.insert(name.value, VariableData::new(ty, name.span, id))
+    fn overwrite_data(&mut self, name: ast::Ident, data: VariableData) -> Option<VariableData> {
+        self.names.insert(name, data)
     }
 }
 
@@ -639,15 +637,22 @@ fn typecheck_decl(
                 })
                 .collect();
 
+
+
             let typed_block = env.with_local(|env| {
 
                 // Define all the arguments in the environment
-                for arg in header.args {
-                    env.overwrite_type(arg.0.clone(), arg.1.clone());
+                for (arg, ty) in header.args {
+                    let var_id = env.fresh_variable_id();
+                    let data = VariableData::new(ty, arg.span, var_id);
+                    env.overwrite_data(arg.value, data);
                 }
 
-                // Define the function itself for recursive calls
-                env.overwrite_type(name.clone(), header.function_type);
+                // TODO: not needed, already done in main
+                // // Define the function itself for recursive calls
+                // let var_id = env.fresh_variable_id();
+                // let data = VariableData::new(header.function_type, name.span.clone(), var_id);
+                // env.overwrite_data(name.value.clone(), data);
 
                 typecheck_block(body, env, &header.return_type)
                 })?;
@@ -680,8 +685,9 @@ fn typecheck_decl(
                     } else {
                         None
                     };
-                    env.insert_type(ident.clone(), ty.clone())?;
                     let var_id = env.fresh_variable_id();
+                    let data = VariableData::new(ty.clone(), span.clone(), var_id);
+                    env.insert_data(ident.value.clone(), data)?;
                     Ok(Spanned::new(
                         span,
                         TypedItem {
@@ -833,7 +839,9 @@ pub fn typecheck_program(program: ast::Program) -> Result<TypedProgram, Vec<Type
                 let header = resolve_function_header(return_type, args, &env);
                 match header {
                     Ok(header) => {
-                        let result = env.insert_type(name.clone(), header.function_type);
+                        let var_id = env.fresh_variable_id();
+                        let data = VariableData::new(header.function_type, name.span.clone(), var_id);
+                        let result = env.insert_data(name.value.clone(), data);
                         if let Err(err) = result {
                             errors.push(err);
                         }

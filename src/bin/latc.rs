@@ -3,6 +3,8 @@ use rust_latte_compiler::input::Input;
 use std::io::Read;
 use std::process::ExitCode;
 
+mod llvm_generator;
+
 pub fn read_input() -> Result<Input, String> {
     match std::env::args().collect::<Vec<_>>().as_slice() {
         [_, path] => {

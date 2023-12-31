@@ -1,0 +1,11 @@
+int main() {
+    // chodzi o to że wywołania funkcji muszą być w takiej kolejności jak w kodzie
+    // chociaż teoretycznie w ramach optymalizacji moglibyśmy je przestawić
+    // to będzie widać dopiero jak będą referencje
+    wywalSie
+}
+
+boolean f(int a) {
+    printInt(a);
+    return false;
+}

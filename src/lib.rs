@@ -8,7 +8,7 @@ use ariadne::Report;
 
 
 use std::ops::Range;
-use crate::ir::FunctionContext;
+use crate::ir::Ir;
 
 mod ast;
 mod dfa;
@@ -30,8 +30,9 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<(), Vec<AriadneR
     let typechecked = typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
     for decl in typechecked.0 {
-        let mut ir = FunctionContext::new();
-        ir.translate_function(decl.value);
+        println!("{:#?}", decl.value);
+
+        let mut ir = Ir::translate_function(decl.value);
         ir.dump();
     }
 
