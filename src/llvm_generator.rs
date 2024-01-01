@@ -41,6 +41,7 @@ impl<'ctx> CodeGen<'ctx> {
             i32_type.fn_type(&[i32_type.ptr_type(AddressSpace::default()).into()], true),
             Some(Linkage::External),
         );
+
         let print_int =
             self.module
                 .add_function("printInt", void.fn_type(&[i32_type.into()], false), None);
@@ -363,7 +364,7 @@ impl<'ctx> CodeGen<'ctx> {
                     self.builder.build_return(None).unwrap();
                 }
                 Terminator::Branch(val, then, else_) => {
-                    let val = values.get(&val).unwrap().into_int_value();
+                    let val = values[&val].into_int_value();
                     let then = basic_blocks[&then];
                     let else_ = basic_blocks.get(&else_).unwrap();
                     self.builder

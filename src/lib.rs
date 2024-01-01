@@ -16,7 +16,6 @@ mod dfa;
 mod errors;
 pub mod input;
 pub mod ir;
-mod junk;
 pub mod lexer;
 pub mod llvm_generator;
 pub mod parser;

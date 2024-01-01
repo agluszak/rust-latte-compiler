@@ -1,7 +1,11 @@
 #[test]
 fn good_{name}() {{
-    let input_str = include_str!("{path}");
-    let input = Input::new(input_str.to_string(), "{path}".to_string());
+    let mut input_str = String::new();
+    File::open("{path}").unwrap().read_to_string(&mut input_str).unwrap();
+    let input = Input::new(input_str, "{path}".to_string());
+    let program_output_path = "{path}".replace(".lat", ".output");
+    let mut program_output = String::new();
+    File::open(program_output_path).unwrap().read_to_string(&mut program_output).unwrap();
     let name = "{name}";
-    good_test!(input, name);
+    good_test!(input, name, program_output);
 }}

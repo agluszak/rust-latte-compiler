@@ -153,6 +153,8 @@ impl IrContext {
 
     pub fn ready(self) -> ReadyIr {
         assert!(self.incomplete_phis.is_empty());
+        #[cfg(feature = "dbg")]
+        dbg!(&self.blocks);
         let blocks = self
             .blocks
             .into_iter()
@@ -712,12 +714,39 @@ impl FunctionIr {
             }
             TypedStmt::While { cond, body } => {
                 let cond_block = context.new_block();
-                let body_block = context.new_block();
-                let after_block = context.new_block();
+
+
 
                 context.add_terminator(block_id, Terminator::Jump(cond_block));
 
-                let cond = Self::translate_expr(context, cond.value, block_id);
+                let cond = Self::translate_expr(context, cond.value, cond_block);
+
+                if let Value::Bool(cond) = context.values[&cond] {
+                    if !cond {
+                        let after_block = context.new_block();
+                        context.add_terminator(cond_block, Terminator::Jump(after_block));
+                        context.seal_block(cond_block);
+                        context.seal_block(after_block);
+                        return ChangeBlock(after_block);
+                    } else {
+                        let body_block = context.new_block();
+                        context.add_terminator(cond_block, Terminator::Jump(body_block));
+                        context.seal_block(body_block);
+                        let body_continuation =
+                            Self::translate_stmt(context, body.value, body_block);
+                        if let ChangeBlock(after_body_block) = body_continuation {
+                            context.add_terminator(after_body_block, Terminator::Jump(cond_block));
+                        } else if let Continue = body_continuation {
+                            context.add_terminator(body_block, Terminator::Jump(cond_block));
+                        }
+                        context.seal_block(cond_block);
+                        return Stop;
+                    }
+                }
+
+                let after_block = context.new_block();
+                let body_block = context.new_block();
+
                 context.add_terminator(
                     cond_block,
                     Terminator::Branch(cond, body_block, after_block),
@@ -732,6 +761,7 @@ impl FunctionIr {
                 }
 
                 context.seal_block(cond_block);
+                context.seal_block(after_block);
                 ChangeBlock(after_block)
             }
             TypedStmt::Expr(expr) => {
