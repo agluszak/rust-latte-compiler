@@ -31,6 +31,7 @@ impl Environment {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadyEnvironment {
     pub globals: BTreeMap<String, Type>,
     pub names: BTreeMap<VariableId, String>,
@@ -644,39 +645,29 @@ fn typecheck_decl(
         } => {
             let header = resolve_function_header(&return_type, &args, env)?;
 
-            let typed_args = header
-                .args
-                .clone()
-                .into_iter()
-                .map(|(name, ty)| {
-                    let span = name.span();
-                    let var_id = env.fresh_variable_id();
-                    Spanned::new(span, TypedArg { name, ty, var_id })
-                })
-                .collect();
+            let (args, body) = env.with_local(|env| {
+                let mut typed_args = Vec::new();
 
-            let typed_block = env.with_local(|env| {
                 // Define all the arguments in the environment
-                for (arg, ty) in header.args {
+                for (name, ty) in header.args {
                     let var_id = env.fresh_variable_id();
-                    let data = VariableData::new(ty, arg.span, var_id);
-                    env.overwrite_data(arg.value, data);
+                    let span = name.span();
+                    let typed_arg = Spanned::new(span, TypedArg { name: name.clone(), ty: ty.clone(), var_id });
+                    let data = VariableData::new(ty, name.span, var_id);
+                    env.overwrite_data(name.value, data);
+                    typed_args.push(typed_arg);
                 }
 
-                // TODO: not needed, already done in main
-                // // Define the function itself for recursive calls
-                // let var_id = env.fresh_variable_id();
-                // let data = VariableData::new(header.function_type, name.span.clone(), var_id);
-                // env.overwrite_data(name.value.clone(), data);
+                let typed_block = typecheck_block(body, env, &header.return_type)?;
 
-                typecheck_block(body, env, &header.return_type)
+                Ok((typed_args, typed_block))
             })?;
 
             TypedDecl::Fn {
                 return_type: header.return_type,
                 name,
-                args: typed_args,
-                body: typed_block,
+                args,
+                body,
             }
         }
 
@@ -871,7 +862,7 @@ pub fn typecheck_program(
                     }
                 }
             }
-            ast::Decl::Var { ty: _, items: _ } => {
+            ast::Decl::Var { .. } => {
                 panic!("Global variables are not supported");
             }
         }

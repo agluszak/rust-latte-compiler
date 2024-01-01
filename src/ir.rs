@@ -418,8 +418,9 @@ impl Ir {
                 let entry_block = ir.new_block();
                 ir.seal_block(entry_block);
                 for (arg, i) in args.into_iter().zip(0..) {
-                    let undef = ir.new_value(Value::Argument(i), arg.value.ty);
-                    ir.write_variable(arg.value.var_id, entry_block, undef);
+                    let argument = ir.new_value(Value::Argument(i), arg.value.ty);
+                    ir.write_variable(arg.value.var_id, entry_block, argument);
+                    ir.add_instruction(entry_block, argument);
                 }
 
                 let continuation = FunctionIr::translate_block(&mut ir, body.value, entry_block);
@@ -438,38 +439,9 @@ impl Ir {
     }
 
     pub fn dump(&self) -> String {
-        // pub fn dump(&self) {
-        //     // print values
-        //     for value in self.ir.values.keys() {
-        //         println!("Value {:?}: {:?}", value, self.ir.values.get(value).unwrap());
-        //     }
-        //
-        //     for (var, values) in &self.ir.values_in_blocks {
-        //         println!("Var {:?}", var);
-        //         for (block, value) in values {
-        //             println!("  {:?} - {:?}", block, value);
-        //         }
-        //     }
-        //
-        //     for block in self.ir.blocks.keys() {
-        //         println!("Block {:?}", block);
-        //         let block = self.ir.blocks.get(block).unwrap();
-        //         let sealed = if block.sealed { "sealed" } else { "unsealed" };
-        //         println!("  {}", sealed);
-        //         let preds = block.preds.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
-        //         println!("  preds: {:?}", preds);
-        //         for instr in &block.instructions {
-        //             println!("    {:?}: {:?}", instr.0, self.ir.values.get(instr).unwrap());
-        //         }
-        //         if let Some(terminator) = &block.terminator {
-        //             println!("  {:?}", terminator);
-        //         }
-        //
-        //     }
-        // }
         let mut result = String::new();
         for (name, function) in &self.functions {
-            result.push_str(&format!("{}: ", name));
+            result.push_str(&format!("Function {}\n", name));
             for (id, block) in &function.ir.blocks {
                 result.push_str(&format!("{}:\n", id));
                 for instr in &block.instructions {

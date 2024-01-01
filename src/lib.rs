@@ -33,13 +33,22 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
     let (typechecked, env) =
         typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
+    #[cfg(feature = "dbg")]
+    {
+        dbg!(&typechecked);
+        dbg!(&env);
+    }
+
     let mut ir = Ir::new();
 
     for decl in typechecked.0 {
         ir.translate_function(decl.value);
     }
 
-    // Ok(ir.dump())
+    #[cfg(feature = "dbg")]
+    {
+        println!("{}", ir.dump());
+    }
 
     let context = Context::create();
     let codegen = CodeGen::new(&context, filename, env);
