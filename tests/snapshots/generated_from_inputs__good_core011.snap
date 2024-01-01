@@ -2,4 +2,22 @@
 source: tests/generated_from_inputs.rs
 description: "/* Test pushing -1. */\n\nint main() {\n  printInt(-1);\n  return 0 ;\n}"
 ---
+; ModuleID = 'core011'
+source_filename = "core011"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 -1)
+  ret i32 0
+}
 

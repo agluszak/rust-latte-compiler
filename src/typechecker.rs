@@ -1,16 +1,19 @@
 use crate::dfa::top_level_return_analysis;
 use crate::lexer::{Span, Spanned};
-use crate::typed_ast::{TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt, VariableId};
+use crate::typed_ast::{
+    TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
+    VariableId,
+};
 use crate::{ast, lexer};
 use std::collections::{BTreeMap, BTreeSet};
-use std::env::var;
+
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
     parent: Option<Box<Environment>>,
     names: BTreeMap<ast::Ident, VariableData>,
-    next_variable_id: u32
+    next_variable_id: u32,
 }
 
 impl Environment {
@@ -24,37 +27,29 @@ impl Environment {
             names.insert(id, name.0);
         }
 
-        ReadyEnvironment {
-            globals,
-            names
-        }
+        ReadyEnvironment { globals, names }
     }
 }
 
 pub struct ReadyEnvironment {
     pub globals: BTreeMap<String, Type>,
-    pub names: BTreeMap<VariableId, String>
+    pub names: BTreeMap<VariableId, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct VariableData {
     ty: Type,
     span: Span, // built-ins don't have span
-    id: VariableId
+    id: VariableId,
 }
 
 impl VariableData {
     fn new(ty: Type, span: Span, id: VariableId) -> Self {
-        Self {
-            ty,
-            span,
-            id
-        }
+        Self { ty, span, id }
     }
 }
 
 impl Environment {
-
     fn fresh_variable_id(&mut self) -> VariableId {
         let id = self.next_variable_id;
         self.next_variable_id += 1;
@@ -68,8 +63,8 @@ impl Environment {
             VariableData {
                 ty: Type::Function(args, Box::new(ret)),
                 span: 0..0,
-                id
-            }
+                id,
+            },
         );
     }
 
@@ -77,7 +72,7 @@ impl Environment {
         let mut env = Environment {
             parent: None,
             names: BTreeMap::new(),
-            next_variable_id: 0
+            next_variable_id: 0,
         };
 
         env.add_predefined_fn("printInt", vec![Type::Int], Type::Void);
@@ -93,11 +88,14 @@ impl Environment {
         Environment {
             parent: Some(Box::new(self.clone())),
             names: BTreeMap::new(),
-            next_variable_id: self.next_variable_id
+            next_variable_id: self.next_variable_id,
         }
     }
 
-    fn with_local<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, TypecheckingError>) -> Result<T, TypecheckingError> {
+    fn with_local<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, TypecheckingError>,
+    ) -> Result<T, TypecheckingError> {
         let mut local = self.local();
 
         let result = f(&mut local);
@@ -126,7 +124,7 @@ impl Environment {
     fn insert_data(
         &mut self,
         name: ast::Ident,
-        data: VariableData
+        data: VariableData,
     ) -> Result<(), TypecheckingError> {
         let new_span = data.span.clone();
         let already_present = self.overwrite_data(name.clone(), data);
@@ -426,10 +424,7 @@ fn typecheck_expr(
             })?;
             let ty = data.ty;
             let expr = TypedExprKind::Variable(ident, data.id);
-            Ok(TypedExpr {
-                expr,
-                ty,
-            })
+            Ok(TypedExpr { expr, ty })
         }
         ast::Expr::Literal(literal) => {
             let ty = match literal {
@@ -660,10 +655,7 @@ fn typecheck_decl(
                 })
                 .collect();
 
-
-
             let typed_block = env.with_local(|env| {
-
                 // Define all the arguments in the environment
                 for (arg, ty) in header.args {
                     let var_id = env.fresh_variable_id();
@@ -678,7 +670,7 @@ fn typecheck_decl(
                 // env.overwrite_data(name.value.clone(), data);
 
                 typecheck_block(body, env, &header.return_type)
-                })?;
+            })?;
 
             TypedDecl::Fn {
                 return_type: header.return_type,
@@ -741,9 +733,8 @@ fn typecheck_stmt(
     let typed_stmt = match stmt.into_value() {
         ast::Stmt::Empty => TypedStmt::Empty,
         ast::Stmt::Block(block) => {
-            let typed_block = env.with_local(|env| {
-                typecheck_block(block, env, expected_return_type)
-            })?;
+            let typed_block =
+                env.with_local(|env| typecheck_block(block, env, expected_return_type))?;
             TypedStmt::Block(typed_block)
         }
         ast::Stmt::Decl(decl) => {
@@ -751,9 +742,12 @@ fn typecheck_stmt(
             TypedStmt::Decl(typed_decl)
         }
         ast::Stmt::Assignment { target, expr } => {
-            let target_type = env.get_data(target.value()).ok_or_else(|| {
-                TypecheckingError::undefined_variable(target.value().clone(), target.span())
-            })?.clone();
+            let target_type = env
+                .get_data(target.value())
+                .ok_or_else(|| {
+                    TypecheckingError::undefined_variable(target.value().clone(), target.span())
+                })?
+                .clone();
             let typed_expr = typecheck_expr(expr, env)?;
             let expr_ty = typed_expr.value().ty.clone();
             ensure_type(target_type.ty.clone(), &expr_ty, typed_expr.span())?;
@@ -845,7 +839,9 @@ fn typecheck_incr_decr_target(
     }
 }
 
-pub fn typecheck_program(program: ast::Program) -> Result<(TypedProgram, ReadyEnvironment), Vec<TypecheckingError>> {
+pub fn typecheck_program(
+    program: ast::Program,
+) -> Result<(TypedProgram, ReadyEnvironment), Vec<TypecheckingError>> {
     let mut errors = Vec::new();
     let mut env = Environment::global();
     // If we supported creating new types, we would have to add them to the environment here
@@ -863,7 +859,8 @@ pub fn typecheck_program(program: ast::Program) -> Result<(TypedProgram, ReadyEn
                 match header {
                     Ok(header) => {
                         let var_id = env.fresh_variable_id();
-                        let data = VariableData::new(header.function_type, name.span.clone(), var_id);
+                        let data =
+                            VariableData::new(header.function_type, name.span.clone(), var_id);
                         let result = env.insert_data(name.value.clone(), data);
                         if let Err(err) = result {
                             errors.push(err);

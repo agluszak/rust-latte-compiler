@@ -2,4 +2,32 @@
 source: tests/generated_from_inputs.rs
 description: "/* usage of variable initialized in both branches. */\n\nint main () {\n  int x;\n  int y = 56;\n  if (y + 45 <= 2) {\n    x = 1;\n  } else {\n    x = 2;\n  }\n  printInt(x);\n  return 0 ;\n\n}"
 ---
+; ModuleID = 'core005'
+source_filename = "core005"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i32 @main() {
+b0:
+  br i1 false, label %b2, label %b3
+
+b1:                                               ; preds = %b3, %b2
+  %v8 = phi i32 [ 1, %b2 ], [ 2, %b3 ]
+  call void @printInt(i32 %v8)
+  ret i32 0
+
+b2:                                               ; preds = %b0
+  br label %b1
+
+b3:                                               ; preds = %b0
+  br label %b1
+}
 

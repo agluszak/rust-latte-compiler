@@ -85,7 +85,9 @@ impl TypedDecl {
     pub fn ty(&self) -> Type {
         match self {
             TypedDecl::Var { ty, .. } => ty.clone(),
-            TypedDecl::Fn { return_type, args, .. } => {
+            TypedDecl::Fn {
+                return_type, args, ..
+            } => {
                 let mut arg_types = Vec::new();
                 for arg in args {
                     arg_types.push(arg.value.ty.clone());

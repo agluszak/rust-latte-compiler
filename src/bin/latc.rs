@@ -3,7 +3,6 @@ use rust_latte_compiler::input::Input;
 use std::io::Read;
 use std::process::ExitCode;
 
-
 pub fn read_input() -> Result<Input, String> {
     match std::env::args().collect::<Vec<_>>().as_slice() {
         [_, path] => {
@@ -48,3 +47,27 @@ fn main() -> ExitCode {
         ExitCode::SUCCESS
     }
 }
+
+// let new_filename = tempfile::Builder::new().suffix(".ll").tempfile().unwrap();
+//
+//     let compiled_filename = new_filename.path().to_str().unwrap().to_string().replace(".ll", ".bc");
+//
+//     println!("{}", codegen.compile_to_string());
+//     // codegen.compile(&new_filename);
+//     //
+//     // // spawn llvm-as
+//     // let output = std::process::Command::new("llvm-as")
+//     //     .arg(new_filename.path())
+//     //     .output()
+//     //     .expect("failed to execute process");
+//     //
+//     //
+//     // if !output.status.success() {
+//     //     println!("llvm-as failed");
+//     //     println!("{}", String::from_utf8_lossy(&output.stderr));
+//     //     return Err(vec![]);
+//     // }
+//     //
+//     // println!("llvm-as succeeded");
+//     // println!("{}", compiled_filename);
+//     Ok(())

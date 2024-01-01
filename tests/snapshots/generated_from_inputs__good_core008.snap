@@ -2,4 +2,23 @@
 source: tests/generated_from_inputs.rs
 description: "// multiple variables of the same type declared \n// and possibly initialized in the same statement\n\nint main() {\n int x, y = 7;\n x = -1234234;\n printInt(x);\n printInt(y);\n return 0 ;\n\n}"
 ---
+; ModuleID = 'core008'
+source_filename = "core008"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 -1234234)
+  call void @printInt(i32 7)
+  ret i32 0
+}
 

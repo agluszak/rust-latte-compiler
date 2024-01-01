@@ -3,34 +3,35 @@ extern crate core;
 use crate::errors::{parsing_reports, typechecking_reports};
 use crate::lexer::Lexer;
 use crate::parser::latte::ProgramParser;
-use crate::typechecker::{typecheck_program};
+use crate::typechecker::typecheck_program;
 use ariadne::Report;
 
-
-use std::ops::Range;
-use inkwell::context::Context;
-use crate::ir::{FunctionIr, Ir};
+use crate::ir::Ir;
 use crate::llvm_generator::CodeGen;
+use inkwell::context::Context;
+use std::ops::Range;
 
 mod ast;
 mod dfa;
 mod errors;
 pub mod input;
+pub mod ir;
+mod junk;
 pub mod lexer;
+pub mod llvm_generator;
 pub mod parser;
 mod typechecker;
 mod typed_ast;
-pub mod ir;
-pub mod llvm_generator;
-mod junk;
 
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 
-pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<(), Vec<AriadneReport<'a>>> {
-
+pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<AriadneReport<'a>>> {
     let lexer = Lexer::new(input);
-    let parsed = ProgramParser::new().parse(lexer).map_err(|err| parsing_reports(err, filename))?;
-    let (typechecked, env) = typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
+    let parsed = ProgramParser::new()
+        .parse(lexer)
+        .map_err(|err| parsing_reports(err, filename))?;
+    let (typechecked, env) =
+        typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
     let mut ir = Ir::new();
 
@@ -45,26 +46,5 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<(), Vec<AriadneR
         codegen.generate(&name, &func);
     }
 
-    let new_filename = tempfile::Builder::new().suffix(".ll").tempfile().unwrap();
-
-    let compiled_filename = new_filename.path().to_str().unwrap().to_string().replace(".ll", ".bc");
-
-    codegen.compile(&new_filename);
-
-    // spawn llvm-as
-    let output = std::process::Command::new("llvm-as")
-        .arg(new_filename.path())
-        .output()
-        .expect("failed to execute process");
-
-
-    if !output.status.success() {
-        println!("llvm-as failed");
-        println!("{}", String::from_utf8_lossy(&output.stderr));
-        return Err(vec![]);
-    }
-
-    println!("llvm-as succeeded");
-    println!("{}", compiled_filename);
-    Ok(())
+    Ok(codegen.compile_to_string())
 }

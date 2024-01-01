@@ -2,4 +2,29 @@
 source: tests/generated_from_inputs.rs
 description: "// Calling functions which take zero parameters\n\nint main() {\n int x = foo();\n printInt(x);\n return 0 ;\n\n}\n\nint foo() {\n return 10;\n}\n\n"
 ---
+; ModuleID = 'core009'
+source_filename = "core009"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i32 @foo() {
+b0:
+  ret i32 10
+}
+
+define i32 @main() {
+b0:
+  %foo = call i32 @foo()
+  %foo1 = call i32 @foo()
+  call void @printInt(i32 %foo1)
+  ret i32 0
+}
 

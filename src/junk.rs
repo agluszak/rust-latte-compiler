@@ -1,14 +1,14 @@
-// 
+//
 // #[cfg(test)]
 // mod test {
 //     use crate::ir::*;
-// 
+//
 //     mod ast {
 //         use std::collections::BTreeMap;
 //         use std::mem;
 //         use crate::ir::test::{tac};
 //         use crate::ir::{IrContext, VariableId};
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         enum Op {
 //             Add,
@@ -16,17 +16,17 @@
 //             Lt,
 //             Eq,
 //         }
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         enum Expr {
 //             Var(String),
 //             Literal(i32),
 //             Binary(Op, Box<Expr>, Box<Expr>),
 //         }
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         struct BlockId(u32);
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         enum Stmt {
 //             Assign(String, Expr),
@@ -34,19 +34,19 @@
 //             While(Expr, Vec<Stmt>),
 //             Return(Expr),
 //         }
-// 
+//
 //         struct Context {
 //             variables: BTreeMap<String, VariableId>,
 //             next_variable_id: u32,
 //             current_stmts: Vec<crate::ir::test::tac::Stmt>
 //         }
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         pub(crate) enum Val {
 //             Var(VariableId),
 //             Literal(i32),
 //         }
-// 
+//
 //         impl Context {
 //             fn new() -> Context {
 //                 Context {
@@ -55,7 +55,7 @@
 //                     current_stmts: Vec::new()
 //                 }
 //             }
-// 
+//
 //             fn child(&mut self) -> Context {
 //                 Context {
 //                     variables: self.variables.clone(),
@@ -63,13 +63,13 @@
 //                     current_stmts: Vec::new()
 //                 }
 //             }
-// 
+//
 //             fn new_variable(&mut self) -> VariableId {
 //                 let id = VariableId::new(self.next_variable_id);
 //                 self.next_variable_id += 1;
 //                 id
 //             }
-// 
+//
 //             fn get_variable(&mut self, name: &str) -> VariableId {
 //                 if let Some(id) = self.variables.get(name) {
 //                     *id
@@ -79,16 +79,16 @@
 //                     id
 //                 }
 //             }
-// 
+//
 //             fn finish_block(&mut self, parent: &mut Self) -> Vec<crate::ir::test::tac::Stmt> {
 //                 parent.next_variable_id = self.next_variable_id;
 //                 std::mem::take(&mut self.current_stmts)
 //             }
-// 
+//
 //             fn emit(&mut self, stmt: crate::ir::test::tac::Stmt) {
 //                 self.current_stmts.push(stmt);
 //             }
-// 
+//
 //             fn translate_expr(&mut self, expr: Expr) -> Val {
 //                 match expr {
 //                     Expr::Var(name) => {
@@ -100,7 +100,7 @@
 //                     Expr::Binary(op, lhs, rhs) => {
 //                         let lhs = self.translate_expr(*lhs);
 //                         let rhs = self.translate_expr(*rhs);
-// 
+//
 //                         if let (Val::Literal(lhs), Val::Literal(rhs)) = (&lhs, &rhs) {
 //                             let result = match op {
 //                                 Op::Add => lhs + rhs,
@@ -110,7 +110,7 @@
 //                             };
 //                             return Val::Literal(result);
 //                         }
-// 
+//
 //                         let variable_id = self.new_variable();
 //                         match op {
 //                             Op::Add =>
@@ -126,7 +126,7 @@
 //                     }
 //                 }
 //             }
-// 
+//
 //             fn translate_stmt(&mut self, stmt: Stmt) {
 //                 match stmt {
 //                     Stmt::Assign(name, expr) => {
@@ -222,7 +222,7 @@
 //                 }
 //             }
 //         }
-// 
+//
 //         #[test]
 //         fn blah() {
 //             // # Program
@@ -253,8 +253,8 @@
 //             //     }
 //             //     y3 = y2 % x1 + x1;
 //             // }
-// 
-// 
+//
+//
 //             let program = vec![
 //                 Stmt::Assign("x".to_string(), Expr::Literal(1)),
 //                 Stmt::Assign("y".to_string(), Expr::Literal(2137)),
@@ -289,11 +289,11 @@
 //             println!("{:#?}", tac);
 //         }
 //     }
-// 
+//
 //     mod tac {
 //         use crate::ir::test::ast::Val;
 //         use crate::ir::VariableId;
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         pub enum Op {
 //             Add(crate::ir::test::ast::Val, crate::ir::test::ast::Val),
@@ -302,7 +302,7 @@
 //             Eq(crate::ir::test::ast::Val, crate::ir::test::ast::Val),
 //             Copy(crate::ir::test::ast::Val),
 //         }
-// 
+//
 //         #[derive(Debug, Clone, PartialEq, Eq)]
 //         pub(crate) enum Stmt {
 //             Assign(VariableId, Op),
