@@ -39,8 +39,14 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
         ir.translate_function(decl.value);
     }
 
+    // Ok(ir.dump())
+
     let context = Context::create();
     let codegen = CodeGen::new(&context, filename, env);
+
+    for (name, func) in &ir.functions {
+        codegen.declare(name, func);
+    }
 
     for (name, func) in ir.functions {
         codegen.generate(&name, &func);

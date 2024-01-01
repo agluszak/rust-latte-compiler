@@ -2,4 +2,37 @@
 source: tests/generated_from_inputs.rs
 description: "// Testing the return checker\n\nint f () {\n   if (true)\n     return 0;\n   else\n     {}\n}\n\nint g () {\n  if (false) \n      {}\n  else\n      return 0;\n}\n\nvoid p () {}\n  \n\nint main() {\n  p();\n  return 0;\n}\n"
 ---
+; ModuleID = 'core003'
+source_filename = "core003"
+
+@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
+
+declare i32 @printf(ptr, ...)
+
+define void @printInt(i32 %0) {
+entry:
+  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
+  ret void
+}
+
+define i32 @f() {
+b0:
+  ret i32 0
+}
+
+define i32 @g() {
+b0:
+  ret i32 0
+}
+
+define i32 @main() {
+b0:
+  call void @p()
+  ret i32 0
+}
+
+define void @p() {
+b0:
+  ret void
+}
 

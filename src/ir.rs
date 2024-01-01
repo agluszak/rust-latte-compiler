@@ -138,12 +138,6 @@ pub struct ReadyIr {
     pub blocks: BTreeMap<BlockId, ReadyBlock>,
 }
 
-impl Default for IrContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl IrContext {
     pub fn new() -> IrContext {
         IrContext {
@@ -180,6 +174,15 @@ impl IrContext {
         block.instructions.push(value);
     }
 
+    fn pop_instruction(&mut self, block: BlockId) {
+        let block = self
+            .blocks
+            .get_mut(&block)
+            .unwrap_or_else(|| panic!("Block {:?} not found", block));
+        assert!(block.terminator.is_none());
+        block.instructions.pop().unwrap_or_else(|| panic!("Block {:?} is empty", block));
+    }
+
     fn add_terminator(&mut self, block_id: BlockId, terminator: Terminator) {
         let mut block = self
             .blocks
@@ -198,6 +201,10 @@ impl IrContext {
         }
         block.terminator = Some(terminator);
         self.blocks.insert(block_id, block);
+    }
+
+    fn terminated(&self, block_id: BlockId) -> bool {
+        self.blocks.get(&block_id).unwrap().terminator.is_some()
     }
 
     fn add_predecessor(&mut self, block: BlockId, pred: BlockId) {
@@ -241,6 +248,11 @@ impl IrContext {
         self.values.insert(id, value);
         self.value_types.insert(id, ty);
         id
+    }
+
+    pub fn remove_value(&mut self, value: ValueId) {
+        self.values.remove(&value);
+        self.value_types.remove(&value);
     }
 
     pub fn read_variable(&mut self, variable: VariableId, block_id: BlockId) -> ValueId {
@@ -413,6 +425,8 @@ impl Ir {
                 let continuation = FunctionIr::translate_block(&mut ir, body.value, entry_block);
                 if let ChangeBlock(block_id) = continuation {
                     ir.add_terminator(block_id, Terminator::ReturnNoValue);
+                } else if let Continue = continuation {
+                    ir.add_terminator(entry_block, Terminator::ReturnNoValue);
                 }
                 name.value.0
             }
@@ -421,6 +435,50 @@ impl Ir {
         let function_ir = FunctionIr { ir, ty };
 
         self.functions.insert(function_name, function_ir);
+    }
+
+    pub fn dump(&self) -> String {
+        // pub fn dump(&self) {
+        //     // print values
+        //     for value in self.ir.values.keys() {
+        //         println!("Value {:?}: {:?}", value, self.ir.values.get(value).unwrap());
+        //     }
+        //
+        //     for (var, values) in &self.ir.values_in_blocks {
+        //         println!("Var {:?}", var);
+        //         for (block, value) in values {
+        //             println!("  {:?} - {:?}", block, value);
+        //         }
+        //     }
+        //
+        //     for block in self.ir.blocks.keys() {
+        //         println!("Block {:?}", block);
+        //         let block = self.ir.blocks.get(block).unwrap();
+        //         let sealed = if block.sealed { "sealed" } else { "unsealed" };
+        //         println!("  {}", sealed);
+        //         let preds = block.preds.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
+        //         println!("  preds: {:?}", preds);
+        //         for instr in &block.instructions {
+        //             println!("    {:?}: {:?}", instr.0, self.ir.values.get(instr).unwrap());
+        //         }
+        //         if let Some(terminator) = &block.terminator {
+        //             println!("  {:?}", terminator);
+        //         }
+        //
+        //     }
+        // }
+        let mut result = String::new();
+        for (name, function) in &self.functions {
+            result.push_str(&format!("{}: ", name));
+            for (id, block) in &function.ir.blocks {
+                result.push_str(&format!("{}:\n", id));
+                for instr in &block.instructions {
+                    result.push_str(&format!("  {:?}: {:?}\n", instr, function.ir.values.get(instr).unwrap()));
+                }
+                result.push_str(&format!("  {:?}\n", block.terminator));
+            }
+        }
+        result
     }
 }
 
@@ -431,85 +489,112 @@ pub struct FunctionIr {
 }
 
 impl FunctionIr {
-    // pub fn dump(&self) {
-    //     // print values
-    //     for value in self.ir.values.keys() {
-    //         println!("Value {:?}: {:?}", value, self.ir.values.get(value).unwrap());
-    //     }
-    //
-    //     for (var, values) in &self.ir.values_in_blocks {
-    //         println!("Var {:?}", var);
-    //         for (block, value) in values {
-    //             println!("  {:?} - {:?}", block, value);
-    //         }
-    //     }
-    //
-    //     for block in self.ir.blocks.keys() {
-    //         println!("Block {:?}", block);
-    //         let block = self.ir.blocks.get(block).unwrap();
-    //         let sealed = if block.sealed { "sealed" } else { "unsealed" };
-    //         println!("  {}", sealed);
-    //         let preds = block.preds.iter().map(|id| format!("{:?}", id)).collect::<Vec<_>>().join(", ");
-    //         println!("  preds: {:?}", preds);
-    //         for instr in &block.instructions {
-    //             println!("    {:?}: {:?}", instr.0, self.ir.values.get(instr).unwrap());
-    //         }
-    //         if let Some(terminator) = &block.terminator {
-    //             println!("  {:?}", terminator);
-    //         }
-    //
-    //     }
-    // }
+    fn dfa_binary(context: &mut IrContext, op: BinaryOpCode, lhs_id: ValueId, rhs_id: ValueId) -> Option<ValueId> {
+        let lhs = context.values[&lhs_id].clone();
+        let rhs = context.values[&rhs_id].clone();
+
+        let result = match (lhs, rhs, op) {
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Add) => context.new_value(Value::Int(lhs + rhs), Type::Int),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Sub) => context.new_value(Value::Int(lhs - rhs), Type::Int),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mul) => context.new_value(Value::Int(lhs * rhs), Type::Int),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Div) => context.new_value(Value::Int(lhs / rhs), Type::Int),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mod) => context.new_value(Value::Int(lhs % rhs), Type::Int),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gt) => context.new_value(Value::Bool(lhs > rhs), Type::Bool),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lt) => context.new_value(Value::Bool(lhs < rhs), Type::Bool),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gte) => context.new_value(Value::Bool(lhs >= rhs), Type::Bool),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lte) => context.new_value(Value::Bool(lhs <= rhs), Type::Bool),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Add) => context.new_value(Value::String(lhs + &rhs), Type::LatteString),
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::And) => context.new_value(Value::Bool(lhs && rhs), Type::Bool),
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Or) => context.new_value(Value::Bool(lhs || rhs), Type::Bool),
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
+            _ => return None,
+        };
+        Some(result)
+    }
+
+    fn dfa_unary(context: &mut IrContext, op: UnaryOpCode, expr_id: ValueId) -> Option<ValueId> {
+        let expr = context.values[&expr_id].clone();
+
+        let result = match (expr, op) {
+            (Value::Int(expr), UnaryOpCode::Neg) => context.new_value(Value::Int(-expr), Type::Int),
+            (Value::Bool(expr), UnaryOpCode::Not) => context.new_value(Value::Bool(!expr), Type::Bool),
+            _ => return None,
+        };
+        Some(result)
+    }
 
     fn translate_expr(context: &mut IrContext, expr: TypedExpr, block_id: BlockId) -> ValueId {
-        let id = match expr.expr {
-            TypedExprKind::Variable(_, id) => context.read_variable(id, block_id),
-            TypedExprKind::Literal(lit) => match lit {
-                Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
-                Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
-            },
-            TypedExprKind::Binary { lhs, op, rhs } => {
-                let lhs = Self::translate_expr(context, lhs.value, block_id);
-                let rhs = Self::translate_expr(context, rhs.value, block_id);
-                let op = match op.value {
-                    ast::BinaryOp::Add => BinaryOpCode::Add,
-                    ast::BinaryOp::Sub => BinaryOpCode::Sub,
-                    ast::BinaryOp::Mul => BinaryOpCode::Mul,
-                    ast::BinaryOp::Div => BinaryOpCode::Div,
-                    ast::BinaryOp::Mod => BinaryOpCode::Mod,
-                    ast::BinaryOp::Gt => BinaryOpCode::Gt,
-                    ast::BinaryOp::Lt => BinaryOpCode::Lt,
-                    ast::BinaryOp::Gte => BinaryOpCode::Gte,
-                    ast::BinaryOp::Lte => BinaryOpCode::Lte,
-                    ast::BinaryOp::Eq => BinaryOpCode::Eq,
-                    ast::BinaryOp::Neq => BinaryOpCode::Neq,
-                    ast::BinaryOp::And => BinaryOpCode::And,
-                    ast::BinaryOp::Or => BinaryOpCode::Or,
-                };
-                context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
-            }
-            TypedExprKind::Unary { op, expr: target } => {
-                let val = Self::translate_expr(context, target.value, block_id);
-                let op = match op.value {
-                    ast::UnaryOp::Neg => UnaryOpCode::Neg,
-                    ast::UnaryOp::Not => UnaryOpCode::Not,
-                };
-                context.new_value(Value::UnaryOp(op, val), expr.ty)
-            }
-            TypedExprKind::Application { target, args } => {
-                let TypedExprKind::Variable(_, id) = target.value.expr else {
-                    panic!("This should have been caught by the typechecker")
-                };
-                let args = args
-                    .into_iter()
-                    .map(|arg| Self::translate_expr(context, arg.value, block_id))
-                    .collect();
-                context.new_value(Value::Call(id, args), expr.ty)
-            }
-        };
-        context.add_instruction(block_id, id);
-        id
+        if let TypedExprKind::Variable(_, id) = expr.expr {
+            context.read_variable(id, block_id)
+        } else {
+            let id = match expr.expr {
+                TypedExprKind::Variable(_, id) => panic!("Caught above"),
+                TypedExprKind::Literal(lit) => match lit {
+                    Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
+                    Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
+                    Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
+                },
+                TypedExprKind::Binary { lhs, op, rhs } => {
+                    let lhs = Self::translate_expr(context, lhs.value, block_id);
+                    let rhs = Self::translate_expr(context, rhs.value, block_id);
+                    let op = match op.value {
+                        ast::BinaryOp::Add => BinaryOpCode::Add,
+                        ast::BinaryOp::Sub => BinaryOpCode::Sub,
+                        ast::BinaryOp::Mul => BinaryOpCode::Mul,
+                        ast::BinaryOp::Div => BinaryOpCode::Div,
+                        ast::BinaryOp::Mod => BinaryOpCode::Mod,
+                        ast::BinaryOp::Gt => BinaryOpCode::Gt,
+                        ast::BinaryOp::Lt => BinaryOpCode::Lt,
+                        ast::BinaryOp::Gte => BinaryOpCode::Gte,
+                        ast::BinaryOp::Lte => BinaryOpCode::Lte,
+                        ast::BinaryOp::Eq => BinaryOpCode::Eq,
+                        ast::BinaryOp::Neq => BinaryOpCode::Neq,
+                        ast::BinaryOp::And => BinaryOpCode::And,
+                        ast::BinaryOp::Or => BinaryOpCode::Or,
+                    };
+                    if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
+                        // context.remove_value(lhs);
+                        // context.remove_value(rhs);
+                        // context.pop_instruction(block_id);
+                        // context.pop_instruction(block_id);
+                        dfa
+                    } else {
+                        context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
+                    }
+                }
+                TypedExprKind::Unary { op, expr: target } => {
+                    let val = Self::translate_expr(context, target.value, block_id);
+                    let op = match op.value {
+                        ast::UnaryOp::Neg => UnaryOpCode::Neg,
+                        ast::UnaryOp::Not => UnaryOpCode::Not,
+                    };
+                    if let Some(dfa) = Self::dfa_unary(context, op, val) {
+                        // context.remove_value(val);
+                        // context.pop_instruction(block_id);
+                        dfa
+                    } else {
+                        context.new_value(Value::UnaryOp(op, val), expr.ty)
+                    }
+                }
+                TypedExprKind::Application { target, args } => {
+                    let TypedExprKind::Variable(_, id) = target.value.expr else {
+                        panic!("This should have been caught by the typechecker")
+                    };
+                    let args = args
+                        .into_iter()
+                        .map(|arg| Self::translate_expr(context, arg.value, block_id))
+                        .collect();
+                    context.new_value(Value::Call(id, args), expr.ty)
+                }
+            };
+            context.add_instruction(block_id, id);
+            id
+        }
     }
 
     fn translate_block(
@@ -584,6 +669,16 @@ impl FunctionIr {
                 otherwise,
             } => {
                 let cond = Self::translate_expr(context, cond.value, block_id);
+                if let Value::Bool(cond) = context.values[&cond] {
+                    return if cond {
+                        Self::translate_stmt(context, then.value, block_id)
+                    } else if let Some(otherwise) = otherwise {
+                        Self::translate_stmt(context, otherwise.value, block_id)
+                    } else {
+                        Continue
+                    }
+                }
+
                 let after_block = context.new_block();
                 let then_block = context.new_block();
                 let then_continuation = Self::translate_stmt(context, then.value, then_block);
@@ -620,13 +715,14 @@ impl FunctionIr {
                         Terminator::Branch(cond, then_block, after_block),
                     );
                     context.seal_block(then_block);
-                    context.seal_block(after_block);
 
                     if let ChangeBlock(after_then_block) = then_continuation {
                         context.add_terminator(after_then_block, Terminator::Jump(after_block));
                     } else if let Continue = then_continuation {
                         context.add_terminator(then_block, Terminator::Jump(after_block));
                     }
+
+                    context.seal_block(after_block);
 
                     ChangeBlock(after_block)
                 }

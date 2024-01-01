@@ -34,17 +34,20 @@ fn main() -> ExitCode {
         }
     };
 
-    let error_reports = compile(&input.text, &input.filename);
+    let result = compile(&input.text, &input.filename);
 
-    if let Err(error_reports) = error_reports {
-        println!("ERROR");
-        for report in error_reports {
-            report.eprint(&input).unwrap_or(());
+    match result {
+        Ok(ir) => {
+            println!("{}", ir);
+            ExitCode::SUCCESS
+        },
+        Err(error_reports) => {
+            println!("ERROR");
+            for report in error_reports {
+                report.eprint(&input).unwrap_or(());
+            }
+            ExitCode::FAILURE
         }
-        ExitCode::FAILURE
-    } else {
-        println!("OK");
-        ExitCode::SUCCESS
     }
 }
 

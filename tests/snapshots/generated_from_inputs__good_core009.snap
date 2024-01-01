@@ -23,8 +23,7 @@ b0:
 define i32 @main() {
 b0:
   %foo = call i32 @foo()
-  %foo1 = call i32 @foo()
-  call void @printInt(i32 %foo1)
+  call void @printInt(i32 %foo)
   ret i32 0
 }
 

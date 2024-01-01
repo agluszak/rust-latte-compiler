@@ -5,5 +5,5 @@ int main() {
     if (x < 3) {
        x = 4;
     }
-    return 0;
+    return x;
 }

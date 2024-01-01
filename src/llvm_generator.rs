@@ -88,9 +88,13 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    pub fn generate(&self, name: &str, ir: &FunctionIr) {
+    pub fn declare(&self, name: &str, ir: &FunctionIr) {
         let fn_type = self.llvm_function_type(&ir.ty);
-        let function = self.module.add_function(name, fn_type, None);
+        self.module.add_function(name, fn_type, None);
+    }
+
+    pub fn generate(&self, name: &str, ir: &FunctionIr) {
+        let function = self.module.get_function(name).unwrap();
         let mut basic_blocks = BTreeMap::new();
         let mut values: BTreeMap<ValueId, BasicValueEnum> = BTreeMap::new();
         for name in ir.ir.blocks.keys() {
