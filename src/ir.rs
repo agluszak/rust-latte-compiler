@@ -590,6 +590,16 @@ impl FunctionIr {
         final_continuation
     }
 
+    fn default_value(ty: &Type) -> Value {
+        match ty {
+            Type::Int => Value::Int(0),
+            Type::Bool => Value::Bool(false),
+            Type::LatteString => Value::String(String::new()),
+            Type::Function(_, _) => panic!("Function cannot have a default value"),
+            Type::Void => panic!("Void cannot have a default value"),
+        }
+    }
+
     fn translate_stmt(
         context: &mut IrContext,
         stmt: TypedStmt,
@@ -608,9 +618,10 @@ impl FunctionIr {
                             let expr = Self::translate_expr(context, expr.value, block_id);
                             context.write_variable(item.value.var_id, block_id, expr);
                         } else {
-                            let undef = context.new_value(Undef, item.value.ty);
-                            context.add_instruction(block_id, undef); // TODO or some default?
-                            context.write_variable(item.value.var_id, block_id, undef);
+                            let default = Self::default_value(&item.value.ty);
+                            let default = context.new_value(default, item.value.ty);
+                            context.add_instruction(block_id, default);
+                            context.write_variable(item.value.var_id, block_id, default);
                         }
                     }
                     Continue
