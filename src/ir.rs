@@ -189,7 +189,11 @@ impl IrContext {
             .blocks
             .get_mut(&block)
             .unwrap_or_else(|| panic!("Block {:?} not found", block));
-        assert!(block.terminator.is_none());
+        if let Value::Phi(_) = self.values[&value].clone() {
+            // TODO: Phi nodes can be added post-sealing, but they should be added to the beginning
+        } else {
+            assert!(block.terminator.is_none());
+        }
         if !self.defined_in_instructions.contains(&value) {
             self.defined_in_instructions.insert(value);
             block.instructions.push(value);
@@ -300,7 +304,6 @@ impl IrContext {
                 let val = self.new_value(Value::Phi(phi), ty);
                 self.write_variable(variable, block_id, val);
 
-                
                 self.add_phi_operands(variable, val)
             };
             self.write_variable(variable, block_id, val);
@@ -343,6 +346,7 @@ impl IrContext {
             .get(&block_id)
             .cloned()
             .unwrap_or_else(|| panic!("Block {:?} not found", block_id));
+        assert!(!block.sealed);
         block.sealed = true;
         self.blocks.insert(block_id, block);
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
@@ -385,8 +389,10 @@ impl IrContext {
 
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
-            if let Value::Phi(_) = self.values[&user] {
-                self.try_remove_trivial_phi(user);
+            if let Some(phi) = self.get_phi(user) {
+                let target = self.try_remove_trivial_phi(user);
+                // TODO: is this necessary?
+                self.values.insert(user, Value::Rerouted(target));
             }
         }
         same.unwrap()
@@ -488,57 +494,74 @@ impl FunctionIr {
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Add) => {
                 context.new_value(Value::Int(lhs + rhs), Type::Int)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Sub) => {
                 context.new_value(Value::Int(lhs - rhs), Type::Int)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mul) => {
                 context.new_value(Value::Int(lhs * rhs), Type::Int)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Div) => {
                 context.new_value(Value::Int(lhs / rhs), Type::Int)
             }
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mod) => {
                 context.new_value(Value::Int(lhs % rhs), Type::Int)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gt) => {
                 context.new_value(Value::Bool(lhs > rhs), Type::Bool)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lt) => {
                 context.new_value(Value::Bool(lhs < rhs), Type::Bool)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gte) => {
                 context.new_value(Value::Bool(lhs >= rhs), Type::Bool)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lte) => {
                 context.new_value(Value::Bool(lhs <= rhs), Type::Bool)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Eq) => {
                 context.new_value(Value::Bool(lhs == rhs), Type::Bool)
             }
+
             (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Neq) => {
                 context.new_value(Value::Bool(lhs != rhs), Type::Bool)
             }
+
             (Value::String(lhs), Value::String(rhs), BinaryOpCode::Add) => {
                 context.new_value(Value::String(lhs + &rhs), Type::LatteString)
             }
+
             (Value::String(lhs), Value::String(rhs), BinaryOpCode::Eq) => {
                 context.new_value(Value::Bool(lhs == rhs), Type::Bool)
             }
+
             (Value::String(lhs), Value::String(rhs), BinaryOpCode::Neq) => {
                 context.new_value(Value::Bool(lhs != rhs), Type::Bool)
             }
+
             (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::And) => {
                 context.new_value(Value::Bool(lhs && rhs), Type::Bool)
             }
+
             (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Or) => {
                 context.new_value(Value::Bool(lhs || rhs), Type::Bool)
             }
+
             (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Eq) => {
                 context.new_value(Value::Bool(lhs == rhs), Type::Bool)
             }
+
             (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Neq) => {
                 context.new_value(Value::Bool(lhs != rhs), Type::Bool)
             }
+
             // Expression simplification
             (lhs, rhs, BinaryOpCode::Eq)
                 if lhs == rhs && lhs.const_evaluable() && rhs.const_evaluable() =>
@@ -628,10 +651,6 @@ impl FunctionIr {
                     ast::BinaryOp::Or => BinaryOpCode::Or,
                 };
                 if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
-                    // context.remove_value(lhs);
-                    // context.remove_value(rhs);
-                    // context.pop_instruction(block_id);
-                    // context.pop_instruction(block_id);
                     dfa
                 } else {
                     context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
@@ -644,8 +663,6 @@ impl FunctionIr {
                     ast::UnaryOp::Not => UnaryOpCode::Not,
                 };
                 if let Some(dfa) = Self::dfa_unary(context, op, val) {
-                    // context.remove_value(val);
-                    // context.pop_instruction(block_id);
                     dfa
                 } else {
                     context.new_value(Value::UnaryOp(op, val), expr.ty)
@@ -662,7 +679,11 @@ impl FunctionIr {
                 context.new_value(Value::Call(id, args), expr.ty)
             }
         };
-        context.add_instruction(block_id, id);
+        if let Value::Phi(phi) = &context.values[&id] {
+            context.add_instruction(phi.block, id);
+        } else {
+            context.add_instruction(block_id, id);
+        }
         id
     }
 
