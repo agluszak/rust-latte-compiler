@@ -1,5 +1,6 @@
 extern crate core;
 
+
 use crate::errors::{parsing_reports, typechecking_reports};
 use crate::lexer::Lexer;
 use crate::parser::latte::ProgramParser;
@@ -10,6 +11,8 @@ use crate::ir::Ir;
 use crate::llvm_generator::CodeGen;
 use inkwell::context::Context;
 use std::ops::Range;
+
+use std::sync::atomic::AtomicBool;
 
 mod ast;
 mod dfa;
@@ -22,6 +25,8 @@ pub mod parser;
 mod typechecker;
 mod typed_ast;
 
+pub static DBG: AtomicBool = AtomicBool::new(false);
+
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 
 pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<AriadneReport<'a>>> {
@@ -32,7 +37,7 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
     let (typechecked, env) =
         typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
-    #[cfg(feature = "dbg")]
+    if DBG.load(std::sync::atomic::Ordering::Relaxed)
     {
         dbg!(&typechecked);
         dbg!(&env);
@@ -44,8 +49,7 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
         ir.translate_function(decl.value);
     }
 
-    #[cfg(feature = "dbg")]
-    {
+    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
         println!("{}", ir.dump());
     }
 

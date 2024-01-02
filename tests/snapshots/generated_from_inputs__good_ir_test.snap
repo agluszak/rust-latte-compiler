@@ -1,6 +1,6 @@
 ---
 source: tests/generated_from_inputs.rs
-description: "int main() {\n    int x = 10;\n    int y = x + 5;\n    x = x - 1;\n    if (x < 3) {\n       x = 4;\n    }\n    return x;\n}"
+description: "int main() {\n    int x = 10;\n    int y = x + 5;\n    x = x - 1;\n    if (x < 3) {\n       x = 4;\n    }\n    printInt(x);\n    return 0;\n}"
 ---
 ; ModuleID = 'ir_test'
 source_filename = "ir_test"
@@ -17,6 +17,7 @@ entry:
 
 define i32 @main() {
 b0:
-  ret i32 9
+  call void @printInt(i32 9)
+  ret i32 0
 }
 

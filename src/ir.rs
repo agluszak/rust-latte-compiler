@@ -1,6 +1,6 @@
-use crate::ast;
+use crate::{ast, DBG};
 use crate::ast::Literal;
-use crate::ir::BasicBlockContinuation::{ChangeBlock, Continue, Stop};
+use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::ir::Value::Undef;
 use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt, VariableId};
@@ -122,6 +122,7 @@ pub struct IrContext {
     value_types: BTreeMap<ValueId, Type>,
     blocks: BTreeMap<BlockId, Block>,
     incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, Phi>>,
+    defined_in_instructions: BTreeSet<ValueId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,6 +139,12 @@ pub struct ReadyIr {
     pub blocks: BTreeMap<BlockId, ReadyBlock>,
 }
 
+impl Default for IrContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IrContext {
     pub fn new() -> IrContext {
         IrContext {
@@ -148,13 +155,15 @@ impl IrContext {
             value_types: BTreeMap::new(),
             blocks: BTreeMap::new(),
             incomplete_phis: BTreeMap::new(),
+            defined_in_instructions: BTreeSet::new(),
         }
     }
 
     pub fn ready(self) -> ReadyIr {
         assert!(self.incomplete_phis.is_empty());
-        #[cfg(feature = "dbg")]
-        dbg!(&self.blocks);
+        if DBG.load(std::sync::atomic::Ordering::Relaxed) {
+            dbg!(&self.blocks);
+        }
         let blocks = self
             .blocks
             .into_iter()
@@ -173,7 +182,10 @@ impl IrContext {
             .get_mut(&block)
             .unwrap_or_else(|| panic!("Block {:?} not found", block));
         assert!(block.terminator.is_none());
-        block.instructions.push(value);
+        if !self.defined_in_instructions.contains(&value) {
+            self.defined_in_instructions.insert(value);
+            block.instructions.push(value);
+        }
     }
 
     fn pop_instruction(&mut self, block: BlockId) {
@@ -385,8 +397,7 @@ impl IrContext {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BasicBlockContinuation {
-    Continue,
-    ChangeBlock(BlockId),
+    ContinueBlock(BlockId),
     Stop,
 }
 
@@ -426,10 +437,8 @@ impl Ir {
                 }
 
                 let continuation = FunctionIr::translate_block(&mut ir, body.value, entry_block);
-                if let ChangeBlock(block_id) = continuation {
+                if let ContinueBlock(block_id) = continuation {
                     ir.add_terminator(block_id, Terminator::ReturnNoValue);
-                } else if let Continue = continuation {
-                    ir.add_terminator(entry_block, Terminator::ReturnNoValue);
                 }
                 name.value.0
             }
@@ -503,11 +512,8 @@ impl FunctionIr {
     }
 
     fn translate_expr(context: &mut IrContext, expr: TypedExpr, block_id: BlockId) -> ValueId {
-        if let TypedExprKind::Variable(_, id) = expr.expr {
-            context.read_variable(id, block_id)
-        } else {
             let id = match expr.expr {
-                TypedExprKind::Variable(_, id) => panic!("Caught above"),
+                TypedExprKind::Variable(_, id) =>             context.read_variable(id, block_id),
                 TypedExprKind::Literal(lit) => match lit {
                     Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
                     Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
@@ -569,7 +575,6 @@ impl FunctionIr {
             context.add_instruction(block_id, id);
             id
         }
-    }
 
     fn translate_block(
         context: &mut IrContext,
@@ -577,14 +582,13 @@ impl FunctionIr {
         block_id: BlockId,
     ) -> BasicBlockContinuation {
         let mut block_id = block_id;
-        let mut final_continuation = Continue;
+        let mut final_continuation = ContinueBlock(block_id);
         for stmt in block.0 {
             let continuation = Self::translate_stmt(context, stmt.value, block_id);
             match continuation {
-                Continue => final_continuation = Continue,
-                ChangeBlock(new_block_id) => {
+                ContinueBlock(new_block_id) => {
                     block_id = new_block_id;
-                    final_continuation = ChangeBlock(new_block_id);
+                    final_continuation = ContinueBlock(new_block_id);
                 }
                 Stop => return Stop,
             }
@@ -608,7 +612,7 @@ impl FunctionIr {
         block_id: BlockId,
     ) -> BasicBlockContinuation {
         match stmt {
-            TypedStmt::Empty => Continue,
+            TypedStmt::Empty => ContinueBlock(block_id),
             TypedStmt::Block(block) => Self::translate_block(context, block.value, block_id),
             TypedStmt::Decl(decl) => match decl.value {
                 TypedDecl::Var { items, .. } => {
@@ -626,7 +630,7 @@ impl FunctionIr {
                             context.write_variable(item.value.var_id, block_id, default);
                         }
                     }
-                    Continue
+                    ContinueBlock(block_id)
                 }
                 TypedDecl::Fn { .. } => panic!("Nested functions are not supported yet"),
             },
@@ -637,7 +641,7 @@ impl FunctionIr {
             } => {
                 let expr = Self::translate_expr(context, expr.value, block_id);
                 context.write_variable(target_id, block_id, expr);
-                Continue
+                ContinueBlock(block_id)
             }
             TypedStmt::Return(expr) => {
                 let expr = expr.map(|expr| Self::translate_expr(context, expr.value, block_id));
@@ -660,7 +664,7 @@ impl FunctionIr {
                     } else if let Some(otherwise) = otherwise {
                         Self::translate_stmt(context, otherwise.value, block_id)
                     } else {
-                        Continue
+                        ContinueBlock(block_id)
                     }
                 }
 
@@ -680,20 +684,16 @@ impl FunctionIr {
                         return Stop;
                     }
 
-                    if let ChangeBlock(after_then_block) = then_continuation {
+                    if let ContinueBlock(after_then_block) = then_continuation {
                         context.add_terminator(after_then_block, Terminator::Jump(after_block));
-                    } else if let Continue = then_continuation {
-                        context.add_terminator(then_block, Terminator::Jump(after_block));
                     }
 
-                    if let ChangeBlock(after_else_block) = else_continuation {
+                    if let ContinueBlock(after_else_block) = else_continuation {
                         context.add_terminator(after_else_block, Terminator::Jump(after_block));
-                    } else if let Continue = else_continuation {
-                        context.add_terminator(else_block, Terminator::Jump(after_block));
                     }
                     context.seal_block(after_block);
 
-                    ChangeBlock(after_block)
+                    ContinueBlock(after_block)
                 } else {
                     context.add_terminator(
                         block_id,
@@ -701,46 +701,39 @@ impl FunctionIr {
                     );
                     context.seal_block(then_block);
 
-                    if let ChangeBlock(after_then_block) = then_continuation {
+                    if let ContinueBlock(after_then_block) = then_continuation {
                         context.add_terminator(after_then_block, Terminator::Jump(after_block));
-                    } else if let Continue = then_continuation {
-                        context.add_terminator(then_block, Terminator::Jump(after_block));
                     }
 
                     context.seal_block(after_block);
 
-                    ChangeBlock(after_block)
+                    ContinueBlock(after_block)
                 }
             }
             TypedStmt::While { cond, body } => {
                 let cond_block = context.new_block();
-
-
-
                 context.add_terminator(block_id, Terminator::Jump(cond_block));
 
                 let cond = Self::translate_expr(context, cond.value, cond_block);
 
                 if let Value::Bool(cond) = context.values[&cond] {
-                    if !cond {
+                    return if !cond {
                         let after_block = context.new_block();
                         context.add_terminator(cond_block, Terminator::Jump(after_block));
                         context.seal_block(cond_block);
                         context.seal_block(after_block);
-                        return ChangeBlock(after_block);
+                        ContinueBlock(after_block)
                     } else {
                         let body_block = context.new_block();
                         context.add_terminator(cond_block, Terminator::Jump(body_block));
                         context.seal_block(body_block);
                         let body_continuation =
                             Self::translate_stmt(context, body.value, body_block);
-                        if let ChangeBlock(after_body_block) = body_continuation {
+                        if let ContinueBlock(after_body_block) = body_continuation {
                             context.add_terminator(after_body_block, Terminator::Jump(cond_block));
-                        } else if let Continue = body_continuation {
-                            context.add_terminator(body_block, Terminator::Jump(cond_block));
                         }
                         context.seal_block(cond_block);
-                        return Stop;
+                        Stop
                     }
                 }
 
@@ -754,37 +747,43 @@ impl FunctionIr {
                 context.seal_block(body_block);
 
                 let body_continuation = Self::translate_stmt(context, body.value, body_block);
-                if let ChangeBlock(after_body_block) = body_continuation {
+                if let ContinueBlock(after_body_block) = body_continuation {
                     context.add_terminator(after_body_block, Terminator::Jump(cond_block));
-                } else if let Continue = body_continuation {
-                    context.add_terminator(body_block, Terminator::Jump(cond_block));
                 }
 
                 context.seal_block(cond_block);
                 context.seal_block(after_block);
-                ChangeBlock(after_block)
+                ContinueBlock(after_block)
             }
             TypedStmt::Expr(expr) => {
                 let _expr = Self::translate_expr(context, expr.value, block_id);
-                Continue
+                ContinueBlock(block_id)
             }
             TypedStmt::Incr(expr) => {
+                let TypedExprKind::Variable(_, var_id) = expr.value.expr else {
+                    panic!("This should have been caught by the typechecker")
+                };
                 let expr = Self::translate_expr(context, expr.value, block_id);
                 let one = context.new_value(Value::Int(1), Type::Int);
                 context.add_instruction(block_id, one);
                 let op =
                     context.new_value(Value::BinaryOp(BinaryOpCode::Add, expr, one), Type::Int);
                 context.add_instruction(block_id, op);
-                Continue
+                context.write_variable(var_id, block_id, op);
+                ContinueBlock(block_id)
             }
             TypedStmt::Decr(expr) => {
+                let TypedExprKind::Variable(_, var_id) = expr.value.expr else {
+                    panic!("This should have been caught by the typechecker")
+                };
                 let expr = Self::translate_expr(context, expr.value, block_id);
                 let one = context.new_value(Value::Int(1), Type::Int);
                 context.add_instruction(block_id, one);
                 let op =
                     context.new_value(Value::BinaryOp(BinaryOpCode::Sub, expr, one), Type::Int);
                 context.add_instruction(block_id, op);
-                Continue
+                context.write_variable(var_id, block_id, op);
+                ContinueBlock(block_id)
             }
         }
     }

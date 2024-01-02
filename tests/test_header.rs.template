@@ -5,6 +5,7 @@ use rust_latte_compiler::compile;
 use rust_latte_compiler::input::Input;
 use std::io::{{BufWriter, Read, Write}};
 use std::env;
+use std::path::Path;
 use std::fs::File;
 
 macro_rules! good_test {{
@@ -31,6 +32,7 @@ macro_rules! good_test {{
         let mut child = std::process::Command::new("lli")
             .arg(temp_file.path())
             .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
             .spawn()
             .unwrap();
 
@@ -38,7 +40,9 @@ macro_rules! good_test {{
         child.stdout.as_mut().unwrap().read_to_string(&mut output).unwrap();
         let status = child.wait().unwrap();
         if !status.success() {{
-            panic!("lli failed with status {{:?}}", status);
+            let mut stderr = String::new();
+            child.stderr.as_mut().unwrap().read_to_string(&mut stderr).unwrap();
+            panic!("lli failed with status {{:?}} and output {{}}", status, stderr);
         }}
         assert_eq!(output, expected_program_output);
     }};

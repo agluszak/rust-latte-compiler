@@ -25,7 +25,7 @@ b0:
 define void @test(i32 %0) {
 b0:
   %v2 = add i32 %0, 1
-  call void @printInt(i32 %0)
+  call void @printInt(i32 %v2)
   ret void
 }
 

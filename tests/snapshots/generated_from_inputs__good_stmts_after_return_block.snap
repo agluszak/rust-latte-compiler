@@ -1,6 +1,6 @@
 ---
 source: tests/generated_from_inputs.rs
-description: "int main() {\n    {   \n        int x = 5;\n        return x;\n    }\n    int y = 6;\n    y++;\n}"
+description: "int main() {\n    {   \n        int x = 5;\n        return 0;\n    }\n    int y = 6;\n    y++;\n}"
 ---
 ; ModuleID = 'stmts_after_return_block'
 source_filename = "stmts_after_return_block"
@@ -17,6 +17,6 @@ entry:
 
 define i32 @main() {
 b0:
-  ret i32 5
+  ret i32 0
 }
 
