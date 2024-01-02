@@ -106,6 +106,28 @@ impl<'ctx> CodeGen<'ctx> {
         for (name, block) in &ir.ir.blocks {
             let this_block = basic_blocks[name];
             self.builder.position_at_end(this_block);
+            // First add phis
+            for &id in &block.instructions {
+                let value = ir.ir.values.get(&id).unwrap();
+                match value {
+                    Value::Phi(phi) => {
+                        // Incoming values will be set later
+                        let llvm_phi = self
+                            .builder
+                            .build_phi(self.context.i32_type(), &id.to_string())
+                            .unwrap();
+                        phis.insert(id, (phi, llvm_phi));
+
+                        values.insert(id, llvm_phi.as_basic_value());
+                    }
+                    Value::Rerouted(rerouted) => {
+                        values.insert(id, values[&rerouted]);
+                    }
+                    _ => {}
+                }
+            }
+
+            // Then the rest
             for &id in &block.instructions {
                 let value = ir.ir.values.get(&id).unwrap();
                 match value {
@@ -339,19 +361,8 @@ impl<'ctx> CodeGen<'ctx> {
                             );
                         }
                     },
-                    Value::Phi(phi) => {
-                        // Incoming values will be set later
-                        let llvm_phi = self
-                            .builder
-                            .build_phi(self.context.i32_type(), &id.to_string())
-                            .unwrap();
-                        phis.insert(id, (phi, llvm_phi));
-
-                        values.insert(id, llvm_phi.as_basic_value());
-                    }
-                    Value::Rerouted(rerouted) => {
-                        values.insert(id, values[&rerouted]);
-                    }
+                    Value::Phi(_) => {}
+                    Value::Rerouted(_) => {}
                     Value::Undef => {}
                 }
             }

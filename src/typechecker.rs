@@ -652,7 +652,14 @@ fn typecheck_decl(
                 for (name, ty) in header.args {
                     let var_id = env.fresh_variable_id();
                     let span = name.span();
-                    let typed_arg = Spanned::new(span, TypedArg { name: name.clone(), ty: ty.clone(), var_id });
+                    let typed_arg = Spanned::new(
+                        span,
+                        TypedArg {
+                            name: name.clone(),
+                            ty: ty.clone(),
+                            var_id,
+                        },
+                    );
                     let data = VariableData::new(ty, name.span, var_id);
                     env.overwrite_data(name.value, data);
                     typed_args.push(typed_arg);

@@ -3,6 +3,7 @@ use crate::lexer::Spanned;
 use crate::typechecker::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct VariableId(u32);
 
 impl VariableId {

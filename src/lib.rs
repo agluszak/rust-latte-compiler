@@ -1,6 +1,5 @@
 extern crate core;
 
-
 use crate::errors::{parsing_reports, typechecking_reports};
 use crate::lexer::Lexer;
 use crate::parser::latte::ProgramParser;
@@ -37,8 +36,7 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
     let (typechecked, env) =
         typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
-    if DBG.load(std::sync::atomic::Ordering::Relaxed)
-    {
+    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
         dbg!(&typechecked);
         dbg!(&env);
     }

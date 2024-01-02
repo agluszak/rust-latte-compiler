@@ -23,13 +23,9 @@ pub fn read_input() -> Result<Input, String> {
         [_, path, dbg] if dbg == "--dbg" => {
             rust_latte_compiler::DBG.store(true, std::sync::atomic::Ordering::Relaxed);
             read_from_path(path)
-        },
-        [_, path] => {
-            read_from_path(path)
-        },
-        [_] => {
-            read_from_stdin()
-        },
+        }
+        [_, path] => read_from_path(path),
+        [_] => read_from_stdin(),
         [this, ..] => Err(format!("Usage: {this} <file> [--dbg]")),
         &[] => unreachable!(),
     }
@@ -52,7 +48,7 @@ fn main() -> ExitCode {
         Ok(ir) => {
             println!("{}", ir);
             ExitCode::SUCCESS
-        },
+        }
         Err(error_reports) => {
             println!("ERROR");
             for report in error_reports {

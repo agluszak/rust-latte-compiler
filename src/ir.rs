@@ -1,13 +1,14 @@
-use crate::{ast, DBG};
 use crate::ast::Literal;
 use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::ir::Value::Undef;
 use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt, VariableId};
+use crate::{ast, DBG};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct BlockId(u32);
 
 impl Display for BlockId {
@@ -17,6 +18,7 @@ impl Display for BlockId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct ValueId(u32);
 
 impl Display for ValueId {
@@ -85,6 +87,12 @@ pub enum Value {
     Undef,
 }
 
+impl Value {
+    pub fn const_evaluable(&self) -> bool {
+        !matches!(self, Value::Call(_, _))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Block {
     instructions: Vec<ValueId>,
@@ -121,7 +129,7 @@ pub struct IrContext {
     values: BTreeMap<ValueId, Value>,
     value_types: BTreeMap<ValueId, Type>,
     blocks: BTreeMap<BlockId, Block>,
-    incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, Phi>>,
+    incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, ValueId>>,
     defined_in_instructions: BTreeSet<ValueId>,
 }
 
@@ -188,15 +196,6 @@ impl IrContext {
         }
     }
 
-    fn pop_instruction(&mut self, block: BlockId) {
-        let block = self
-            .blocks
-            .get_mut(&block)
-            .unwrap_or_else(|| panic!("Block {:?} not found", block));
-        assert!(block.terminator.is_none());
-        block.instructions.pop().unwrap_or_else(|| panic!("Block {:?} is empty", block));
-    }
-
     fn add_terminator(&mut self, block_id: BlockId, terminator: Terminator) {
         let mut block = self
             .blocks
@@ -215,10 +214,6 @@ impl IrContext {
         }
         block.terminator = Some(terminator);
         self.blocks.insert(block_id, block);
-    }
-
-    fn terminated(&self, block_id: BlockId) -> bool {
-        self.blocks.get(&block_id).unwrap().terminator.is_some()
     }
 
     fn add_predecessor(&mut self, block: BlockId, pred: BlockId) {
@@ -289,12 +284,12 @@ impl IrContext {
             let val = if !block.sealed {
                 // Incomplete CFG
                 let phi = Phi::new(block_id);
+                let id = self.new_value(Value::Phi(phi), ty);
                 self.incomplete_phis
                     .entry(block_id)
                     .or_default()
-                    .insert(variable, phi.clone());
-
-                self.new_value(Value::Phi(phi), ty)
+                    .insert(variable, id);
+                id
             } else if block.preds.len() == 1 {
                 // Optimize the common case of a single predecessor: no phi needed
                 let pred = block.preds.iter().next().unwrap();
@@ -305,6 +300,7 @@ impl IrContext {
                 let val = self.new_value(Value::Phi(phi), ty);
                 self.write_variable(variable, block_id, val);
 
+                
                 self.add_phi_operands(variable, val)
             };
             self.write_variable(variable, block_id, val);
@@ -313,24 +309,31 @@ impl IrContext {
     }
 
     fn add_phi_operands(&mut self, variable: VariableId, phi_id: ValueId) -> ValueId {
-        let mut phi = self.get_phi(phi_id);
+        let phi_block = self.get_phi(phi_id).unwrap().block;
         let block = self
             .blocks
-            .get(&phi.block)
-            .unwrap_or_else(|| panic!("Block {:?} not found", phi.block));
+            .get(&phi_block)
+            .unwrap_or_else(|| panic!("Block {:?} not found", phi_block));
         for pred in block.preds.clone() {
             let pred_val = self.read_variable(variable, pred);
-            phi.incoming.insert(pred, pred_val);
+            if let Some(pred_phi) = self.get_phi(pred_val) {
+                pred_phi.users.insert(phi_id);
+            }
+            self.get_phi(phi_id)
+                .unwrap()
+                .incoming
+                .insert(pred, pred_val);
         }
-        self.values.insert(phi_id, Value::Phi(phi));
         self.try_remove_trivial_phi(phi_id)
     }
 
-    fn get_phi(&self, phi_id: ValueId) -> Phi {
-        if let Value::Phi(phi) = self.values[&phi_id].clone() {
-            phi
+    fn get_phi(&mut self, phi_id: ValueId) -> Option<&mut Phi> {
+        if let Some(Value::Rerouted(id)) = self.values.get(&phi_id) {
+            self.get_phi(*id)
+        } else if let Some(Value::Phi(phi)) = self.values.get_mut(&phi_id) {
+            Some(phi)
         } else {
-            panic!("Value {:?} is not a phi", phi_id)
+            None
         }
     }
 
@@ -343,28 +346,23 @@ impl IrContext {
         block.sealed = true;
         self.blocks.insert(block_id, block);
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
-            for (variable, phi) in incomplete_phis {
-                let ty = self
-                    .variable_types
-                    .get(&variable)
-                    .cloned()
-                    .unwrap_or_else(|| panic!("Variable {:?} not found", variable));
-                let val = self.new_value(Value::Phi(phi), ty);
-                self.add_phi_operands(variable, val);
+            for (variable, phi_id) in incomplete_phis {
+                self.add_phi_operands(variable, phi_id);
             }
         }
     }
 
     fn try_remove_trivial_phi(&mut self, phi_id: ValueId) -> ValueId {
-        let mut phi = self.get_phi(phi_id);
+        let mut phi = self.get_phi(phi_id).cloned().unwrap();
         let mut same = None;
         for &op in phi.incoming.values() {
             if let Some(same) = same {
-                if same != op && same != phi_id {
+                if op == same || op == phi_id {
+                    // Unique value or self−reference
+                    continue;
+                } else {
                     // This phi merges at least two different values, so it's not trivial
                     return phi_id;
-                } else {
-                    continue;
                 }
             } else {
                 same = Some(op);
@@ -456,7 +454,11 @@ impl Ir {
             for (id, block) in &function.ir.blocks {
                 result.push_str(&format!("{}:\n", id));
                 for instr in &block.instructions {
-                    result.push_str(&format!("  {:?}: {:?}\n", instr, function.ir.values.get(instr).unwrap()));
+                    result.push_str(&format!(
+                        "  {:?}: {:?}\n",
+                        instr,
+                        function.ir.values.get(instr).unwrap()
+                    ));
                 }
                 result.push_str(&format!("  {:?}\n", block.terminator));
             }
@@ -472,29 +474,115 @@ pub struct FunctionIr {
 }
 
 impl FunctionIr {
-    fn dfa_binary(context: &mut IrContext, op: BinaryOpCode, lhs_id: ValueId, rhs_id: ValueId) -> Option<ValueId> {
+    fn dfa_binary(
+        context: &mut IrContext,
+        op: BinaryOpCode,
+        lhs_id: ValueId,
+        rhs_id: ValueId,
+    ) -> Option<ValueId> {
         let lhs = context.values[&lhs_id].clone();
         let rhs = context.values[&rhs_id].clone();
 
         let result = match (lhs, rhs, op) {
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Add) => context.new_value(Value::Int(lhs + rhs), Type::Int),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Sub) => context.new_value(Value::Int(lhs - rhs), Type::Int),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mul) => context.new_value(Value::Int(lhs * rhs), Type::Int),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Div) => context.new_value(Value::Int(lhs / rhs), Type::Int),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mod) => context.new_value(Value::Int(lhs % rhs), Type::Int),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gt) => context.new_value(Value::Bool(lhs > rhs), Type::Bool),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lt) => context.new_value(Value::Bool(lhs < rhs), Type::Bool),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gte) => context.new_value(Value::Bool(lhs >= rhs), Type::Bool),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lte) => context.new_value(Value::Bool(lhs <= rhs), Type::Bool),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Add) => context.new_value(Value::String(lhs + &rhs), Type::LatteString),
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::And) => context.new_value(Value::Bool(lhs && rhs), Type::Bool),
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Or) => context.new_value(Value::Bool(lhs || rhs), Type::Bool),
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Eq) => context.new_value(Value::Bool(lhs == rhs), Type::Bool),
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Neq) => context.new_value(Value::Bool(lhs != rhs), Type::Bool),
+            // Constant folding
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Add) => {
+                context.new_value(Value::Int(lhs + rhs), Type::Int)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Sub) => {
+                context.new_value(Value::Int(lhs - rhs), Type::Int)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mul) => {
+                context.new_value(Value::Int(lhs * rhs), Type::Int)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Div) => {
+                context.new_value(Value::Int(lhs / rhs), Type::Int)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mod) => {
+                context.new_value(Value::Int(lhs % rhs), Type::Int)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gt) => {
+                context.new_value(Value::Bool(lhs > rhs), Type::Bool)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lt) => {
+                context.new_value(Value::Bool(lhs < rhs), Type::Bool)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gte) => {
+                context.new_value(Value::Bool(lhs >= rhs), Type::Bool)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lte) => {
+                context.new_value(Value::Bool(lhs <= rhs), Type::Bool)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Eq) => {
+                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
+            }
+            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Neq) => {
+                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
+            }
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Add) => {
+                context.new_value(Value::String(lhs + &rhs), Type::LatteString)
+            }
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Eq) => {
+                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
+            }
+            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Neq) => {
+                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
+            }
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::And) => {
+                context.new_value(Value::Bool(lhs && rhs), Type::Bool)
+            }
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Or) => {
+                context.new_value(Value::Bool(lhs || rhs), Type::Bool)
+            }
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Eq) => {
+                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
+            }
+            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Neq) => {
+                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
+            }
+            // Expression simplification
+            (lhs, rhs, BinaryOpCode::Eq)
+                if lhs == rhs && lhs.const_evaluable() && rhs.const_evaluable() =>
+            {
+                context.new_value(Value::Bool(true), Type::Bool)
+            }
+            (lhs, rhs, BinaryOpCode::Neq)
+                if lhs == rhs && lhs.const_evaluable() && rhs.const_evaluable() =>
+            {
+                context.new_value(Value::Bool(false), Type::Bool)
+            }
+            (Value::Int(0), _rhs, BinaryOpCode::Add) => rhs_id,
+            (Value::Int(0), _rhs, BinaryOpCode::Sub) => {
+                context.new_value(Value::UnaryOp(UnaryOpCode::Neg, rhs_id), Type::Int)
+            }
+            (Value::Int(1), _rhs, BinaryOpCode::Mul) => rhs_id,
+            (Value::Int(0), rhs, BinaryOpCode::Mul) if rhs.const_evaluable() => {
+                context.new_value(Value::Int(0), Type::Int)
+            }
+            (_lhs, Value::Int(0), BinaryOpCode::Add) => lhs_id,
+            (_lhs, Value::Int(0), BinaryOpCode::Sub) => lhs_id,
+            (_lhs, Value::Int(1), BinaryOpCode::Mul) => lhs_id,
+            (lhs, Value::Int(0), BinaryOpCode::Mul) if lhs.const_evaluable() => {
+                context.new_value(Value::Int(0), Type::Int)
+            }
+            (_lhs, Value::Int(1), BinaryOpCode::Div) => lhs_id,
+            // Short-circuiting SHOULD NOT overoptimize
+            (_lhs, Value::Bool(true), BinaryOpCode::And) => lhs_id,
+            (lhs, Value::Bool(false), BinaryOpCode::And) if lhs.const_evaluable() => {
+                context.new_value(Value::Bool(false), Type::Bool)
+            }
+            (lhs, Value::Bool(true), BinaryOpCode::Or) if lhs.const_evaluable() => {
+                context.new_value(Value::Bool(true), Type::Bool)
+            }
+            (_lhs, Value::Bool(false), BinaryOpCode::Or) => lhs_id,
+            (Value::Bool(true), _rhs, BinaryOpCode::And) => rhs_id,
+            (Value::Bool(false), rhs, BinaryOpCode::And) if rhs.const_evaluable() => {
+                context.new_value(Value::Bool(false), Type::Bool)
+            }
+            (Value::Bool(true), rhs, BinaryOpCode::Or) if rhs.const_evaluable() => {
+                context.new_value(Value::Bool(true), Type::Bool)
+            }
+            (Value::Bool(false), _rhs, BinaryOpCode::Or) => rhs_id,
+
             _ => return None,
         };
         Some(result)
@@ -505,76 +593,78 @@ impl FunctionIr {
 
         let result = match (expr, op) {
             (Value::Int(expr), UnaryOpCode::Neg) => context.new_value(Value::Int(-expr), Type::Int),
-            (Value::Bool(expr), UnaryOpCode::Not) => context.new_value(Value::Bool(!expr), Type::Bool),
+            (Value::Bool(expr), UnaryOpCode::Not) => {
+                context.new_value(Value::Bool(!expr), Type::Bool)
+            }
             _ => return None,
         };
         Some(result)
     }
 
     fn translate_expr(context: &mut IrContext, expr: TypedExpr, block_id: BlockId) -> ValueId {
-            let id = match expr.expr {
-                TypedExprKind::Variable(_, id) =>             context.read_variable(id, block_id),
-                TypedExprKind::Literal(lit) => match lit {
-                    Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                    Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
-                    Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
-                },
-                TypedExprKind::Binary { lhs, op, rhs } => {
-                    let lhs = Self::translate_expr(context, lhs.value, block_id);
-                    let rhs = Self::translate_expr(context, rhs.value, block_id);
-                    let op = match op.value {
-                        ast::BinaryOp::Add => BinaryOpCode::Add,
-                        ast::BinaryOp::Sub => BinaryOpCode::Sub,
-                        ast::BinaryOp::Mul => BinaryOpCode::Mul,
-                        ast::BinaryOp::Div => BinaryOpCode::Div,
-                        ast::BinaryOp::Mod => BinaryOpCode::Mod,
-                        ast::BinaryOp::Gt => BinaryOpCode::Gt,
-                        ast::BinaryOp::Lt => BinaryOpCode::Lt,
-                        ast::BinaryOp::Gte => BinaryOpCode::Gte,
-                        ast::BinaryOp::Lte => BinaryOpCode::Lte,
-                        ast::BinaryOp::Eq => BinaryOpCode::Eq,
-                        ast::BinaryOp::Neq => BinaryOpCode::Neq,
-                        ast::BinaryOp::And => BinaryOpCode::And,
-                        ast::BinaryOp::Or => BinaryOpCode::Or,
-                    };
-                    if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
-                        // context.remove_value(lhs);
-                        // context.remove_value(rhs);
-                        // context.pop_instruction(block_id);
-                        // context.pop_instruction(block_id);
-                        dfa
-                    } else {
-                        context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
-                    }
+        let id = match expr.expr {
+            TypedExprKind::Variable(_, id) => context.read_variable(id, block_id),
+            TypedExprKind::Literal(lit) => match lit {
+                Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
+                Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
+                Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
+            },
+            TypedExprKind::Binary { lhs, op, rhs } => {
+                let lhs = Self::translate_expr(context, lhs.value, block_id);
+                let rhs = Self::translate_expr(context, rhs.value, block_id);
+                let op = match op.value {
+                    ast::BinaryOp::Add => BinaryOpCode::Add,
+                    ast::BinaryOp::Sub => BinaryOpCode::Sub,
+                    ast::BinaryOp::Mul => BinaryOpCode::Mul,
+                    ast::BinaryOp::Div => BinaryOpCode::Div,
+                    ast::BinaryOp::Mod => BinaryOpCode::Mod,
+                    ast::BinaryOp::Gt => BinaryOpCode::Gt,
+                    ast::BinaryOp::Lt => BinaryOpCode::Lt,
+                    ast::BinaryOp::Gte => BinaryOpCode::Gte,
+                    ast::BinaryOp::Lte => BinaryOpCode::Lte,
+                    ast::BinaryOp::Eq => BinaryOpCode::Eq,
+                    ast::BinaryOp::Neq => BinaryOpCode::Neq,
+                    ast::BinaryOp::And => BinaryOpCode::And,
+                    ast::BinaryOp::Or => BinaryOpCode::Or,
+                };
+                if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
+                    // context.remove_value(lhs);
+                    // context.remove_value(rhs);
+                    // context.pop_instruction(block_id);
+                    // context.pop_instruction(block_id);
+                    dfa
+                } else {
+                    context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
                 }
-                TypedExprKind::Unary { op, expr: target } => {
-                    let val = Self::translate_expr(context, target.value, block_id);
-                    let op = match op.value {
-                        ast::UnaryOp::Neg => UnaryOpCode::Neg,
-                        ast::UnaryOp::Not => UnaryOpCode::Not,
-                    };
-                    if let Some(dfa) = Self::dfa_unary(context, op, val) {
-                        // context.remove_value(val);
-                        // context.pop_instruction(block_id);
-                        dfa
-                    } else {
-                        context.new_value(Value::UnaryOp(op, val), expr.ty)
-                    }
+            }
+            TypedExprKind::Unary { op, expr: target } => {
+                let val = Self::translate_expr(context, target.value, block_id);
+                let op = match op.value {
+                    ast::UnaryOp::Neg => UnaryOpCode::Neg,
+                    ast::UnaryOp::Not => UnaryOpCode::Not,
+                };
+                if let Some(dfa) = Self::dfa_unary(context, op, val) {
+                    // context.remove_value(val);
+                    // context.pop_instruction(block_id);
+                    dfa
+                } else {
+                    context.new_value(Value::UnaryOp(op, val), expr.ty)
                 }
-                TypedExprKind::Application { target, args } => {
-                    let TypedExprKind::Variable(_, id) = target.value.expr else {
-                        panic!("This should have been caught by the typechecker")
-                    };
-                    let args = args
-                        .into_iter()
-                        .map(|arg| Self::translate_expr(context, arg.value, block_id))
-                        .collect();
-                    context.new_value(Value::Call(id, args), expr.ty)
-                }
-            };
-            context.add_instruction(block_id, id);
-            id
-        }
+            }
+            TypedExprKind::Application { target, args } => {
+                let TypedExprKind::Variable(_, id) = target.value.expr else {
+                    panic!("This should have been caught by the typechecker")
+                };
+                let args = args
+                    .into_iter()
+                    .map(|arg| Self::translate_expr(context, arg.value, block_id))
+                    .collect();
+                context.new_value(Value::Call(id, args), expr.ty)
+            }
+        };
+        context.add_instruction(block_id, id);
+        id
+    }
 
     fn translate_block(
         context: &mut IrContext,
@@ -665,7 +755,7 @@ impl FunctionIr {
                         Self::translate_stmt(context, otherwise.value, block_id)
                     } else {
                         ContinueBlock(block_id)
-                    }
+                    };
                 }
 
                 let after_block = context.new_block();
@@ -734,7 +824,7 @@ impl FunctionIr {
                         }
                         context.seal_block(cond_block);
                         Stop
-                    }
+                    };
                 }
 
                 let after_block = context.new_block();
@@ -745,6 +835,7 @@ impl FunctionIr {
                     Terminator::Branch(cond, body_block, after_block),
                 );
                 context.seal_block(body_block);
+                context.seal_block(after_block);
 
                 let body_continuation = Self::translate_stmt(context, body.value, body_block);
                 if let ContinueBlock(after_body_block) = body_continuation {
@@ -752,7 +843,6 @@ impl FunctionIr {
                 }
 
                 context.seal_block(cond_block);
-                context.seal_block(after_block);
                 ContinueBlock(after_block)
             }
             TypedStmt::Expr(expr) => {
