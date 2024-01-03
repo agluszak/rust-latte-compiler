@@ -170,7 +170,7 @@ impl IrContext {
     pub fn ready(self) -> ReadyIr {
         assert!(self.incomplete_phis.is_empty());
         if DBG.load(std::sync::atomic::Ordering::Relaxed) {
-            dbg!(&self.blocks);
+            dbg!((&self.variable_names, &self.values, &self.blocks));
         }
         let blocks = self
             .blocks
@@ -389,7 +389,7 @@ impl IrContext {
 
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
-            if let Some(phi) = self.get_phi(user) {
+            if let Some(_phi) = self.get_phi(user) {
                 let target = self.try_remove_trivial_phi(user);
                 // TODO: is this necessary?
                 self.values.insert(user, Value::Rerouted(target));
@@ -779,7 +779,6 @@ impl FunctionIr {
                     };
                 }
 
-                let after_block = context.new_block();
                 let then_block = context.new_block();
                 let then_continuation = Self::translate_stmt(context, then.value, then_block);
                 if let Some(otherwise) = otherwise {
@@ -795,6 +794,8 @@ impl FunctionIr {
                         return Stop;
                     }
 
+                    let after_block = context.new_block();
+
                     if let ContinueBlock(after_then_block) = then_continuation {
                         context.add_terminator(after_then_block, Terminator::Jump(after_block));
                     }
@@ -806,6 +807,8 @@ impl FunctionIr {
 
                     ContinueBlock(after_block)
                 } else {
+                    let after_block = context.new_block();
+
                     context.add_terminator(
                         block_id,
                         Terminator::Branch(cond, then_block, after_block),
