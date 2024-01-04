@@ -24,7 +24,14 @@ impl<'ctx> CodeGen<'ctx> {
         let builder = context.create_builder();
 
         let string_type = context.opaque_struct_type("string");
-        string_type.set_body(&[context.i8_type().ptr_type(AddressSpace::default()).into(), context.i32_type().into(), context.i32_type().into()], false);
+        string_type.set_body(
+            &[
+                context.i8_type().ptr_type(AddressSpace::default()).into(),
+                context.i32_type().into(),
+                context.i32_type().into(),
+            ],
+            false,
+        );
 
         let codegen = CodeGen {
             context,
@@ -60,23 +67,61 @@ impl<'ctx> CodeGen<'ctx> {
         let number_format = self.builder.build_global_string_ptr("%d\n", "dnl").unwrap();
         let x = print_int.get_nth_param(0).unwrap().into_int_value();
         self.builder
-            .build_call(printf, &[number_format.as_pointer_value().into(), x.into()], "call")
+            .build_call(
+                printf,
+                &[number_format.as_pointer_value().into(), x.into()],
+                "call",
+            )
             .unwrap();
         self.builder.build_return(None).unwrap();
 
         // printString
-        let print_string =
-            self.module.add_function("printString", void.fn_type(&[self.string_type.ptr_type(AddressSpace::default()).into()], false), None);
+        let print_string = self.module.add_function(
+            "printString",
+            void.fn_type(
+                &[self.string_type.ptr_type(AddressSpace::default()).into()],
+                false,
+            ),
+            None,
+        );
         let basic_block = self.context.append_basic_block(print_string, "entry");
         self.builder.position_at_end(basic_block);
-        let string_format = self.builder.build_global_string_ptr("%.*s\n", "snl").unwrap();
+        let string_format = self
+            .builder
+            .build_global_string_ptr("%.*s\n", "snl")
+            .unwrap();
         let pointer_to_string = print_string.get_nth_param(0).unwrap().into_pointer_value();
-        let string_buffer_ptr = self.builder.build_struct_gep(self.string_type, pointer_to_string, 0, "buf_ptr").unwrap();
-        let string_len_ptr = self.builder.build_struct_gep(self.string_type, pointer_to_string, 1, "len_ptr").unwrap();
-        let string_buffer = self.builder.build_load(i8_type, string_buffer_ptr, "buf").unwrap();
-        let string_len = self.builder.build_load(i32_type, string_len_ptr, "len").unwrap();
+        let string_buffer_ptr = self
+            .builder
+            .build_struct_gep(self.string_type, pointer_to_string, 0, "buf_ptr")
+            .unwrap();
+        let string_len_ptr = self
+            .builder
+            .build_struct_gep(self.string_type, pointer_to_string, 1, "len_ptr")
+            .unwrap();
+        let string_buffer = self
+            .builder
+            .build_load(
+                i8_type.ptr_type(AddressSpace::default()),
+                string_buffer_ptr,
+                "buf",
+            )
+            .unwrap();
+        let string_len = self
+            .builder
+            .build_load(i32_type, string_len_ptr, "len")
+            .unwrap();
         self.builder
-            .build_call(printf, &[string_format.as_pointer_value().into(), string_len.into(), string_buffer.into()], "call").unwrap();
+            .build_call(
+                printf,
+                &[
+                    string_format.as_pointer_value().into(),
+                    string_len.into(),
+                    string_buffer.into(),
+                ],
+                "call",
+            )
+            .unwrap();
         self.builder.build_return(None).unwrap();
     }
 
@@ -86,7 +131,7 @@ impl<'ctx> CodeGen<'ctx> {
             Type::Bool => self.context.bool_type().into(),
             Type::Void => panic!("void type is not a basic llvm type"),
             Type::Function(_, _) => panic!("function type is not a basic llvm type"),
-            Type::LatteString => self.string_type.ptr_type(AddressSpace::default()).into()
+            Type::LatteString => self.string_type.ptr_type(AddressSpace::default()).into(),
         }
     }
 
@@ -102,7 +147,7 @@ impl<'ctx> CodeGen<'ctx> {
                     Type::Bool => self.context.bool_type().fn_type(&args, false),
                     Type::Int => self.context.i32_type().fn_type(&args, false),
                     Type::Function(_, _) => panic!("function type is not a basic llvm type"),
-                    Type::LatteString => self.string_type.fn_type(&args, false)
+                    Type::LatteString => self.string_type.fn_type(&args, false),
                 }
             }
             _ => panic!("not a function type"),
@@ -161,22 +206,39 @@ impl<'ctx> CodeGen<'ctx> {
                     Value::String(s) => {
                         // TODO: fix leak
                         let const_str = self.context.const_string(s.as_bytes(), false);
-                        let len = self.context.i32_type().const_int(s.len().try_into().unwrap(), false);
-                        let buf_ptr = self.builder.build_array_malloc(self.context.i8_type(), len, "buf").unwrap();
+                        let len = self
+                            .context
+                            .i32_type()
+                            .const_int(s.len().try_into().unwrap(), false);
+                        let buf_ptr = self
+                            .builder
+                            .build_array_malloc(self.context.i8_type(), len, "buf")
+                            .unwrap();
                         self.builder.build_store(buf_ptr, const_str).unwrap();
                         // let buf_ptr = self.context.i8_type().ptr_type(AddressSpace::default()).const_null();
-                        let string_ptr = self.builder.build_malloc(self.string_type, "string").unwrap();
+                        let string_ptr = self
+                            .builder
+                            .build_malloc(self.string_type, "string")
+                            .unwrap();
                         // let string = self.string_type.const_named_struct(&[buf_ptr.into(), len.into(), len.into()]);
-                        let string_buffer_ptr_ptr = self.builder.build_struct_gep(self.string_type, string_ptr, 0, "buf_ptr").unwrap();
-                        let string_len_ptr = self.builder.build_struct_gep(self.string_type, string_ptr, 1, "len_ptr").unwrap();
-                        let string_cap_ptr = self.builder.build_struct_gep(self.string_type, string_ptr, 2, "len_ptr").unwrap();
-                        self.builder.build_store(string_buffer_ptr_ptr, buf_ptr).unwrap();
+                        let string_buffer_ptr_ptr = self
+                            .builder
+                            .build_struct_gep(self.string_type, string_ptr, 0, "buf_ptr")
+                            .unwrap();
+                        let string_len_ptr = self
+                            .builder
+                            .build_struct_gep(self.string_type, string_ptr, 1, "len_ptr")
+                            .unwrap();
+                        let string_cap_ptr = self
+                            .builder
+                            .build_struct_gep(self.string_type, string_ptr, 2, "len_ptr")
+                            .unwrap();
+                        self.builder
+                            .build_store(string_buffer_ptr_ptr, buf_ptr)
+                            .unwrap();
                         self.builder.build_store(string_len_ptr, len).unwrap();
                         self.builder.build_store(string_cap_ptr, len).unwrap();
-                        values.insert(
-                            id,
-                            string_ptr.into()
-                        );
+                        values.insert(id, string_ptr.into());
                     }
                     Value::Bool(b) => {
                         values.insert(

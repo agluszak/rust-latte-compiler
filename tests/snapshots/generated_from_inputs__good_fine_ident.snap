@@ -22,9 +22,9 @@ define void @printString(ptr %0) {
 entry:
   %buf_ptr = getelementptr inbounds %string, ptr %0, i32 0, i32 0
   %len_ptr = getelementptr inbounds %string, ptr %0, i32 0, i32 1
-  %buf = load i8, ptr %buf_ptr, align 1
+  %buf = load ptr, ptr %buf_ptr, align 8
   %len = load i32, ptr %len_ptr, align 4
-  %call = call i32 (ptr, ...) @printf(ptr @snl, i32 %len, i8 %buf)
+  %call = call i32 (ptr, ...) @printf(ptr @snl, i32 %len, ptr %buf)
   ret void
 }
 

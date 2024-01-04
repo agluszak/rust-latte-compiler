@@ -598,14 +598,14 @@ impl FunctionIr {
             }
             (_lhs, Value::Bool(false), BinaryOpCode::Or) => lhs_id,
             (Value::Bool(true), _rhs, BinaryOpCode::And) => rhs_id,
-            (Value::Bool(false), rhs, BinaryOpCode::And) if rhs.const_evaluable() => {
+            (Value::Bool(false), _rhs, BinaryOpCode::Or) => rhs_id,
+            // Short circuiting SHOULD optimize
+            (Value::Bool(false), _rhs, BinaryOpCode::And) => {
                 context.new_value(Value::Bool(false), Type::Bool)
             }
-            (Value::Bool(true), rhs, BinaryOpCode::Or) if rhs.const_evaluable() => {
+            (Value::Bool(true), _rhs, BinaryOpCode::Or) => {
                 context.new_value(Value::Bool(true), Type::Bool)
             }
-            (Value::Bool(false), _rhs, BinaryOpCode::Or) => rhs_id,
-
             _ => return None,
         };
         Some(result)
@@ -629,7 +629,16 @@ impl FunctionIr {
             TypedExprKind::Variable(_, id) => context.read_variable(id, block_id),
             TypedExprKind::Literal(lit) => match lit {
                 Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
+                Literal::String(s) => context.new_value(
+                    Value::String(
+                        s.strip_prefix('"')
+                            .unwrap()
+                            .strip_suffix('"')
+                            .unwrap()
+                            .to_string(),
+                    ),
+                    Type::LatteString,
+                ),
                 Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
             },
             TypedExprKind::Binary { lhs, op, rhs } => {
@@ -653,6 +662,8 @@ impl FunctionIr {
                 if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
                     dfa
                 } else {
+                    if let BinaryOpCode::And = op {}
+
                     context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
                 }
             }
