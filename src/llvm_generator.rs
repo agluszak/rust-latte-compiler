@@ -173,13 +173,14 @@ impl<'ctx> CodeGen<'ctx> {
             self.builder.position_at_end(this_block);
             // First add phis
             for &id in &block.instructions {
-                let value = ir.ir.values.get(&id).unwrap();
+                let value = &ir.ir.values[&id];
+                let value_type = &ir.ir.types[&id];
                 match value {
                     Value::Phi(phi) => {
                         // Incoming values will be set later
                         let llvm_phi = self
                             .builder
-                            .build_phi(self.context.i32_type(), &id.to_string())
+                            .build_phi(self.llvm_basic_type(value_type), &id.to_string())
                             .unwrap();
                         phis.insert(id, (phi, llvm_phi));
 

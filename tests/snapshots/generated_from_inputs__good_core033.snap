@@ -31,22 +31,58 @@ entry:
 define i32 @funkcja_ifbooltrudny(i1 %0, i1 %1) {
 b0:
   %v2 = xor i1 %0, true
-  %v3 = and i1 %v2, %0
-  %v4 = xor i1 %1, true
-  %v5 = or i1 %0, %v4
-  %v6 = xor i1 %v5, true
-  %v7 = or i1 %v3, %v6
-  br i1 %v7, label %b1, label %b2
+  br i1 %v2, label %b2, label %b3
 
-b1:                                               ; preds = %b0
-  call void @printInt(i32 1042)
-  br label %b3
+b1:                                               ; preds = %b2
+  br label %b4
 
 b2:                                               ; preds = %b0
-  call void @printInt(i32 2042)
-  br label %b3
+  br i1 %0, label %b1, label %b3
 
-b3:                                               ; preds = %b2, %b1
+b3:                                               ; preds = %b2, %b0
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v5 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  br i1 %v5, label %b5, label %b6
+
+b5:                                               ; preds = %b12, %b4
+  br label %b8
+
+b6:                                               ; preds = %b4
+  br i1 %0, label %b9, label %b10
+
+b7:                                               ; preds = %b12
+  br label %b8
+
+b8:                                               ; preds = %b7, %b5
+  %v17 = phi i1 [ true, %b5 ], [ false, %b7 ]
+  br i1 %v17, label %b13, label %b14
+
+b9:                                               ; preds = %b10, %b6
+  br label %b12
+
+b10:                                              ; preds = %b6
+  %v10 = xor i1 %1, true
+  br i1 %v10, label %b9, label %b11
+
+b11:                                              ; preds = %b10
+  br label %b12
+
+b12:                                              ; preds = %b11, %b9
+  %v13 = phi i1 [ true, %b9 ], [ false, %b11 ]
+  %v14 = xor i1 %v13, true
+  br i1 %v14, label %b5, label %b7
+
+b13:                                              ; preds = %b8
+  call void @printInt(i32 1042)
+  br label %b15
+
+b14:                                              ; preds = %b8
+  call void @printInt(i32 2042)
+  br label %b15
+
+b15:                                              ; preds = %b14, %b13
   ret i32 0
 }
 

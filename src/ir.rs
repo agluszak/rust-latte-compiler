@@ -624,26 +624,47 @@ impl FunctionIr {
         Some(result)
     }
 
-    fn translate_expr(context: &mut IrContext, expr: TypedExpr, block_id: BlockId) -> ValueId {
-        let id = match expr.expr {
-            TypedExprKind::Variable(_, id) => context.read_variable(id, block_id),
-            TypedExprKind::Literal(lit) => match lit {
-                Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                Literal::String(s) => context.new_value(
-                    Value::String(
-                        s.strip_prefix('"')
-                            .unwrap()
-                            .strip_suffix('"')
-                            .unwrap()
-                            .to_string(),
+    fn join_blocks(context: &mut IrContext, block_ids: &[BlockId]) -> BlockId {
+        let mut block_ids = block_ids.to_vec();
+        block_ids.sort();
+        block_ids.dedup();
+        if block_ids.len() == 1 {
+            return block_ids[0];
+        }
+
+        let join_block = context.new_block();
+        for block_id in block_ids {
+            context.add_terminator(block_id, Terminator::Jump(join_block));
+        }
+        context.seal_block(join_block);
+        join_block
+    }
+
+    fn translate_expr(
+        context: &mut IrContext,
+        expr: TypedExpr,
+        block_id: BlockId,
+    ) -> (ValueId, BlockId) {
+        let (value, block_id) = match expr.expr {
+            TypedExprKind::Variable(_, id) => (context.read_variable(id, block_id), block_id),
+            TypedExprKind::Literal(lit) => {
+                let val = match lit {
+                    Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
+                    Literal::String(s) => context.new_value(
+                        Value::String(
+                            s.strip_prefix('"')
+                                .unwrap()
+                                .strip_suffix('"')
+                                .unwrap()
+                                .to_string(),
+                        ),
+                        Type::LatteString,
                     ),
-                    Type::LatteString,
-                ),
-                Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
-            },
+                    Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
+                };
+                (val, block_id)
+            }
             TypedExprKind::Binary { lhs, op, rhs } => {
-                let lhs = Self::translate_expr(context, lhs.value, block_id);
-                let rhs = Self::translate_expr(context, rhs.value, block_id);
                 let op = match op.value {
                     ast::BinaryOp::Add => BinaryOpCode::Add,
                     ast::BinaryOp::Sub => BinaryOpCode::Sub,
@@ -659,43 +680,117 @@ impl FunctionIr {
                     ast::BinaryOp::And => BinaryOpCode::And,
                     ast::BinaryOp::Or => BinaryOpCode::Or,
                 };
-                if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
-                    dfa
-                } else {
-                    if let BinaryOpCode::And = op {}
 
-                    context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty)
+                // Handle short-circuiting
+                // TODO: const eval
+                if let BinaryOpCode::And = op {
+                    let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
+
+                    let true_block = context.new_block();
+                    let rhs_block = context.new_block();
+                    let false_block = context.new_block();
+                    let join_block = context.new_block();
+
+                    context
+                        .add_terminator(lhs_block, Terminator::Branch(lhs, rhs_block, false_block));
+                    context.seal_block(rhs_block);
+                    let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
+                    context.add_terminator(
+                        rhs_block,
+                        Terminator::Branch(rhs, true_block, false_block),
+                    );
+                    context.seal_block(true_block);
+                    context.seal_block(false_block);
+                    context.add_terminator(true_block, Terminator::Jump(join_block));
+                    context.add_terminator(false_block, Terminator::Jump(join_block));
+                    context.seal_block(join_block);
+                    let true_ = context.new_value(Value::Bool(true), Type::Bool);
+                    let false_ = context.new_value(Value::Bool(false), Type::Bool);
+                    context.add_instruction(join_block, true_);
+                    context.add_instruction(join_block, false_);
+                    let mut phi = Phi::new(join_block);
+                    phi.incoming.insert(true_block, true_);
+                    phi.incoming.insert(false_block, false_);
+                    let phi = context.new_value(Value::Phi(phi), Type::Bool);
+                    context.add_instruction(join_block, phi);
+                    return (phi, join_block);
+                } else if let BinaryOpCode::Or = op {
+                    let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
+
+                    let true_block = context.new_block();
+                    let rhs_block = context.new_block();
+                    let false_block = context.new_block();
+                    let join_block = context.new_block();
+
+                    context
+                        .add_terminator(lhs_block, Terminator::Branch(lhs, true_block, rhs_block));
+                    context.seal_block(rhs_block);
+                    let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
+                    context.add_terminator(
+                        rhs_block,
+                        Terminator::Branch(rhs, true_block, false_block),
+                    );
+                    context.seal_block(true_block);
+                    context.seal_block(false_block);
+                    context.add_terminator(true_block, Terminator::Jump(join_block));
+                    context.add_terminator(false_block, Terminator::Jump(join_block));
+                    context.seal_block(join_block);
+                    let true_ = context.new_value(Value::Bool(true), Type::Bool);
+                    let false_ = context.new_value(Value::Bool(false), Type::Bool);
+                    context.add_instruction(join_block, true_);
+                    context.add_instruction(join_block, false_);
+                    let mut phi = Phi::new(join_block);
+                    phi.incoming.insert(true_block, true_);
+                    phi.incoming.insert(false_block, false_);
+                    let phi = context.new_value(Value::Phi(phi), Type::Bool);
+                    context.add_instruction(join_block, phi);
+                    return (phi, join_block);
+                }
+
+                let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
+                let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, block_id);
+                let block_id = Self::join_blocks(context, &[lhs_block, rhs_block]);
+
+                if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
+                    (dfa, block_id)
+                } else {
+                    let val = context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty);
+                    (val, block_id)
                 }
             }
             TypedExprKind::Unary { op, expr: target } => {
-                let val = Self::translate_expr(context, target.value, block_id);
+                let (val, block_id) = Self::translate_expr(context, target.value, block_id);
                 let op = match op.value {
                     ast::UnaryOp::Neg => UnaryOpCode::Neg,
                     ast::UnaryOp::Not => UnaryOpCode::Not,
                 };
                 if let Some(dfa) = Self::dfa_unary(context, op, val) {
-                    dfa
+                    (dfa, block_id)
                 } else {
-                    context.new_value(Value::UnaryOp(op, val), expr.ty)
+                    let val = context.new_value(Value::UnaryOp(op, val), expr.ty);
+                    (val, block_id)
                 }
             }
             TypedExprKind::Application { target, args } => {
                 let TypedExprKind::Variable(_, id) = target.value.expr else {
                     panic!("This should have been caught by the typechecker")
                 };
-                let args = args
+                let (args, mut blocks): (Vec<_>, Vec<_>) = args
                     .into_iter()
                     .map(|arg| Self::translate_expr(context, arg.value, block_id))
-                    .collect();
-                context.new_value(Value::Call(id, args), expr.ty)
+                    .unzip();
+                blocks.push(block_id);
+                let block_id = Self::join_blocks(context, &blocks);
+                let val = context.new_value(Value::Call(id, args), expr.ty);
+                (val, block_id)
             }
         };
-        if let Value::Phi(phi) = &context.values[&id] {
-            context.add_instruction(phi.block, id);
+        if let Value::Phi(phi) = &context.values[&value] {
+            context.add_instruction(phi.block, value);
         } else {
-            context.add_instruction(block_id, id);
+            context.add_instruction(block_id, value);
         }
-        id
+        (value, block_id)
     }
 
     fn translate_block(
@@ -738,20 +833,25 @@ impl FunctionIr {
             TypedStmt::Block(block) => Self::translate_block(context, block.value, block_id),
             TypedStmt::Decl(decl) => match decl.value {
                 TypedDecl::Var { items, .. } => {
+                    let mut expr_blocks = Vec::new();
                     for item in items {
                         context
                             .variable_names
                             .insert(item.value.var_id, item.value.ident.value.0);
                         if let Some(expr) = item.value.init {
-                            let expr = Self::translate_expr(context, expr.value, block_id);
+                            let (expr, block_id) =
+                                Self::translate_expr(context, expr.value, block_id);
                             context.write_variable(item.value.var_id, block_id, expr);
+                            expr_blocks.push(block_id);
                         } else {
                             let default = Self::default_value(&item.value.ty);
                             let default = context.new_value(default, item.value.ty);
                             context.add_instruction(block_id, default);
                             context.write_variable(item.value.var_id, block_id, default);
+                            expr_blocks.push(block_id);
                         }
                     }
+                    let block_id = Self::join_blocks(context, &expr_blocks);
                     ContinueBlock(block_id)
                 }
                 TypedDecl::Fn { .. } => panic!("Nested functions are not supported yet"),
@@ -761,13 +861,13 @@ impl FunctionIr {
                 target_id,
                 expr,
             } => {
-                let expr = Self::translate_expr(context, expr.value, block_id);
+                let (expr, block_id) = Self::translate_expr(context, expr.value, block_id);
                 context.write_variable(target_id, block_id, expr);
                 ContinueBlock(block_id)
             }
             TypedStmt::Return(expr) => {
                 let expr = expr.map(|expr| Self::translate_expr(context, expr.value, block_id));
-                if let Some(expr) = expr {
+                if let Some((expr, block_id)) = expr {
                     context.add_terminator(block_id, Terminator::Return(expr));
                 } else {
                     context.add_terminator(block_id, Terminator::ReturnNoValue);
@@ -779,7 +879,7 @@ impl FunctionIr {
                 then,
                 otherwise,
             } => {
-                let cond = Self::translate_expr(context, cond.value, block_id);
+                let (cond, block_id) = Self::translate_expr(context, cond.value, block_id);
                 if let Value::Bool(cond) = context.values[&cond] {
                     return if cond {
                         Self::translate_stmt(context, then.value, block_id)
@@ -839,7 +939,7 @@ impl FunctionIr {
                 let cond_block = context.new_block();
                 context.add_terminator(block_id, Terminator::Jump(cond_block));
 
-                let cond = Self::translate_expr(context, cond.value, cond_block);
+                let (cond, cond_block) = Self::translate_expr(context, cond.value, cond_block);
 
                 if let Value::Bool(cond) = context.values[&cond] {
                     return if !cond {
@@ -888,7 +988,7 @@ impl FunctionIr {
                 let TypedExprKind::Variable(_, var_id) = expr.value.expr else {
                     panic!("This should have been caught by the typechecker")
                 };
-                let expr = Self::translate_expr(context, expr.value, block_id);
+                let (expr, block_id) = Self::translate_expr(context, expr.value, block_id);
                 let one = context.new_value(Value::Int(1), Type::Int);
                 context.add_instruction(block_id, one);
                 let op =
@@ -901,7 +1001,7 @@ impl FunctionIr {
                 let TypedExprKind::Variable(_, var_id) = expr.value.expr else {
                     panic!("This should have been caught by the typechecker")
                 };
-                let expr = Self::translate_expr(context, expr.value, block_id);
+                let (expr, block_id) = Self::translate_expr(context, expr.value, block_id);
                 let one = context.new_value(Value::Int(1), Type::Int);
                 context.add_instruction(block_id, one);
                 let op =
