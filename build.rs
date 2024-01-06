@@ -4,6 +4,7 @@ use std::fs::read_dir;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn read_latte_inputs(directory: &str) -> Vec<PathBuf> {
     let directory = read_dir(directory).unwrap();
@@ -21,6 +22,12 @@ fn read_latte_inputs(directory: &str) -> Vec<PathBuf> {
 fn main() {
     lalrpop::process_root().unwrap();
 
+    // Compile runtime.ll
+    Command::new("llvm-as-16")
+        .arg("./lib/runtime.ll")
+        .status()
+        .unwrap();
+
     let mut test_file = File::create("./tests/generated_from_inputs.rs").unwrap();
 
     // write test file header, put `use`, `const` etc there
@@ -37,7 +44,6 @@ fn main() {
     }
 }
 
-// TODO: once actual code generation is implemented, run the code and compare the output
 fn write_good_test(test_file: &mut File, path: &Path) {
     let path_str = path.to_string_lossy();
     let test_name = path.file_stem().unwrap().to_string_lossy();
