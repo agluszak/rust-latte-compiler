@@ -1,0 +1,13 @@
+boolean blah(int x, int y) {
+    boolean z = x == y;
+    if (!z) {
+        printInt(x);
+        printInt(y);
+        return false;
+    }
+    return true;
+}
+
+int main() {
+    (blah(1, 1) && blah(1, 2)) || blah(5, 5);
+}

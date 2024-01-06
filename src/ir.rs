@@ -775,14 +775,17 @@ impl FunctionIr {
                 let TypedExprKind::Variable(_, id) = target.value.expr else {
                     panic!("This should have been caught by the typechecker")
                 };
-                let (args, mut blocks): (Vec<_>, Vec<_>) = args
-                    .into_iter()
-                    .map(|arg| Self::translate_expr(context, arg.value, block_id))
-                    .unzip();
-                blocks.push(block_id);
-                let block_id = Self::join_blocks(context, &blocks);
-                let val = context.new_value(Value::Call(id, args), expr.ty);
-                (val, block_id)
+
+                let mut arg_values = Vec::new();
+                let mut current_block_id = block_id;
+                for arg in args {
+                    let (arg, block_id) = Self::translate_expr(context, arg.value, current_block_id);
+                    current_block_id = block_id;
+                    arg_values.push(arg);
+                }
+
+                let val = context.new_value(Value::Call(id, arg_values), expr.ty);
+                (val, current_block_id)
             }
         };
         if let Value::Phi(phi) = &context.values[&value] {
@@ -981,7 +984,7 @@ impl FunctionIr {
                 ContinueBlock(after_block)
             }
             TypedStmt::Expr(expr) => {
-                let _expr = Self::translate_expr(context, expr.value, block_id);
+                let (_, block_id) = Self::translate_expr(context, expr.value, block_id);
                 ContinueBlock(block_id)
             }
             TypedStmt::Incr(expr) => {

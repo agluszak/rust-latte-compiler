@@ -9,7 +9,7 @@ use std::path::Path;
 use std::fs::File;
 
 macro_rules! good_test {{
-    ($input:ident, $name:expr, $program_output:ident) => {{
+    ($input:ident, $name:expr, $program_output:ident, $program_input:ident) => {{
         let input = $input;
         let ir = compile(&input.text, $name).unwrap();
 
@@ -26,15 +26,19 @@ macro_rules! good_test {{
         }});
 
         let expected_program_output = $program_output;
+        let program_input = $program_input;
         let mut temp_file = tempfile::NamedTempFile::new().unwrap();
         temp_file.write_all(ir.as_bytes()).unwrap();
 
         let mut child = std::process::Command::new("lli")
             .arg(temp_file.path())
+            .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
             .unwrap();
+
+        child.stdin.as_mut().unwrap().write_all(program_input.as_bytes()).unwrap();
 
         let mut output = String::new();
         child.stdout.as_mut().unwrap().read_to_string(&mut output).unwrap();

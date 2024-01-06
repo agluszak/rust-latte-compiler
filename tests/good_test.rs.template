@@ -5,10 +5,14 @@ fn good_{name}() {{
     let input = Input::new(input_str, "{path}".to_string());
     let program_output_path = "{path}".replace(".lat", ".output");
     let mut program_output = String::new();
-    // if the output file exists, read it
+    let program_input_path = "{path}".replace(".lat", ".input");
+    let mut program_input = String::new();
     if Path::new(&program_output_path).is_file() {{
         File::open(&program_output_path).unwrap().read_to_string(&mut program_output).unwrap();
     }}
+    if Path::new(&program_input_path).is_file() {{
+        File::open(&program_input_path).unwrap().read_to_string(&mut program_input).unwrap();
+    }}
     let name = "{name}";
-    good_test!(input, name, program_output);
+    good_test!(input, name, program_output, program_input);
 }}

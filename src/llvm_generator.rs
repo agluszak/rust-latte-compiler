@@ -53,7 +53,14 @@ impl<'ctx> CodeGen<'ctx> {
         // printf
         let printf = self.module.add_function(
             "printf",
-            i32_type.fn_type(&[i32_type.ptr_type(AddressSpace::default()).into()], true),
+            i32_type.fn_type(&[i8_type.ptr_type(AddressSpace::default()).into()], true),
+            Some(Linkage::External),
+        );
+
+        // scanf
+        let scanf = self.module.add_function(
+            "scanf",
+            i32_type.fn_type(&[i8_type.ptr_type(AddressSpace::default()).into()], true),
             Some(Linkage::External),
         );
 
@@ -123,6 +130,73 @@ impl<'ctx> CodeGen<'ctx> {
             )
             .unwrap();
         self.builder.build_return(None).unwrap();
+
+        // readInt
+        let read_int = self.module.add_function(
+            "readInt",
+            i32_type.fn_type(&[], false),
+            None,
+        );
+        let basic_block = self.context.append_basic_block(read_int, "entry");
+        self.builder.position_at_end(basic_block);
+        let number_format = self.builder.build_global_string_ptr("%d", "d").unwrap();
+        let buf = self.builder.build_alloca(i32_type, "buf").unwrap();
+        self.builder
+            .build_call(
+                scanf,
+                &[number_format.as_pointer_value().into(), buf.into()],
+                "call",
+            )
+            .unwrap();
+        let buf = self.builder.build_load(i32_type, buf, "buf").unwrap();
+        self.builder.build_return(Some(&buf)).unwrap();
+
+        // readString
+        let read_string = self.module.add_function(
+            "readString",
+            self.string_type.ptr_type(AddressSpace::default()).fn_type(&[], false),
+            None,
+        );
+        let basic_block = self.context.append_basic_block(read_string, "entry");
+        self.builder.position_at_end(basic_block);
+        let string_format = self.builder.build_global_string_ptr("%ms%n", "msn").unwrap();
+        let str_buf = self.builder.build_alloca(i8_type.ptr_type(AddressSpace::default()), "buf").unwrap();
+        let str_len = self.builder.build_alloca(i32_type, "len").unwrap();
+        self.builder
+            .build_call(
+                scanf,
+                &[
+                    string_format.as_pointer_value().into(),
+                    str_buf.into(),
+                    str_len.into(),
+                ],
+                "call",
+            )
+            .unwrap();
+        let str_buf = self.builder.build_load(i8_type.ptr_type(AddressSpace::default()), str_buf, "buf").unwrap();
+        let str_len = self.builder.build_load(i32_type, str_len, "len").unwrap();
+        let string_ptr = self
+            .builder
+            .build_malloc(self.string_type, "string")
+            .unwrap();
+        let string_buffer_ptr_ptr = self
+            .builder
+            .build_struct_gep(self.string_type, string_ptr, 0, "buf_ptr")
+            .unwrap();
+        let string_len_ptr = self
+            .builder
+            .build_struct_gep(self.string_type, string_ptr, 1, "len_ptr")
+            .unwrap();
+        let string_cap_ptr = self
+            .builder
+            .build_struct_gep(self.string_type, string_ptr, 2, "len_ptr")
+            .unwrap();
+        self.builder
+            .build_store(string_buffer_ptr_ptr, str_buf)
+            .unwrap();
+        self.builder.build_store(string_len_ptr, str_len).unwrap();
+        self.builder.build_store(string_cap_ptr, str_len).unwrap();
+        self.builder.build_return(Some(&string_ptr)).unwrap();
     }
 
     fn llvm_basic_type(&self, ty: &Type) -> BasicTypeEnum<'ctx> {
