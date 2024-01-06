@@ -779,7 +779,8 @@ impl FunctionIr {
                 let mut arg_values = Vec::new();
                 let mut current_block_id = block_id;
                 for arg in args {
-                    let (arg, block_id) = Self::translate_expr(context, arg.value, current_block_id);
+                    let (arg, block_id) =
+                        Self::translate_expr(context, arg.value, current_block_id);
                     current_block_id = block_id;
                     arg_values.push(arg);
                 }

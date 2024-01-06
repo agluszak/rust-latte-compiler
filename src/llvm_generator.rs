@@ -40,9 +40,47 @@ impl<'ctx> CodeGen<'ctx> {
             string_type,
             env,
         };
-        codegen.add_builtins();
+        codegen.declare_builtins();
 
         codegen
+    }
+
+    pub fn declare_builtins(&self) {
+        let _i8_type = self.context.i8_type();
+        let i32_type = self.context.i32_type();
+        let void = self.context.void_type();
+
+        self.module.add_function(
+            "printInt",
+            void.fn_type(&[i32_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        self.module.add_function(
+            "printString",
+            void.fn_type(
+                &[self.string_type.ptr_type(AddressSpace::default()).into()],
+                false,
+            ),
+            Some(Linkage::External),
+        );
+
+        self.module.add_function(
+            "readInt",
+            i32_type.fn_type(&[], false),
+            Some(Linkage::External),
+        );
+
+        self.module.add_function(
+            "readString",
+            self.string_type
+                .ptr_type(AddressSpace::default())
+                .fn_type(&[], false),
+            Some(Linkage::External),
+        );
+
+        self.module
+            .add_function("error", void.fn_type(&[], false), Some(Linkage::External));
     }
 
     pub fn add_builtins(&self) {
@@ -61,6 +99,13 @@ impl<'ctx> CodeGen<'ctx> {
         let scanf = self.module.add_function(
             "scanf",
             i32_type.fn_type(&[i8_type.ptr_type(AddressSpace::default()).into()], true),
+            Some(Linkage::External),
+        );
+
+        // exit
+        let exit = self.module.add_function(
+            "exit",
+            void.fn_type(&[i32_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -132,11 +177,9 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_return(None).unwrap();
 
         // readInt
-        let read_int = self.module.add_function(
-            "readInt",
-            i32_type.fn_type(&[], false),
-            None,
-        );
+        let read_int = self
+            .module
+            .add_function("readInt", i32_type.fn_type(&[], false), None);
         let basic_block = self.context.append_basic_block(read_int, "entry");
         self.builder.position_at_end(basic_block);
         let number_format = self.builder.build_global_string_ptr("%d", "d").unwrap();
@@ -154,13 +197,21 @@ impl<'ctx> CodeGen<'ctx> {
         // readString
         let read_string = self.module.add_function(
             "readString",
-            self.string_type.ptr_type(AddressSpace::default()).fn_type(&[], false),
+            self.string_type
+                .ptr_type(AddressSpace::default())
+                .fn_type(&[], false),
             None,
         );
         let basic_block = self.context.append_basic_block(read_string, "entry");
         self.builder.position_at_end(basic_block);
-        let string_format = self.builder.build_global_string_ptr("%ms%n", "msn").unwrap();
-        let str_buf = self.builder.build_alloca(i8_type.ptr_type(AddressSpace::default()), "buf").unwrap();
+        let string_format = self
+            .builder
+            .build_global_string_ptr("%ms%n", "msn")
+            .unwrap();
+        let str_buf = self
+            .builder
+            .build_alloca(i8_type.ptr_type(AddressSpace::default()), "buf")
+            .unwrap();
         let str_len = self.builder.build_alloca(i32_type, "len").unwrap();
         self.builder
             .build_call(
@@ -173,7 +224,10 @@ impl<'ctx> CodeGen<'ctx> {
                 "call",
             )
             .unwrap();
-        let str_buf = self.builder.build_load(i8_type.ptr_type(AddressSpace::default()), str_buf, "buf").unwrap();
+        let str_buf = self
+            .builder
+            .build_load(i8_type.ptr_type(AddressSpace::default()), str_buf, "buf")
+            .unwrap();
         let str_len = self.builder.build_load(i32_type, str_len, "len").unwrap();
         let string_ptr = self
             .builder
@@ -197,6 +251,24 @@ impl<'ctx> CodeGen<'ctx> {
         self.builder.build_store(string_len_ptr, str_len).unwrap();
         self.builder.build_store(string_cap_ptr, str_len).unwrap();
         self.builder.build_return(Some(&string_ptr)).unwrap();
+
+        // error
+        let error = self
+            .module
+            .add_function("error", void.fn_type(&[], false), None);
+        let basic_block = self.context.append_basic_block(error, "entry");
+        self.builder.position_at_end(basic_block);
+        let error_format = self
+            .builder
+            .build_global_string_ptr("runtime error\n", "error")
+            .unwrap();
+        self.builder
+            .build_call(printf, &[error_format.as_pointer_value().into()], "call")
+            .unwrap();
+        self.builder
+            .build_call(exit, &[i32_type.const_int(1, false).into()], "call")
+            .unwrap();
+        self.builder.build_return(None).unwrap();
     }
 
     fn llvm_basic_type(&self, ty: &Type) -> BasicTypeEnum<'ctx> {

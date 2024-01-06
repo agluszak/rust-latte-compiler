@@ -9,7 +9,7 @@ use std::path::Path;
 use std::fs::File;
 
 macro_rules! good_test {{
-    ($input:ident, $name:expr, $program_output:ident, $program_input:ident) => {{
+    ($input:ident, $name:expr, $program_output:ident, $program_input:ident, $exit_code:ident) => {{
         let input = $input;
         let ir = compile(&input.text, $name).unwrap();
 
@@ -31,6 +31,8 @@ macro_rules! good_test {{
         temp_file.write_all(ir.as_bytes()).unwrap();
 
         let mut child = std::process::Command::new("lli")
+            .arg("--extra-module")
+            .arg(format!("{{}}/lib/runtime.bc", project_dir))
             .arg(temp_file.path())
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -43,7 +45,7 @@ macro_rules! good_test {{
         let mut output = String::new();
         child.stdout.as_mut().unwrap().read_to_string(&mut output).unwrap();
         let status = child.wait().unwrap();
-        if !status.success() {{
+        if status.code() != Some($exit_code) {{
             let mut stderr = String::new();
             child.stderr.as_mut().unwrap().read_to_string(&mut stderr).unwrap();
             panic!("lli failed with status {{:?}} and output {{}}", status, stderr);

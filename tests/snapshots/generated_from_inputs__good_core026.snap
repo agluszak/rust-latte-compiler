@@ -5,28 +5,15 @@ description: "int d() { return 0;}\nint s(int x) {return x + 1;}\nint main() {\n
 ; ModuleID = 'core026'
 source_filename = "core026"
 
-%string = type { ptr, i32, i32 }
+declare void @printInt(i32)
 
-@dnl = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
-@snl = private unnamed_addr constant [6 x i8] c"%.*s\0A\00", align 1
+declare void @printString(ptr)
 
-declare i32 @printf(ptr, ...)
+declare i32 @readInt()
 
-define void @printInt(i32 %0) {
-entry:
-  %call = call i32 (ptr, ...) @printf(ptr @dnl, i32 %0)
-  ret void
-}
+declare ptr @readString()
 
-define void @printString(ptr %0) {
-entry:
-  %buf_ptr = getelementptr inbounds %string, ptr %0, i32 0, i32 0
-  %len_ptr = getelementptr inbounds %string, ptr %0, i32 0, i32 1
-  %buf = load ptr, ptr %buf_ptr, align 8
-  %len = load i32, ptr %len_ptr, align 4
-  %call = call i32 (ptr, ...) @printf(ptr @snl, i32 %len, ptr %buf)
-  ret void
-}
+declare void @error()
 
 define i32 @d() {
 b0:
