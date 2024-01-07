@@ -5,6 +5,8 @@ description: "// Calling functions which take zero parameters\n\nint main() {\n 
 ; ModuleID = 'core009'
 source_filename = "core009"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

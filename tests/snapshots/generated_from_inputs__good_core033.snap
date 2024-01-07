@@ -5,6 +5,8 @@ description: "int funkcja_ifbooltrudny (boolean f, boolean t) {\n  if ((!f && f)
 ; ModuleID = 'core033'
 source_filename = "core033"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

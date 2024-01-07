@@ -5,6 +5,8 @@ description: "int main() {\n    if (false) {\n        printInt(2);\n    } else {
 ; ModuleID = 'if_false_always_returns'
 source_filename = "if_false_always_returns"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

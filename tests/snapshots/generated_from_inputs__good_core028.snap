@@ -5,6 +5,8 @@ description: "int main() {\n  int x;\n  printInt(x);\n  return 0;\n}\n"
 ; ModuleID = 'core028'
 source_filename = "core028"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

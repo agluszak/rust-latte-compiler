@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\nint main() {\n    int abcABC000_
 ; ModuleID = 'fine_ident'
 source_filename = "fine_ident"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

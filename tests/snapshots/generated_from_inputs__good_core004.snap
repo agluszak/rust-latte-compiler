@@ -5,6 +5,8 @@ description: "/* allow comparing booleans. */\n\nint main() {\n  if (true == tru
 ; ModuleID = 'core004'
 source_filename = "core004"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

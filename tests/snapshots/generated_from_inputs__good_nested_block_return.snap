@@ -5,6 +5,8 @@ description: "int main() {\n    {\n        int x = 5;\n        return 0;\n    }\
 ; ModuleID = 'nested_block_return'
 source_filename = "nested_block_return"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

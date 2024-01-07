@@ -46,9 +46,22 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     pub fn declare_builtins(&self) {
-        let _i8_type = self.context.i8_type();
+        let i8_type = self.context.i8_type();
         let i32_type = self.context.i32_type();
         let void = self.context.void_type();
+
+        self.module.add_function(
+            "memcpy",
+            void.fn_type(
+                &[
+                    i8_type.ptr_type(AddressSpace::default()).into(),
+                    i8_type.ptr_type(AddressSpace::default()).into(),
+                    i32_type.into(),
+                ],
+                false,
+            ),
+            Some(Linkage::External),
+        );
 
         self.module.add_function(
             "printInt",
@@ -293,7 +306,7 @@ impl<'ctx> CodeGen<'ctx> {
                     Type::Bool => self.context.bool_type().fn_type(&args, false),
                     Type::Int => self.context.i32_type().fn_type(&args, false),
                     Type::Function(_, _) => panic!("function type is not a basic llvm type"),
-                    Type::LatteString => self.string_type.fn_type(&args, false),
+                    Type::LatteString => self.string_type.ptr_type(AddressSpace::default()).fn_type(&args, false),
                 }
             }
             _ => panic!("not a function type"),
@@ -305,10 +318,25 @@ impl<'ctx> CodeGen<'ctx> {
         self.module.add_function(name, fn_type, None);
     }
 
+    fn get_rerouted(ir: &FunctionIr, id: ValueId) -> ValueId {
+        let mut id = id;
+        loop {
+            match ir.ir.values[&id] {
+                Value::Rerouted(new_id) => id = new_id,
+                _ => return id,
+            }
+        }
+    }
+
     pub fn generate(&self, name: &str, ir: &FunctionIr) {
         let function = self.module.get_function(name).unwrap();
         let mut basic_blocks = BTreeMap::new();
         let mut values: BTreeMap<ValueId, BasicValueEnum> = BTreeMap::new();
+        let mut value_types: BTreeMap<ValueId, Type> = BTreeMap::new();
+        for (id, ty) in &ir.ir.types {
+            value_types.insert(*id, ty.clone());
+        }
+
         for name in ir.ir.blocks.keys() {
             let this_block = self.context.append_basic_block(function, &name.to_string());
             basic_blocks.insert(name, this_block);
@@ -333,6 +361,7 @@ impl<'ctx> CodeGen<'ctx> {
                         values.insert(id, llvm_phi.as_basic_value());
                     }
                     Value::Rerouted(rerouted) => {
+                        let rerouted = Self::get_rerouted(ir, *rerouted);
                         values.insert(id, values[&rerouted]);
                     }
                     _ => {}
@@ -414,15 +443,135 @@ impl<'ctx> CodeGen<'ctx> {
                     Value::BinaryOp(op, lhs, rhs) => {
                         match op {
                             BinaryOpCode::Add => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_add(lhs, rhs, &id.to_string())
+                                if let Type::LatteString = value_types[&lhs] {
+                                    let lhs = values[&lhs].into_pointer_value();
+                                    let lhs_buf_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, lhs, 0, "buf_ptr")
+                                        .unwrap();
+                                    let lhs_len_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, lhs, 1, "len_ptr")
+                                        .unwrap();
+                                    let rhs = values[&rhs].into_pointer_value();
+                                    let rhs_buf_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, rhs, 0, "buf_ptr")
+                                        .unwrap();
+                                    let rhs_len_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, rhs, 1, "len_ptr")
+                                        .unwrap();
+                                    let lhs_buf = self
+                                        .builder
+                                        .build_load(
+                                            self.context.i8_type().ptr_type(AddressSpace::default()),
+                                            lhs_buf_ptr,
+                                            "buf",
+                                        )
                                         .unwrap()
-                                        .into(),
-                                );
+                                        .into_pointer_value();
+                                    let lhs_len = self
+                                        .builder
+                                        .build_load(
+                                            self.context.i32_type(),
+                                            lhs_len_ptr,
+                                            "len",
+                                        )
+                                        .unwrap()
+                                        .into_int_value();
+                                    let rhs_buf = self
+                                        .builder
+                                        .build_load(
+                                            self.context.i8_type().ptr_type(AddressSpace::default()),
+                                            rhs_buf_ptr,
+                                            "buf",
+                                        )
+                                        .unwrap()
+                                        .into_pointer_value();
+                                    let rhs_len = self
+                                        .builder
+                                        .build_load(
+                                            self.context.i32_type(),
+                                            rhs_len_ptr,
+                                            "len",
+                                        )
+                                        .unwrap()
+                                        .into_int_value();
+                                    let new_len = self.builder.build_int_add(
+                                        lhs_len,
+                                        rhs_len,
+                                        "new_len",
+                                    ).unwrap();
+                                    let new_buf = self
+                                        .builder
+                                        .build_array_malloc(
+                                            self.context.i8_type(),
+                                            new_len,
+                                            "new_buf",
+                                        )
+                                        .unwrap();
+                                    let new_string = self
+                                        .builder
+                                        .build_malloc(self.string_type, "new_string")
+                                        .unwrap();
+                                    let memcpy =
+                                        self.module.get_function("memcpy").unwrap();
+                                    self.builder.build_call(
+                                        memcpy,
+                                        &[
+                                            new_buf.into(),
+                                            lhs_buf.into(),
+                                            lhs_len.into(),
+                                        ],
+                                        "memcpy",
+                                    ).unwrap();
+                                    let new_buf_second_part = unsafe {
+                                        self.builder.build_gep(
+                                            self.context.i8_type(),
+                                            new_buf,
+                                            &[lhs_len],
+                                            "new_buf_second_part",
+                                        )
+                                    }.unwrap();
+                                    self.builder.build_call(
+                                        memcpy,
+                                        &[
+                                            new_buf_second_part.into(),
+                                            rhs_buf.into(),
+                                            rhs_len.into(),
+                                        ],
+                                        "memcpy",
+                                    ).unwrap();
+                                    let new_buf_ptr_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, new_string, 0, "buf_ptr")
+                                        .unwrap();
+                                    let new_len_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, new_string, 1, "len_ptr")
+                                        .unwrap();
+                                    let new_cap_ptr = self
+                                        .builder
+                                        .build_struct_gep(self.string_type, new_string, 2, "cap_ptr")
+                                        .unwrap();
+                                    self.builder.build_store(new_buf_ptr_ptr, new_buf).unwrap();
+                                    self.builder.build_store(new_len_ptr, new_len).unwrap();
+                                    self.builder.build_store(new_cap_ptr, new_len).unwrap();
+                                    values.insert(id, new_string.into());
+                                } else if let Type::Int = value_types[&lhs] {
+                                    let lhs = values[&lhs].into_int_value();
+                                    let rhs = values[&rhs].into_int_value();
+                                    values.insert(
+                                        id,
+                                        self.builder
+                                            .build_int_add(lhs, rhs, &id.to_string())
+                                            .unwrap()
+                                            .into(),
+                                    );
+                                } else {
+                                    panic!("invalid type for add");
+                                }
                             }
                             BinaryOpCode::Sub => {
                                 let lhs = values.get(lhs).unwrap().into_int_value();

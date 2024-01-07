@@ -5,6 +5,8 @@ description: "void test(int arg) {\n    int x = 0;\n    if (arg == 1) {\n       
 ; ModuleID = 'if_phi'
 source_filename = "if_phi"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

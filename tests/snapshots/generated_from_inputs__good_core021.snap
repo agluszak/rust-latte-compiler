@@ -5,6 +5,8 @@ description: "int main() {\n    if (true) {\n      printInt(1);\n      return 0;
 ; ModuleID = 'core021'
 source_filename = "core021"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

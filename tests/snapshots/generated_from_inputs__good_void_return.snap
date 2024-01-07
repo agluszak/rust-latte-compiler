@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\nint main() {\n    run();\n    re
 ; ModuleID = 'void_return'
 source_filename = "void_return"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

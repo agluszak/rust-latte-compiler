@@ -5,6 +5,8 @@ description: "// Declaration of multiple variables of the same type in one state
 ; ModuleID = 'core006'
 source_filename = "core006"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

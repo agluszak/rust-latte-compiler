@@ -1,0 +1,17 @@
+int x() {
+    return -37;
+}
+
+string y() {
+    return "foo";
+}
+
+string z() {
+    return "bar";
+}
+
+int main() {
+  printInt(x()-5);
+  printString(y()+z());
+  return 0 ;
+}

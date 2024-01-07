@@ -2,4 +2,233 @@
 source: tests/generated_from_inputs.rs
 description: "int main() {\n\tprintInt(fac(10));\n\tprintInt(rfac(10));\n\tprintInt(mfac(10));\n        printInt(ifac(10));\n        string r ; // just to test blocks \n\t{\n\t  int n = 10;\n\t  int r = 1;\n\t  while (n>0) {\n\t    r = r * n;\n\t    n--;\n\t  }\n\t  printInt(r);\n\t}\n\tprintString (repStr(\"=\",60));\n\tprintString (\"hello */\");\n        printString (\"/* world\") ;\n        return 0 ;\n}\n\nint fac(int a) {\n\tint r;\n\tint n;\n\n\tr = 1;\n\tn = a;\n\twhile (n > 0) {\n\t  r = r * n;\n\t  n = n - 1;\n\t}\n\treturn r;\n}\n\nint rfac(int n) {\n\tif (n == 0)\n\t  return 1;\n\telse\n\t  return n * rfac(n-1);\n}\n\nint mfac(int n) {\n\tif (n == 0)\n\t  return 1;\n\telse\n\t  return n * nfac(n-1);\n}\n\nint nfac(int n) {\n\tif (n != 0)\n\t  return mfac(n-1) * n;\n\telse\n\t  return 1;\n}\n\nint ifac(int n) { return ifac2f(1,n); }\n\nint ifac2f(int l, int h) {\n        if (l == h)\n          return l;\n        if (l > h)\n          return 1;\n        int m;\n        m = (l + h) / 2;\n        return ifac2f(l,m) * ifac2f(m+1,h);\n}\n\nstring repStr(string s, int n) {\n  string r = \"\";\n  int i = 0;\n  while(i<n) {\n    r = r + s;\n    i++;\n  }\n return r;\n}"
 ---
+; ModuleID = 'core001'
+source_filename = "core001"
+
+%string = type { ptr, i32, i32 }
+
+declare void @memcpy(ptr, ptr, i32)
+
+declare void @printInt(i32)
+
+declare void @printString(ptr)
+
+declare i32 @readInt()
+
+declare ptr @readString()
+
+declare void @error()
+
+define i32 @fac(i32 %0) {
+b0:
+  br label %b1
+
+b1:                                               ; preds = %b3, %b0
+  %v4 = phi i32 [ %0, %b0 ], [ %v10, %b3 ]
+  %v7 = phi i32 [ 1, %b0 ], [ %v8, %b3 ]
+  %v6 = icmp sgt i32 %v4, 0
+  br i1 %v6, label %b3, label %b2
+
+b2:                                               ; preds = %b1
+  ret i32 %v7
+
+b3:                                               ; preds = %b1
+  %v8 = mul i32 %v7, %v4
+  %v10 = sub i32 %v4, 1
+  br label %b1
+}
+
+define i32 @ifac(i32 %0) {
+b0:
+  %ifac2f = call i32 @ifac2f(i32 1, i32 %0)
+  ret i32 %ifac2f
+}
+
+define i32 @ifac2f(i32 %0, i32 %1) {
+b0:
+  %v2 = icmp eq i32 %0, %1
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  ret i32 %0
+
+b2:                                               ; preds = %b0
+  %v4 = icmp sgt i32 %0, %1
+  br i1 %v4, label %b3, label %b4
+
+b3:                                               ; preds = %b2
+  ret i32 1
+
+b4:                                               ; preds = %b2
+  %v7 = add i32 %0, %1
+  %v9 = sdiv i32 %v7, 2
+  %ifac2f = call i32 @ifac2f(i32 %0, i32 %v9)
+  %v12 = add i32 %v9, 1
+  %ifac2f1 = call i32 @ifac2f(i32 %v12, i32 %1)
+  %v14 = mul i32 %ifac2f, %ifac2f1
+  ret i32 %v14
+}
+
+define i32 @main() {
+b0:
+  %fac = call i32 @fac(i32 10)
+  call void @printInt(i32 %fac)
+  %rfac = call i32 @rfac(i32 10)
+  call void @printInt(i32 %rfac)
+  %mfac = call i32 @mfac(i32 10)
+  call void @printInt(i32 %mfac)
+  %ifac = call i32 @ifac(i32 10)
+  call void @printInt(i32 %ifac)
+  %buf = tail call ptr @malloc(i32 0)
+  store [0 x i8] zeroinitializer, ptr %buf, align 1
+  %string = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  %buf_ptr = getelementptr inbounds %string, ptr %string, i32 0, i32 0
+  %len_ptr = getelementptr inbounds %string, ptr %string, i32 0, i32 1
+  %len_ptr1 = getelementptr inbounds %string, ptr %string, i32 0, i32 2
+  store ptr %buf, ptr %buf_ptr, align 8
+  store i32 0, ptr %len_ptr, align 4
+  store i32 0, ptr %len_ptr1, align 4
+  br label %b1
+
+b1:                                               ; preds = %b3, %b0
+  %v15 = phi i32 [ 10, %b0 ], [ %v21, %b3 ]
+  %v18 = phi i32 [ 1, %b0 ], [ %v19, %b3 ]
+  %v17 = icmp sgt i32 %v15, 0
+  br i1 %v17, label %b3, label %b2
+
+b2:                                               ; preds = %b1
+  call void @printInt(i32 %v18)
+  %buf2 = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i32))
+  store [1 x i8] c"=", ptr %buf2, align 1
+  %string3 = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  %buf_ptr4 = getelementptr inbounds %string, ptr %string3, i32 0, i32 0
+  %len_ptr5 = getelementptr inbounds %string, ptr %string3, i32 0, i32 1
+  %len_ptr6 = getelementptr inbounds %string, ptr %string3, i32 0, i32 2
+  store ptr %buf2, ptr %buf_ptr4, align 8
+  store i32 1, ptr %len_ptr5, align 4
+  store i32 1, ptr %len_ptr6, align 4
+  %repStr = call ptr @repStr(ptr %string3, i32 60)
+  call void @printString(ptr %repStr)
+  %buf7 = tail call ptr @malloc(i32 mul (i32 ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i32), i32 8))
+  store [8 x i8] c"hello */", ptr %buf7, align 1
+  %string8 = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  %buf_ptr9 = getelementptr inbounds %string, ptr %string8, i32 0, i32 0
+  %len_ptr10 = getelementptr inbounds %string, ptr %string8, i32 0, i32 1
+  %len_ptr11 = getelementptr inbounds %string, ptr %string8, i32 0, i32 2
+  store ptr %buf7, ptr %buf_ptr9, align 8
+  store i32 8, ptr %len_ptr10, align 4
+  store i32 8, ptr %len_ptr11, align 4
+  call void @printString(ptr %string8)
+  %buf12 = tail call ptr @malloc(i32 mul (i32 ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i32), i32 8))
+  store [8 x i8] c"/* world", ptr %buf12, align 1
+  %string13 = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  %buf_ptr14 = getelementptr inbounds %string, ptr %string13, i32 0, i32 0
+  %len_ptr15 = getelementptr inbounds %string, ptr %string13, i32 0, i32 1
+  %len_ptr16 = getelementptr inbounds %string, ptr %string13, i32 0, i32 2
+  store ptr %buf12, ptr %buf_ptr14, align 8
+  store i32 8, ptr %len_ptr15, align 4
+  store i32 8, ptr %len_ptr16, align 4
+  call void @printString(ptr %string13)
+  ret i32 0
+
+b3:                                               ; preds = %b1
+  %v19 = mul i32 %v18, %v15
+  %v21 = sub i32 %v15, 1
+  br label %b1
+}
+
+define i32 @mfac(i32 %0) {
+b0:
+  %v2 = icmp eq i32 %0, 0
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  ret i32 1
+
+b2:                                               ; preds = %b0
+  %v6 = sub i32 %0, 1
+  %nfac = call i32 @nfac(i32 %v6)
+  %v8 = mul i32 %0, %nfac
+  ret i32 %v8
+}
+
+define i32 @nfac(i32 %0) {
+b0:
+  %v2 = icmp ne i32 %0, 0
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  %v5 = sub i32 %0, 1
+  %mfac = call i32 @mfac(i32 %v5)
+  %v7 = mul i32 %mfac, %0
+  ret i32 %v7
+
+b2:                                               ; preds = %b0
+  ret i32 1
+}
+
+define ptr @repStr(ptr %0, i32 %1) {
+b0:
+  %buf = tail call ptr @malloc(i32 0)
+  store [0 x i8] zeroinitializer, ptr %buf, align 1
+  %string = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  %buf_ptr = getelementptr inbounds %string, ptr %string, i32 0, i32 0
+  %len_ptr = getelementptr inbounds %string, ptr %string, i32 0, i32 1
+  %len_ptr1 = getelementptr inbounds %string, ptr %string, i32 0, i32 2
+  store ptr %buf, ptr %buf_ptr, align 8
+  store i32 0, ptr %len_ptr, align 4
+  store i32 0, ptr %len_ptr1, align 4
+  br label %b1
+
+b1:                                               ; preds = %b3, %b0
+  %v4 = phi i32 [ 0, %b0 ], [ %v11, %b3 ]
+  %v7 = phi ptr [ %string, %b0 ], [ %new_string, %b3 ]
+  %v6 = icmp slt i32 %v4, %1
+  br i1 %v6, label %b3, label %b2
+
+b2:                                               ; preds = %b1
+  ret ptr %v7
+
+b3:                                               ; preds = %b1
+  %buf_ptr2 = getelementptr inbounds %string, ptr %v7, i32 0, i32 0
+  %len_ptr3 = getelementptr inbounds %string, ptr %v7, i32 0, i32 1
+  %buf_ptr4 = getelementptr inbounds %string, ptr %0, i32 0, i32 0
+  %len_ptr5 = getelementptr inbounds %string, ptr %0, i32 0, i32 1
+  %buf6 = load ptr, ptr %buf_ptr2, align 8
+  %len = load i32, ptr %len_ptr3, align 4
+  %buf7 = load ptr, ptr %buf_ptr4, align 8
+  %len8 = load i32, ptr %len_ptr5, align 4
+  %new_len = add i32 %len, %len8
+  %mallocsize = mul i32 %new_len, ptrtoint (ptr getelementptr (i8, ptr null, i32 1) to i32)
+  %new_buf = tail call ptr @malloc(i32 %mallocsize)
+  %new_string = tail call ptr @malloc(i32 ptrtoint (ptr getelementptr (%string, ptr null, i32 1) to i32))
+  call void @memcpy(ptr %new_buf, ptr %buf6, i32 %len)
+  %new_buf_second_part = getelementptr i8, ptr %new_buf, i32 %len
+  call void @memcpy(ptr %new_buf_second_part, ptr %buf7, i32 %len8)
+  %buf_ptr9 = getelementptr inbounds %string, ptr %new_string, i32 0, i32 0
+  %len_ptr10 = getelementptr inbounds %string, ptr %new_string, i32 0, i32 1
+  %cap_ptr = getelementptr inbounds %string, ptr %new_string, i32 0, i32 2
+  store ptr %new_buf, ptr %buf_ptr9, align 8
+  store i32 %new_len, ptr %len_ptr10, align 4
+  store i32 %new_len, ptr %cap_ptr, align 4
+  %v11 = add i32 %v4, 1
+  br label %b1
+}
+
+define i32 @rfac(i32 %0) {
+b0:
+  %v2 = icmp eq i32 %0, 0
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  ret i32 1
+
+b2:                                               ; preds = %b0
+  %v6 = sub i32 %0, 1
+  %rfac = call i32 @rfac(i32 %v6)
+  %v8 = mul i32 %0, %rfac
+  ret i32 %v8
+}
+
+declare noalias ptr @malloc(i32)
 

@@ -5,6 +5,8 @@ description: "/* parity of positive integers by recursion */\n\nint main () {\n 
 ; ModuleID = 'core015'
 source_filename = "core015"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

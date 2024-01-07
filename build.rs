@@ -23,10 +23,14 @@ fn main() {
     lalrpop::process_root().unwrap();
 
     // Compile runtime.ll
-    Command::new("llvm-as-16")
+    let status = Command::new("llvm-as-16")
         .arg("./lib/runtime.ll")
         .status()
-        .unwrap();
+        .unwrap()
+        ;
+
+    assert!(status.success());
+
 
     let mut test_file = File::create("./tests/generated_from_inputs.rs").unwrap();
 

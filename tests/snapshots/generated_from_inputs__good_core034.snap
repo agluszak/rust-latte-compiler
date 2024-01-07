@@ -5,6 +5,8 @@ description: "int main() {\n    printInt(5 % 3);\n    printInt(-5 % 3); // -2 - 
 ; ModuleID = 'core034'
 source_filename = "core034"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

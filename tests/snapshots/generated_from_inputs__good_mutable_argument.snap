@@ -5,6 +5,8 @@ description: "void test(int arg) {\n    arg++;\n    printInt(arg);\n}\n\nint mai
 ; ModuleID = 'mutable_argument'
 source_filename = "mutable_argument"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

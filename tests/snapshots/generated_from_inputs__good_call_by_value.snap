@@ -5,6 +5,8 @@ description: "void test(int param) {\n    param++;\n    printInt(param);\n}\n\ni
 ; ModuleID = 'call_by_value'
 source_filename = "call_by_value"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\nint main() {\n    int i = 0;\n  
 ; ModuleID = 'scopes'
 source_filename = "scopes"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

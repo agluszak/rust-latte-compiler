@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\nint main() {\n    while(true) {\
 ; ModuleID = 'while_true'
 source_filename = "while_true"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

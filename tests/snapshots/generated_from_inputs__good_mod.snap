@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\nint main() {\n    printInt(5 % 3
 ; ModuleID = 'mod'
 source_filename = "mod"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

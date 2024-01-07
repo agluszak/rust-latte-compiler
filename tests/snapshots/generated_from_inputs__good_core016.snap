@@ -5,6 +5,8 @@ description: "/* parity of positive integers by loop */\n\nint main () {\n  int 
 ; ModuleID = 'core016'
 source_filename = "core016"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

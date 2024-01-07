@@ -5,6 +5,8 @@ description: "/* Test pushing -1. */\n\nint main() {\n  printInt(-1);\n  return 
 ; ModuleID = 'core011'
 source_filename = "core011"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

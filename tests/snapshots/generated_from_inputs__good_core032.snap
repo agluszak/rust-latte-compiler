@@ -5,6 +5,8 @@ description: "/* division */\n\nint main() {\n  { printInt(-42 / -1); }\n  retur
 ; ModuleID = 'core032'
 source_filename = "core032"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

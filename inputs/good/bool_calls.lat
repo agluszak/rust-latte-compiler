@@ -10,4 +10,5 @@ boolean blah(int x, int y) {
 
 int main() {
     (blah(1, 1) && blah(1, 2)) || blah(5, 5);
+    return 0;
 }

@@ -5,6 +5,8 @@ description: "/* usage of variable initialized in both branches. */\n\nint main 
 ; ModuleID = 'core005'
 source_filename = "core005"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

@@ -5,6 +5,8 @@ description: "// declaration and initialization in same statement\n\nint main() 
 ; ModuleID = 'core007'
 source_filename = "core007"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

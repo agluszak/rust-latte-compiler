@@ -5,6 +5,8 @@ description: "// Author: Tomasz Wysocki 277696\n\nint main() {\n    if(false);\n
 ; ModuleID = 'empty_if'
 source_filename = "empty_if"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

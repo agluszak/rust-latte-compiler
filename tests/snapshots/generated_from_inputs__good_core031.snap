@@ -5,6 +5,8 @@ description: "int main()\n{\n   printInt(f(1,-1));\n   return 0;\n}\n\nint f(int
 ; ModuleID = 'core031'
 source_filename = "core031"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

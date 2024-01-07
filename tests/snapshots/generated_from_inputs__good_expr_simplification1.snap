@@ -5,6 +5,8 @@ description: "void simpl(int a) {\n    if (a == a) {\n        printInt(1);\n    
 ; ModuleID = 'expr_simplification1'
 source_filename = "expr_simplification1"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

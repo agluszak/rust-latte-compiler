@@ -7,6 +7,8 @@ source_filename = "while_true2"
 
 %string = type { ptr, i32, i32 }
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

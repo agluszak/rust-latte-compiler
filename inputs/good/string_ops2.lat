@@ -1,0 +1,14 @@
+string add(string a) {
+    return a + a;
+}
+
+int main() {
+    int i = 3;
+    string s = "*";
+    while (i > 0) {
+        s = add(s);
+        i--;
+    }
+    printString(s);
+    return 0;
+}

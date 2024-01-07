@@ -5,6 +5,8 @@ description: "int main() {\n    error();\n    return 0;\n}"
 ; ModuleID = 'error'
 source_filename = "error"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)

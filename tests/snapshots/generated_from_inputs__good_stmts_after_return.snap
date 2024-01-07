@@ -5,6 +5,8 @@ description: "int main() {\n    int x = 5;\n    return 0;\n    x++;\n    x--;\n}
 ; ModuleID = 'stmts_after_return'
 source_filename = "stmts_after_return"
 
+declare void @memcpy(ptr, ptr, i32)
+
 declare void @printInt(i32)
 
 declare void @printString(ptr)
