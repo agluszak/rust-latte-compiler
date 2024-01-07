@@ -58,7 +58,7 @@ fn main() -> ExitCode {
         match read_input() {
             Ok(input) => input,
             Err(err) => {
-                eprintln!("Error: {err}");
+                eprintln!("ERROR\n{err}");
                 return ExitCode::FAILURE;
             }
         }
@@ -73,15 +73,15 @@ fn main() -> ExitCode {
             }
 
             if let Err(err) = compile_llvm_ir(&ir, &input.filename) {
-                eprintln!("ERROR\n {err}");
+                eprintln!("ERROR\n{err}");
                 return ExitCode::FAILURE;
             }
 
-            println!("OK");
+            eprintln!("OK");
             ExitCode::SUCCESS
         }
         Err(error_reports) => {
-            println!("ERROR");
+            eprintln!("ERROR");
             for report in error_reports {
                 report.eprint(&input).unwrap_or(());
             }
