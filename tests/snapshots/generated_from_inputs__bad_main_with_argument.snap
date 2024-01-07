@@ -6,7 +6,7 @@ description: "// Author: Jacek Tomaszewski 277663\n//main parameter\n\nint main(
    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mmain_with_argument:4:5[38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m4 │[0m [38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[31mm[0m[31ma[0m[31mi[0m[31mn[0m[38;5;249m([0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249my[0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m{[0m
- [38;5;246m  ·[0m     [31m─[0m[31m─[0m[31m┬[0m[31m─[0m  
- [38;5;246m  ·[0m       [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Type mismatch: expected `function() -> int`, found `function(int) -> int`
+ [38;5;240m  │[0m     [31m─[0m[31m─[0m[31m┬[0m[31m─[0m  
+ [38;5;240m  │[0m       [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Type mismatch: expected `function() -> int`, found `function(int) -> int`
 [38;5;246m───╯[0m
 

@@ -2,4 +2,185 @@
 source: tests/generated_from_inputs.rs
 description: "/* Test boolean operators */\n\nint main () {\n  int x = 4;\n  if (3 <= x && 4 != 2 && true) {\n    printBool(true);\n  } else {\n    printString(\"apa\");\n  }\n\n  printBool(true == true || dontCallMe(1));\n  printBool(4 < -5 && dontCallMe(2));\n\n  printBool(4 == x && true == !false && true);\n\n  printBool(implies(false,false));\n  printBool(implies(false,true));\n  printBool(implies(true,false));\n  printBool(implies(true,true));\n  return 0 ;\n\n}\n\nboolean dontCallMe(int x) {\n  printInt(x);\n  return true;\n}\n\nvoid printBool(boolean b) {\n  if (b) {\n    printString(\"true\");\n  } else {\n    printString(\"false\");\n }\n return;\n}\n\nboolean implies(boolean x, boolean y) {\n  return !x || x == y;\n}\n"
 ---
+; ModuleID = 'core017'
+source_filename = "core017"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i1 @dontCallMe(i32 %0) {
+b0:
+  call void @printInt(i32 %0)
+  ret i1 true
+}
+
+define i1 @implies(i1 %0, i1 %1) {
+b0:
+  %v2 = xor i1 %0, true
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b2, %b0
+  br label %b4
+
+b2:                                               ; preds = %b0
+  %v3 = icmp eq i1 %0, %1
+  br i1 %v3, label %b1, label %b3
+
+b3:                                               ; preds = %b2
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v6 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  ret i1 %v6
+}
+
+define i32 @main() {
+b0:
+  br i1 true, label %b2, label %b3
+
+b1:                                               ; preds = %b2
+  br label %b4
+
+b2:                                               ; preds = %b0
+  br i1 true, label %b1, label %b3
+
+b3:                                               ; preds = %b2, %b0
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v8 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  br i1 %v8, label %b6, label %b7
+
+b5:                                               ; preds = %b6
+  br label %b8
+
+b6:                                               ; preds = %b4
+  br i1 true, label %b5, label %b7
+
+b7:                                               ; preds = %b6, %b4
+  br label %b8
+
+b8:                                               ; preds = %b7, %b5
+  %v12 = phi i1 [ true, %b5 ], [ false, %b7 ]
+  br i1 %v12, label %b9, label %b10
+
+b9:                                               ; preds = %b8
+  call void @printBool(i1 true)
+  br label %b11
+
+b10:                                              ; preds = %b8
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"apa", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  call void @printString(%string* %new_string)
+  br label %b11
+
+b11:                                              ; preds = %b10, %b9
+  br i1 true, label %b12, label %b13
+
+b12:                                              ; preds = %b13, %b11
+  br label %b15
+
+b13:                                              ; preds = %b11
+  %dontCallMe = call i1 @dontCallMe(i32 1)
+  br i1 %dontCallMe, label %b12, label %b14
+
+b14:                                              ; preds = %b13
+  br label %b15
+
+b15:                                              ; preds = %b14, %b12
+  %v24 = phi i1 [ true, %b12 ], [ false, %b14 ]
+  call void @printBool(i1 %v24)
+  br i1 false, label %b17, label %b18
+
+b16:                                              ; preds = %b17
+  br label %b19
+
+b17:                                              ; preds = %b15
+  %dontCallMe2 = call i1 @dontCallMe(i32 2)
+  br i1 %dontCallMe2, label %b16, label %b18
+
+b18:                                              ; preds = %b17, %b15
+  br label %b19
+
+b19:                                              ; preds = %b18, %b16
+  %v34 = phi i1 [ true, %b16 ], [ false, %b18 ]
+  call void @printBool(i1 %v34)
+  br i1 true, label %b21, label %b22
+
+b20:                                              ; preds = %b21
+  br label %b23
+
+b21:                                              ; preds = %b19
+  br i1 true, label %b20, label %b22
+
+b22:                                              ; preds = %b21, %b19
+  br label %b23
+
+b23:                                              ; preds = %b22, %b20
+  %v53 = phi i1 [ true, %b20 ], [ false, %b22 ]
+  br i1 %v53, label %b25, label %b26
+
+b24:                                              ; preds = %b25
+  br label %b27
+
+b25:                                              ; preds = %b23
+  br i1 true, label %b24, label %b26
+
+b26:                                              ; preds = %b25, %b23
+  br label %b27
+
+b27:                                              ; preds = %b26, %b24
+  %v57 = phi i1 [ true, %b24 ], [ false, %b26 ]
+  call void @printBool(i1 %v57)
+  %implies = call i1 @implies(i1 false, i1 false)
+  call void @printBool(i1 %implies)
+  %implies3 = call i1 @implies(i1 false, i1 true)
+  call void @printBool(i1 %implies3)
+  %implies4 = call i1 @implies(i1 true, i1 false)
+  call void @printBool(i1 %implies4)
+  %implies5 = call i1 @implies(i1 true, i1 true)
+  call void @printBool(i1 %implies5)
+  ret i32 0
+}
+
+define void @printBool(i1 %0) {
+b0:
+  br i1 %0, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  br label %b3
+
+b2:                                               ; preds = %b0
+  %str_ptr2 = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
+  call void @printString(%string* %new_string4)
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
+  ret void
+}
 

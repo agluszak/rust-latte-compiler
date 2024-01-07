@@ -2,4 +2,30 @@
 source: tests/generated_from_inputs.rs
 description: "// Autor: Tomasz Wysocki 277696\nint main() {\n    printInt(1);\n    return 0;\n}\n"
 ---
+; ModuleID = 'print_int'
+source_filename = "print_int"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 1)
+  ret i32 0
+}
 

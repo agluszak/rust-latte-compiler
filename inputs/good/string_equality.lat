@@ -1,0 +1,12 @@
+int main() {
+    string test = "test";
+    string test2 = "test";
+    
+    if (test == test2) {
+        printString("test == test2");
+    }
+    if (test != test2) {
+        printString("test != test2");
+    }
+    return 0;
+}

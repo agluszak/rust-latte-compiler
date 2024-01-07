@@ -6,58 +6,61 @@ use crate::parser::latte::ProgramParser;
 use crate::typechecker::typecheck_program;
 use ariadne::Report;
 
+use crate::ir::Ir;
+use crate::llvm_generator::CodeGen;
+use inkwell::context::Context;
 use std::ops::Range;
+
+use std::sync::atomic::AtomicBool;
 
 mod ast;
 mod dfa;
 mod errors;
 pub mod input;
-mod ir;
+pub mod ir;
 pub mod lexer;
+pub mod llvm_generator;
 pub mod parser;
 mod typechecker;
 mod typed_ast;
-mod typed_ast_lowering;
 
-pub fn compile(input: &str, filename: &str) -> Vec<Report<(String, Range<usize>)>> {
-    // let mut error_reports = Vec::new();
-    //
-    // // Lex
-    // let (tokens, lexer_errs) = lexer().parse_recovery(input);
-    // error_reports.extend(parsing_reports(lexer_errs, filename));
-    //
-    // if let Some(tokens) = tokens {
-    //     let input_len = input.len();
-    //     let stream = Stream::from_iter(input_len..input_len + 1, tokens.into_iter());
-    //     // Parse
-    //     let (ast, parser_errs) = program_parser().parse_recovery(stream);
-    //     error_reports.extend(parsing_reports(parser_errs, filename));
-    //     if let Some(ast) = ast {
-    //         if error_reports.is_empty() {
-    //             // Typecheck
-    //             match typecheck_program(&ast.value) {
-    //                 Ok(_) => {}
-    //                 Err(errs) => {
-    //                     error_reports.extend(typechecking_reports(errs, filename));
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+pub static DBG: AtomicBool = AtomicBool::new(false);
 
+type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
+
+pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<AriadneReport<'a>>> {
     let lexer = Lexer::new(input);
-    let actual = ProgramParser::new().parse(lexer);
+    let parsed = ProgramParser::new()
+        .parse(lexer)
+        .map_err(|err| parsing_reports(err, filename))?;
+    let (typechecked, env) =
+        typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
-    match actual {
-        Ok(actual) => {
-            let errors = typecheck_program(actual);
-
-            if let Err(errs) = errors {
-                typechecking_reports(errs, filename)
-            } else {
-                Vec::new()
-            }
-        }
-        Err(err) => parsing_reports(err, filename),
+    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
+        dbg!(&typechecked);
+        dbg!(&env);
     }
+
+    let mut ir = Ir::new();
+
+    for decl in typechecked.0 {
+        ir.translate_function(decl.value);
+    }
+
+    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
+        println!("{}", ir.dump());
+    }
+
+    let context = Context::create();
+    let codegen = CodeGen::new(&context, filename, env);
+
+    for (name, func) in &ir.functions {
+        codegen.declare(name, func);
+    }
+
+    for (name, func) in ir.functions {
+        codegen.generate(&name, &func);
+    }
+
+    Ok(codegen.compile_to_string())
 }

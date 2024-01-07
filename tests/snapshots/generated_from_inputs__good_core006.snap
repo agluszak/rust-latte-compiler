@@ -2,4 +2,31 @@
 source: tests/generated_from_inputs.rs
 description: "// Declaration of multiple variables of the same type in one statement:\n\nint main () {\n  int x, y;\n  x = 45;\n  y = -36;\n  printInt(x);\n  printInt(y);\n  return 0 ;\n\n}"
 ---
+; ModuleID = 'core006'
+source_filename = "core006"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 45)
+  call void @printInt(i32 -36)
+  ret i32 0
+}
 

@@ -2,4 +2,51 @@
 source: tests/generated_from_inputs.rs
 description: "// Author: Tomasz Biczel 277568, Tomasz Wysocki 277696\nint main() {\n    while (true) {\n        int x;\n        x = readInt();\n        if (x == 1)\n            return 0;\n        else\n            printString(\"jeszcze raz\");\n    }\n}\n"
 ---
+; ModuleID = 'while_true2'
+source_filename = "while_true2"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  br label %b1
+
+b1:                                               ; preds = %b5, %b0
+  br label %b2
+
+b2:                                               ; preds = %b1
+  %readInt = call i32 @readInt()
+  %v4 = icmp eq i32 %readInt, 1
+  br i1 %v4, label %b3, label %b4
+
+b3:                                               ; preds = %b2
+  ret i32 0
+
+b4:                                               ; preds = %b2
+  %str_ptr = alloca [11 x i8], align 1
+  store [11 x i8] c"jeszcze raz", [11 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [11 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 11)
+  call void @printString(%string* %new_string)
+  br label %b5
+
+b5:                                               ; preds = %b4
+  br label %b1
+}
 

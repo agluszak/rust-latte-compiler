@@ -2,4 +2,36 @@
 source: tests/generated_from_inputs.rs
 description: "// Author: Tomasz Wysocki 277696\n\nint main() {\n    while(false);\n    printInt(1);\n    return 0;\n}\n"
 ---
+; ModuleID = 'empty_while'
+source_filename = "empty_while"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  br label %b1
+
+b1:                                               ; preds = %b0
+  br label %b2
+
+b2:                                               ; preds = %b1
+  call void @printInt(i32 1)
+  ret i32 0
+}
 

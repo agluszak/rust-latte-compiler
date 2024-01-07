@@ -2,4 +2,32 @@
 source: tests/generated_from_inputs.rs
 description: "// Author: Tomasz Wysocki 277696\nint main() {\n    printInt(- -1);\n    int i = 1;\n    printInt(-i);\n    printInt(2 - -i);\n    return 0;\n}\n"
 ---
+; ModuleID = 'negation'
+source_filename = "negation"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 1)
+  call void @printInt(i32 -1)
+  call void @printInt(i32 3)
+  ret i32 0
+}
 

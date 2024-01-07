@@ -2,4 +2,36 @@
 source: tests/generated_from_inputs.rs
 description: "/* test input */\n\nint main() {\n  int x = readInt();\n  string y = readString();\n  string z = readString();\n\n  printInt(x-5);\n  printString(y+z);  \n  return 0 ;\n}"
 ---
+; ModuleID = 'core018'
+source_filename = "core018"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %readInt = call i32 @readInt()
+  %readString = call %string* @readString()
+  %readString1 = call %string* @readString()
+  %v4 = sub i32 %readInt, 5
+  call void @printInt(i32 %v4)
+  %new_string = call %string* @stringConcat(%string* %readString, %string* %readString1)
+  call void @printString(%string* %new_string)
+  ret i32 0
+}
 

@@ -1,0 +1,43 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int main() {\n    string test = \"test\";\n    string test2 = \"test\";\n    \n    if (test == test2) {\n        printString(\"test == test2\");\n    }\n    if (test != test2) {\n        printString(\"test != test2\");\n    }\n    return 0;\n}"
+---
+; ModuleID = 'string_equality'
+source_filename = "string_equality"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"test", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  %str_ptr2 = alloca [4 x i8], align 1
+  store [4 x i8] c"test", [4 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
+  %str_ptr5 = alloca [13 x i8], align 1
+  store [13 x i8] c"test == test2", [13 x i8]* %str_ptr5, align 1
+  %str_ptr6 = bitcast [13 x i8]* %str_ptr5 to i8*
+  %new_string7 = call %string* @newString(i8* %str_ptr6, i32 13)
+  call void @printString(%string* %new_string7)
+  ret i32 0
+}
+

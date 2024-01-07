@@ -1,5 +1,123 @@
 ---
 source: tests/generated_from_inputs.rs
-description: "int d() { return 0;}\nint s(int x) {return x + 1;}\nint main() {\n   printInt(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(d()))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));\n  return 0;\n}\n"
+description: "int d() { return 0;}\nint s(int x) {return x + 1;}\nint main() {\n   printInt(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(d())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));  \n  return 0;\n}\n"
 ---
+; ModuleID = 'core026'
+source_filename = "core026"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @d() {
+b0:
+  ret i32 0
+}
+
+define i32 @main() {
+b0:
+  %d = call i32 @d()
+  %s = call i32 @s(i32 %d)
+  %s1 = call i32 @s(i32 %s)
+  %s2 = call i32 @s(i32 %s1)
+  %s3 = call i32 @s(i32 %s2)
+  %s4 = call i32 @s(i32 %s3)
+  %s5 = call i32 @s(i32 %s4)
+  %s6 = call i32 @s(i32 %s5)
+  %s7 = call i32 @s(i32 %s6)
+  %s8 = call i32 @s(i32 %s7)
+  %s9 = call i32 @s(i32 %s8)
+  %s10 = call i32 @s(i32 %s9)
+  %s11 = call i32 @s(i32 %s10)
+  %s12 = call i32 @s(i32 %s11)
+  %s13 = call i32 @s(i32 %s12)
+  %s14 = call i32 @s(i32 %s13)
+  %s15 = call i32 @s(i32 %s14)
+  %s16 = call i32 @s(i32 %s15)
+  %s17 = call i32 @s(i32 %s16)
+  %s18 = call i32 @s(i32 %s17)
+  %s19 = call i32 @s(i32 %s18)
+  %s20 = call i32 @s(i32 %s19)
+  %s21 = call i32 @s(i32 %s20)
+  %s22 = call i32 @s(i32 %s21)
+  %s23 = call i32 @s(i32 %s22)
+  %s24 = call i32 @s(i32 %s23)
+  %s25 = call i32 @s(i32 %s24)
+  %s26 = call i32 @s(i32 %s25)
+  %s27 = call i32 @s(i32 %s26)
+  %s28 = call i32 @s(i32 %s27)
+  %s29 = call i32 @s(i32 %s28)
+  %s30 = call i32 @s(i32 %s29)
+  %s31 = call i32 @s(i32 %s30)
+  %s32 = call i32 @s(i32 %s31)
+  %s33 = call i32 @s(i32 %s32)
+  %s34 = call i32 @s(i32 %s33)
+  %s35 = call i32 @s(i32 %s34)
+  %s36 = call i32 @s(i32 %s35)
+  %s37 = call i32 @s(i32 %s36)
+  %s38 = call i32 @s(i32 %s37)
+  %s39 = call i32 @s(i32 %s38)
+  %s40 = call i32 @s(i32 %s39)
+  %s41 = call i32 @s(i32 %s40)
+  %s42 = call i32 @s(i32 %s41)
+  %s43 = call i32 @s(i32 %s42)
+  %s44 = call i32 @s(i32 %s43)
+  %s45 = call i32 @s(i32 %s44)
+  %s46 = call i32 @s(i32 %s45)
+  %s47 = call i32 @s(i32 %s46)
+  %s48 = call i32 @s(i32 %s47)
+  %s49 = call i32 @s(i32 %s48)
+  %s50 = call i32 @s(i32 %s49)
+  %s51 = call i32 @s(i32 %s50)
+  %s52 = call i32 @s(i32 %s51)
+  %s53 = call i32 @s(i32 %s52)
+  %s54 = call i32 @s(i32 %s53)
+  %s55 = call i32 @s(i32 %s54)
+  %s56 = call i32 @s(i32 %s55)
+  %s57 = call i32 @s(i32 %s56)
+  %s58 = call i32 @s(i32 %s57)
+  %s59 = call i32 @s(i32 %s58)
+  %s60 = call i32 @s(i32 %s59)
+  %s61 = call i32 @s(i32 %s60)
+  %s62 = call i32 @s(i32 %s61)
+  %s63 = call i32 @s(i32 %s62)
+  %s64 = call i32 @s(i32 %s63)
+  %s65 = call i32 @s(i32 %s64)
+  %s66 = call i32 @s(i32 %s65)
+  %s67 = call i32 @s(i32 %s66)
+  %s68 = call i32 @s(i32 %s67)
+  %s69 = call i32 @s(i32 %s68)
+  %s70 = call i32 @s(i32 %s69)
+  %s71 = call i32 @s(i32 %s70)
+  %s72 = call i32 @s(i32 %s71)
+  %s73 = call i32 @s(i32 %s72)
+  %s74 = call i32 @s(i32 %s73)
+  %s75 = call i32 @s(i32 %s74)
+  %s76 = call i32 @s(i32 %s75)
+  %s77 = call i32 @s(i32 %s76)
+  %s78 = call i32 @s(i32 %s77)
+  %s79 = call i32 @s(i32 %s78)
+  call void @printInt(i32 %s79)
+  ret i32 0
+}
+
+define i32 @s(i32 %0) {
+b0:
+  %v2 = add i32 %0, 1
+  ret i32 %v2
+}
 

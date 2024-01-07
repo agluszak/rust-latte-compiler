@@ -1,0 +1,7 @@
+/* test input */
+
+int main() {
+  printInt(readInt()-5);
+  printString(readString()+readString());
+  return 0 ;
+}

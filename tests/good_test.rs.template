@@ -1,7 +1,25 @@
 #[test]
 fn good_{name}() {{
-    let input_str = include_str!("{path}");
-    let input = Input::new(input_str.to_string(), "{path}".to_string());
+    let mut input_str = String::new();
+    File::open("{path}").unwrap().read_to_string(&mut input_str).unwrap();
+    let input = Input::new(input_str, "{path}".to_string());
+    let program_output_path = "{path}".replace(".lat", ".output");
+    let mut program_output = String::new();
+    let program_input_path = "{path}".replace(".lat", ".input");
+    let mut program_input = String::new();
+    let expected_exit_code_path = "{path}".replace(".lat", ".exitcode");
+    let mut expected_exit_code = String::new();
+    if Path::new(&program_output_path).is_file() {{
+        File::open(&program_output_path).unwrap().read_to_string(&mut program_output).unwrap();
+    }}
+    if Path::new(&program_input_path).is_file() {{
+        File::open(&program_input_path).unwrap().read_to_string(&mut program_input).unwrap();
+    }}
+    if Path::new(&expected_exit_code_path).is_file() {{
+        File::open(&expected_exit_code_path).unwrap().read_to_string(&mut expected_exit_code).unwrap();
+    }}
+    let expected_exit_code = expected_exit_code.trim().parse::<i32>().unwrap_or(0);
+
     let name = "{name}";
-    good_test!(input, name);
+    good_test!(input, name, program_output, program_input, expected_exit_code);
 }}

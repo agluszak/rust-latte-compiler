@@ -2,4 +2,30 @@
 source: tests/generated_from_inputs.rs
 description: "/* allow comparing booleans. */\n\nint main() {\n  if (true == true) { printInt(42); }\n  return 0 ;\n\n}"
 ---
+; ModuleID = 'core004'
+source_filename = "core004"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 42)
+  ret i32 0
+}
 

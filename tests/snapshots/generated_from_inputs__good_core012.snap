@@ -2,4 +2,78 @@
 source: tests/generated_from_inputs.rs
 description: "/* Test arithmetic and comparisons. */\n\nint main() {\n    int x = 56;\n    int y = -23;\n    printInt(x+y);\n    printInt(x-y);\n    printInt(x*y);\n    printInt(45/2);\n    printInt(78%3);\n    printBool(x-y > x+y);\n    printBool(x/y <= x*y);\n    printString(\"string\"+\" \"+\"concatenation\");\n    return 0 ;\n}\n\nvoid printBool(boolean b) {\n  if (b) {\n    printString(\"true\");\n    return;\n  } else {\n    printString(\"false\");\n    return;\n }\n}"
 ---
+; ModuleID = 'core012'
+source_filename = "core012"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 33)
+  call void @printInt(i32 79)
+  call void @printInt(i32 -1288)
+  call void @printInt(i32 22)
+  call void @printInt(i32 0)
+  call void @printBool(i1 true)
+  call void @printBool(i1 false)
+  %str_ptr = alloca [6 x i8], align 1
+  store [6 x i8] c"string", [6 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [6 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 6)
+  %str_ptr2 = alloca [1 x i8], align 1
+  store [1 x i8] c" ", [1 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [1 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 1)
+  %str_ptr5 = alloca [7 x i8], align 1
+  store [7 x i8] c"string ", [7 x i8]* %str_ptr5, align 1
+  %str_ptr6 = bitcast [7 x i8]* %str_ptr5 to i8*
+  %new_string7 = call %string* @newString(i8* %str_ptr6, i32 7)
+  %str_ptr8 = alloca [13 x i8], align 1
+  store [13 x i8] c"concatenation", [13 x i8]* %str_ptr8, align 1
+  %str_ptr9 = bitcast [13 x i8]* %str_ptr8 to i8*
+  %new_string10 = call %string* @newString(i8* %str_ptr9, i32 13)
+  %str_ptr11 = alloca [20 x i8], align 1
+  store [20 x i8] c"string concatenation", [20 x i8]* %str_ptr11, align 1
+  %str_ptr12 = bitcast [20 x i8]* %str_ptr11 to i8*
+  %new_string13 = call %string* @newString(i8* %str_ptr12, i32 20)
+  call void @printString(%string* %new_string13)
+  ret i32 0
+}
+
+define void @printBool(i1 %0) {
+b0:
+  br i1 %0, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  ret void
+
+b2:                                               ; preds = %b0
+  %str_ptr2 = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
+  call void @printString(%string* %new_string4)
+  ret void
+}
 

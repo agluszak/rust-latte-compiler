@@ -1,0 +1,15 @@
+void test(int arg) {
+    int x = 0;
+    if (arg == 1) {
+        x = 1;
+    } else {
+        x = 2;
+    }
+    printInt(x);
+}
+
+int main() {
+    test(1);
+    test(42);
+    return 0;
+}

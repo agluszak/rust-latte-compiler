@@ -1,0 +1,37 @@
+---
+source: tests/generated_from_inputs.rs
+description: "void simpl(int a) {\n    if (a == a) {\n        printInt(1);\n    } else {\n        // This call should not be GENERATED at all\n        printInt(0);\n    }\n}\n\nint main() {\n    simpl(1);\n    return 0;\n}\n"
+---
+; ModuleID = 'expr_simplification1'
+source_filename = "expr_simplification1"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @simpl(i32 1)
+  ret i32 0
+}
+
+define void @simpl(i32 %0) {
+b0:
+  call void @printInt(i32 1)
+  ret void
+}
+

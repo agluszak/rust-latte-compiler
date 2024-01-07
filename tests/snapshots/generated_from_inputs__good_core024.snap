@@ -2,4 +2,71 @@
 source: tests/generated_from_inputs.rs
 description: "int main() {\n  f(1,2);\n  return 0;\n}\n\nvoid f(int x, int y) {\n  if (y > x || e())\n    printString(\"yes\");\n}\n\nboolean e() {\n  printString(\"NOOO\");\n  return false;\n  }\n\n"
 ---
+; ModuleID = 'core024'
+source_filename = "core024"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i1 @e() {
+b0:
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"NOOO", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  ret i1 false
+}
+
+define void @f(i32 %0, i32 %1) {
+b0:
+  %v2 = icmp sgt i32 %1, %0
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b2, %b0
+  br label %b4
+
+b2:                                               ; preds = %b0
+  %e = call i1 @e()
+  br i1 %e, label %b1, label %b3
+
+b3:                                               ; preds = %b2
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v6 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  br i1 %v6, label %b5, label %b6
+
+b5:                                               ; preds = %b4
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"yes", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  call void @printString(%string* %new_string)
+  br label %b6
+
+b6:                                               ; preds = %b5, %b4
+  ret void
+}
+
+define i32 @main() {
+b0:
+  call void @f(i32 1, i32 2)
+  ret i32 0
+}
 

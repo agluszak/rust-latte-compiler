@@ -110,7 +110,7 @@ fn data_flow_analysis(expr: &TypedExpr, env: &Environment) -> TriLogic {
         TypedExprKind::Literal(ast::Literal::Bool(true)) => TriLogic::True,
         TypedExprKind::Literal(ast::Literal::Bool(false)) => TriLogic::False,
         TypedExprKind::Literal(_) => TriLogic::Unknown,
-        TypedExprKind::Variable(ident) => {
+        TypedExprKind::Variable(ident, _) => {
             if let Some(value) = env.get_bool(ident) {
                 value
             } else {
@@ -206,7 +206,7 @@ fn return_analysis_stmt(
         }
         TypedStmt::Incr(_) => false,
         TypedStmt::Decr(_) => false,
-        TypedStmt::Assignment { target, expr } => {
+        TypedStmt::Assignment { target, expr, .. } => {
             let dfa_value = data_flow_analysis(&expr.value, env);
             env.mark_bool(&target.value, dfa_value);
             false

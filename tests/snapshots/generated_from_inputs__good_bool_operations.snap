@@ -2,4 +2,190 @@
 source: tests/generated_from_inputs.rs
 description: "// Author: Tomasz Wysocki 277696\nint main() {\n    b(t(1) && f(2));\n    b(t(3) && t(4));\n    b(t(5) || t(6));\n    b(f(7) && t(8));\n    b(t(9) && t(10) && t(11));\n    b(f(12) || f(13) && t(14));\n    return 0;\n}\n\nboolean f(int a) {\n    printInt(a);\n    return false;\n}\nboolean t(int a) {\n    return !f(a);\n}\nvoid b(boolean a) {\n    if(a)\n        printString(\"true\");\n    else\n        printString(\"false\");\n}\n"
 ---
+; ModuleID = 'bool_operations'
+source_filename = "bool_operations"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define void @b(i1 %0) {
+b0:
+  br i1 %0, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  br label %b3
+
+b2:                                               ; preds = %b0
+  %str_ptr2 = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
+  call void @printString(%string* %new_string4)
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
+  ret void
+}
+
+define i1 @f(i32 %0) {
+b0:
+  call void @printInt(i32 %0)
+  ret i1 false
+}
+
+define i32 @main() {
+b0:
+  %t = call i1 @t(i32 1)
+  br i1 %t, label %b2, label %b3
+
+b1:                                               ; preds = %b2
+  br label %b4
+
+b2:                                               ; preds = %b0
+  %f = call i1 @f(i32 2)
+  br i1 %f, label %b1, label %b3
+
+b3:                                               ; preds = %b2, %b0
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v6 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  call void @b(i1 %v6)
+  %t1 = call i1 @t(i32 3)
+  br i1 %t1, label %b6, label %b7
+
+b5:                                               ; preds = %b6
+  br label %b8
+
+b6:                                               ; preds = %b4
+  %t2 = call i1 @t(i32 4)
+  br i1 %t2, label %b5, label %b7
+
+b7:                                               ; preds = %b6, %b4
+  br label %b8
+
+b8:                                               ; preds = %b7, %b5
+  %v14 = phi i1 [ true, %b5 ], [ false, %b7 ]
+  call void @b(i1 %v14)
+  %t3 = call i1 @t(i32 5)
+  br i1 %t3, label %b9, label %b10
+
+b9:                                               ; preds = %b10, %b8
+  br label %b12
+
+b10:                                              ; preds = %b8
+  %t4 = call i1 @t(i32 6)
+  br i1 %t4, label %b9, label %b11
+
+b11:                                              ; preds = %b10
+  br label %b12
+
+b12:                                              ; preds = %b11, %b9
+  %v22 = phi i1 [ true, %b9 ], [ false, %b11 ]
+  call void @b(i1 %v22)
+  %f5 = call i1 @f(i32 7)
+  br i1 %f5, label %b14, label %b15
+
+b13:                                              ; preds = %b14
+  br label %b16
+
+b14:                                              ; preds = %b12
+  %t6 = call i1 @t(i32 8)
+  br i1 %t6, label %b13, label %b15
+
+b15:                                              ; preds = %b14, %b12
+  br label %b16
+
+b16:                                              ; preds = %b15, %b13
+  %v30 = phi i1 [ true, %b13 ], [ false, %b15 ]
+  call void @b(i1 %v30)
+  %t7 = call i1 @t(i32 9)
+  br i1 %t7, label %b18, label %b19
+
+b17:                                              ; preds = %b18
+  br label %b20
+
+b18:                                              ; preds = %b16
+  %t8 = call i1 @t(i32 10)
+  br i1 %t8, label %b17, label %b19
+
+b19:                                              ; preds = %b18, %b16
+  br label %b20
+
+b20:                                              ; preds = %b19, %b17
+  %v38 = phi i1 [ true, %b17 ], [ false, %b19 ]
+  br i1 %v38, label %b22, label %b23
+
+b21:                                              ; preds = %b22
+  br label %b24
+
+b22:                                              ; preds = %b20
+  %t9 = call i1 @t(i32 11)
+  br i1 %t9, label %b21, label %b23
+
+b23:                                              ; preds = %b22, %b20
+  br label %b24
+
+b24:                                              ; preds = %b23, %b21
+  %v43 = phi i1 [ true, %b21 ], [ false, %b23 ]
+  call void @b(i1 %v43)
+  %f10 = call i1 @f(i32 12)
+  br i1 %f10, label %b25, label %b26
+
+b25:                                              ; preds = %b32, %b24
+  br label %b28
+
+b26:                                              ; preds = %b24
+  %f11 = call i1 @f(i32 13)
+  br i1 %f11, label %b30, label %b31
+
+b27:                                              ; preds = %b32
+  br label %b28
+
+b28:                                              ; preds = %b27, %b25
+  %v56 = phi i1 [ true, %b25 ], [ false, %b27 ]
+  call void @b(i1 %v56)
+  ret i32 0
+
+b29:                                              ; preds = %b30
+  br label %b32
+
+b30:                                              ; preds = %b26
+  %t12 = call i1 @t(i32 14)
+  br i1 %t12, label %b29, label %b31
+
+b31:                                              ; preds = %b30, %b26
+  br label %b32
+
+b32:                                              ; preds = %b31, %b29
+  %v53 = phi i1 [ true, %b29 ], [ false, %b31 ]
+  br i1 %v53, label %b25, label %b27
+}
+
+define i1 @t(i32 %0) {
+b0:
+  %f = call i1 @f(i32 %0)
+  %v2 = xor i1 %f, true
+  ret i1 %v2
+}
 

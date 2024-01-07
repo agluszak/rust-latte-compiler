@@ -2,4 +2,34 @@
 source: tests/generated_from_inputs.rs
 description: "// Autor: Tomasz Wysocki 277696\nint main() {\n    printString(\"abc\");\n    return 0;\n}\n"
 ---
+; ModuleID = 'print_string'
+source_filename = "print_string"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"abc", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  call void @printString(%string* %new_string)
+  ret i32 0
+}
 

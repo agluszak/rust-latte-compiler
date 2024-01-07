@@ -1,0 +1,55 @@
+---
+source: tests/generated_from_inputs.rs
+description: "string add(string a) {\n    return a + a;\n}\n\nint main() {\n    int i = 3;\n    string s = \"*\";\n    while (i > 0) {\n        s = add(s);\n        i--;\n    }\n    printString(s);\n    return 0;\n}"
+---
+; ModuleID = 'string_ops2'
+source_filename = "string_ops2"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define %string* @add(%string* %0) {
+b0:
+  %new_string = call %string* @stringConcat(%string* %0, %string* %0)
+  ret %string* %new_string
+}
+
+define i32 @main() {
+b0:
+  %str_ptr = alloca [1 x i8], align 1
+  store [1 x i8] c"*", [1 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [1 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 1)
+  br label %b1
+
+b1:                                               ; preds = %b3, %b0
+  %v2 = phi i32 [ 3, %b0 ], [ %v8, %b3 ]
+  %v5 = phi %string* [ %new_string, %b0 ], [ %add, %b3 ]
+  %v4 = icmp sgt i32 %v2, 0
+  br i1 %v4, label %b3, label %b2
+
+b2:                                               ; preds = %b1
+  call void @printString(%string* %v5)
+  ret i32 0
+
+b3:                                               ; preds = %b1
+  %add = call %string* @add(%string* %v5)
+  %v8 = sub i32 %v2, 1
+  br label %b1
+}
+

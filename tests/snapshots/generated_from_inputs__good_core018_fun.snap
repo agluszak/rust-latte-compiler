@@ -1,0 +1,60 @@
+---
+source: tests/generated_from_inputs.rs
+description: "int x() {\n    return -37;\n}\n\nstring y() {\n    return \"foo\";\n}\n\nstring z() {\n    return \"bar\";\n}\n\nint main() {\n  printInt(x()-5);\n  printString(y()+z());\n  return 0 ;\n}"
+---
+; ModuleID = 'core018_fun'
+source_filename = "core018_fun"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %x = call i32 @x()
+  %v2 = sub i32 %x, 5
+  call void @printInt(i32 %v2)
+  %y = call %string* @y()
+  %z = call %string* @z()
+  %new_string = call %string* @stringConcat(%string* %y, %string* %z)
+  call void @printString(%string* %new_string)
+  ret i32 0
+}
+
+define i32 @x() {
+b0:
+  ret i32 -37
+}
+
+define %string* @y() {
+b0:
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"foo", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  ret %string* %new_string
+}
+
+define %string* @z() {
+b0:
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"bar", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  ret %string* %new_string
+}
+

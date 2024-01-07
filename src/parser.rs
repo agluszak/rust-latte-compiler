@@ -1,5 +1,6 @@
 use crate::lexer::{LexingError, Spanned, Token};
 use lalrpop_util::lalrpop_mod;
+
 lalrpop_mod!(#[allow(clippy::all, dead_code)] pub latte); // synthesized by LALRPOP
 
 pub type ParsingError = lalrpop_util::ParseError<usize, Token, Spanned<LexingError>>;

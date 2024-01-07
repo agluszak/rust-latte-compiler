@@ -2,4 +2,38 @@
 source: tests/generated_from_inputs.rs
 description: "void test(int arg) {\n    arg++;\n    printInt(arg);\n}\n\nint main() {\n    test(1);\n    test(42);\n    return 0;\n}\n"
 ---
+; ModuleID = 'mutable_argument'
+source_filename = "mutable_argument"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @test(i32 1)
+  call void @test(i32 42)
+  ret i32 0
+}
+
+define void @test(i32 %0) {
+b0:
+  %v2 = add i32 %0, 1
+  call void @printInt(i32 %v2)
+  ret void
+}
 

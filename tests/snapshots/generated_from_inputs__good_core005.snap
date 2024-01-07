@@ -2,4 +2,30 @@
 source: tests/generated_from_inputs.rs
 description: "/* usage of variable initialized in both branches. */\n\nint main () {\n  int x;\n  int y = 56;\n  if (y + 45 <= 2) {\n    x = 1;\n  } else {\n    x = 2;\n  }\n  printInt(x);\n  return 0 ;\n\n}"
 ---
+; ModuleID = 'core005'
+source_filename = "core005"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 2)
+  ret i32 0
+}
 

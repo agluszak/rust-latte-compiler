@@ -2,4 +2,64 @@
 source: tests/generated_from_inputs.rs
 description: "int main() {\n  int i = 78;\n  {\n    int i = 1;\n    printInt(i);\n  }\n  printInt(i);\n  while (i > 76) {\n    i--;\n    printInt(i);\n   // this is a little tricky\n   // on the right hand side, i refers to the outer i\n   int i = i + 7;\n   printInt(i);\n  }\n  printInt(i);\n  if (i > 4) {\n    int i = 4;\n    printInt(i);\n  } else {\n    printString(\"foo\");\n  } \n  printInt(i);\n  return 0 ;\n\n}"
 ---
+; ModuleID = 'core019'
+source_filename = "core019"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  call void @printInt(i32 1)
+  call void @printInt(i32 78)
+  br label %b1
+
+b1:                                               ; preds = %b3, %b0
+  %v4 = phi i32 [ 78, %b0 ], [ %v8, %b3 ]
+  %v6 = icmp sgt i32 %v4, 76
+  br i1 %v6, label %b3, label %b2
+
+b2:                                               ; preds = %b1
+  call void @printInt(i32 %v4)
+  %v15 = icmp sgt i32 %v4, 4
+  br i1 %v15, label %b4, label %b5
+
+b3:                                               ; preds = %b1
+  %v8 = sub i32 %v4, 1
+  call void @printInt(i32 %v8)
+  %v11 = add i32 %v8, 7
+  call void @printInt(i32 %v11)
+  br label %b1
+
+b4:                                               ; preds = %b2
+  call void @printInt(i32 4)
+  br label %b6
+
+b5:                                               ; preds = %b2
+  %str_ptr = alloca [3 x i8], align 1
+  store [3 x i8] c"foo", [3 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  call void @printString(%string* %new_string)
+  br label %b6
+
+b6:                                               ; preds = %b5, %b4
+  call void @printInt(i32 %v4)
+  ret i32 0
+}
 

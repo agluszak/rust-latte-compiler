@@ -2,4 +2,36 @@
 source: tests/generated_from_inputs.rs
 description: "// Calling functions which take zero parameters\n\nint main() {\n int x = foo();\n printInt(x);\n return 0 ;\n\n}\n\nint foo() {\n return 10;\n}\n\n"
 ---
+; ModuleID = 'core009'
+source_filename = "core009"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @foo() {
+b0:
+  ret i32 10
+}
+
+define i32 @main() {
+b0:
+  %foo = call i32 @foo()
+  call void @printInt(i32 %foo)
+  ret i32 0
+}
 

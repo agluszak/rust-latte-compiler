@@ -107,7 +107,7 @@ pub struct Arg {
     pub name: Spanned<Ident>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Ident(pub String); // TODO: interned
 
 impl Ident {

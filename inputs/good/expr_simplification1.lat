@@ -1,0 +1,13 @@
+void simpl(int a) {
+    if (a == a) {
+        printInt(1);
+    } else {
+        // This call should not be GENERATED at all
+        printInt(0);
+    }
+}
+
+int main() {
+    simpl(1);
+    return 0;
+}
