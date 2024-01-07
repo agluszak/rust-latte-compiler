@@ -28,7 +28,6 @@ impl<'ctx> CodeGen<'ctx> {
             &[
                 context.i8_type().ptr_type(AddressSpace::default()).into(),
                 context.i32_type().into(),
-                context.i32_type().into(),
             ],
             false,
         );
@@ -49,19 +48,6 @@ impl<'ctx> CodeGen<'ctx> {
         let i8_type = self.context.i8_type();
         let i32_type = self.context.i32_type();
         let void = self.context.void_type();
-
-        self.module.add_function(
-            "memcpy",
-            void.fn_type(
-                &[
-                    i8_type.ptr_type(AddressSpace::default()).into(),
-                    i8_type.ptr_type(AddressSpace::default()).into(),
-                    i32_type.into(),
-                ],
-                false,
-            ),
-            Some(Linkage::External),
-        );
 
         self.module.add_function(
             "printInt",
@@ -94,194 +80,43 @@ impl<'ctx> CodeGen<'ctx> {
 
         self.module
             .add_function("error", void.fn_type(&[], false), Some(Linkage::External));
-    }
 
-    pub fn add_builtins(&self) {
-        let i8_type = self.context.i8_type();
-        let i32_type = self.context.i32_type();
-        let void = self.context.void_type();
-
-        // printf
-        let printf = self.module.add_function(
-            "printf",
-            i32_type.fn_type(&[i8_type.ptr_type(AddressSpace::default()).into()], true),
-            Some(Linkage::External),
-        );
-
-        // scanf
-        let scanf = self.module.add_function(
-            "scanf",
-            i32_type.fn_type(&[i8_type.ptr_type(AddressSpace::default()).into()], true),
-            Some(Linkage::External),
-        );
-
-        // exit
-        let exit = self.module.add_function(
-            "exit",
-            void.fn_type(&[i32_type.into()], false),
-            Some(Linkage::External),
-        );
-
-        // printInt
-        let print_int =
-            self.module
-                .add_function("printInt", void.fn_type(&[i32_type.into()], false), None);
-        let basic_block = self.context.append_basic_block(print_int, "entry");
-        self.builder.position_at_end(basic_block);
-
-        let number_format = self.builder.build_global_string_ptr("%d\n", "dnl").unwrap();
-        let x = print_int.get_nth_param(0).unwrap().into_int_value();
-        self.builder
-            .build_call(
-                printf,
-                &[number_format.as_pointer_value().into(), x.into()],
-                "call",
-            )
-            .unwrap();
-        self.builder.build_return(None).unwrap();
-
-        // printString
-        let print_string = self.module.add_function(
-            "printString",
-            void.fn_type(
-                &[self.string_type.ptr_type(AddressSpace::default()).into()],
+        self.module.add_function(
+            "newString",
+            self.string_type.ptr_type(AddressSpace::default()).fn_type(
+                &[
+                    i8_type.ptr_type(AddressSpace::default()).into(),
+                    i32_type.into(),
+                ],
                 false,
             ),
-            None,
+            Some(Linkage::External),
         );
-        let basic_block = self.context.append_basic_block(print_string, "entry");
-        self.builder.position_at_end(basic_block);
-        let string_format = self
-            .builder
-            .build_global_string_ptr("%.*s\n", "snl")
-            .unwrap();
-        let pointer_to_string = print_string.get_nth_param(0).unwrap().into_pointer_value();
-        let string_buffer_ptr = self
-            .builder
-            .build_struct_gep(self.string_type, pointer_to_string, 0, "buf_ptr")
-            .unwrap();
-        let string_len_ptr = self
-            .builder
-            .build_struct_gep(self.string_type, pointer_to_string, 1, "len_ptr")
-            .unwrap();
-        let string_buffer = self
-            .builder
-            .build_load(
-                i8_type.ptr_type(AddressSpace::default()),
-                string_buffer_ptr,
-                "buf",
-            )
-            .unwrap();
-        let string_len = self
-            .builder
-            .build_load(i32_type, string_len_ptr, "len")
-            .unwrap();
-        self.builder
-            .build_call(
-                printf,
+
+        self.module.add_function(
+            "stringConcat",
+            self.string_type.ptr_type(AddressSpace::default()).fn_type(
                 &[
-                    string_format.as_pointer_value().into(),
-                    string_len.into(),
-                    string_buffer.into(),
+                    self.string_type.ptr_type(AddressSpace::default()).into(),
+                    self.string_type.ptr_type(AddressSpace::default()).into(),
                 ],
-                "call",
-            )
-            .unwrap();
-        self.builder.build_return(None).unwrap();
-
-        // readInt
-        let read_int = self
-            .module
-            .add_function("readInt", i32_type.fn_type(&[], false), None);
-        let basic_block = self.context.append_basic_block(read_int, "entry");
-        self.builder.position_at_end(basic_block);
-        let number_format = self.builder.build_global_string_ptr("%d", "d").unwrap();
-        let buf = self.builder.build_alloca(i32_type, "buf").unwrap();
-        self.builder
-            .build_call(
-                scanf,
-                &[number_format.as_pointer_value().into(), buf.into()],
-                "call",
-            )
-            .unwrap();
-        let buf = self.builder.build_load(i32_type, buf, "buf").unwrap();
-        self.builder.build_return(Some(&buf)).unwrap();
-
-        // readString
-        let read_string = self.module.add_function(
-            "readString",
-            self.string_type
-                .ptr_type(AddressSpace::default())
-                .fn_type(&[], false),
-            None,
+                false,
+            ),
+            Some(Linkage::External),
         );
-        let basic_block = self.context.append_basic_block(read_string, "entry");
-        self.builder.position_at_end(basic_block);
-        let string_format = self
-            .builder
-            .build_global_string_ptr("%ms%n", "msn")
-            .unwrap();
-        let str_buf = self
-            .builder
-            .build_alloca(i8_type.ptr_type(AddressSpace::default()), "buf")
-            .unwrap();
-        let str_len = self.builder.build_alloca(i32_type, "len").unwrap();
-        self.builder
-            .build_call(
-                scanf,
-                &[
-                    string_format.as_pointer_value().into(),
-                    str_buf.into(),
-                    str_len.into(),
-                ],
-                "call",
-            )
-            .unwrap();
-        let str_buf = self
-            .builder
-            .build_load(i8_type.ptr_type(AddressSpace::default()), str_buf, "buf")
-            .unwrap();
-        let str_len = self.builder.build_load(i32_type, str_len, "len").unwrap();
-        let string_ptr = self
-            .builder
-            .build_malloc(self.string_type, "string")
-            .unwrap();
-        let string_buffer_ptr_ptr = self
-            .builder
-            .build_struct_gep(self.string_type, string_ptr, 0, "buf_ptr")
-            .unwrap();
-        let string_len_ptr = self
-            .builder
-            .build_struct_gep(self.string_type, string_ptr, 1, "len_ptr")
-            .unwrap();
-        let string_cap_ptr = self
-            .builder
-            .build_struct_gep(self.string_type, string_ptr, 2, "len_ptr")
-            .unwrap();
-        self.builder
-            .build_store(string_buffer_ptr_ptr, str_buf)
-            .unwrap();
-        self.builder.build_store(string_len_ptr, str_len).unwrap();
-        self.builder.build_store(string_cap_ptr, str_len).unwrap();
-        self.builder.build_return(Some(&string_ptr)).unwrap();
 
-        // error
-        let error = self
-            .module
-            .add_function("error", void.fn_type(&[], false), None);
-        let basic_block = self.context.append_basic_block(error, "entry");
-        self.builder.position_at_end(basic_block);
-        let error_format = self
-            .builder
-            .build_global_string_ptr("runtime error\n", "error")
-            .unwrap();
-        self.builder
-            .build_call(printf, &[error_format.as_pointer_value().into()], "call")
-            .unwrap();
-        self.builder
-            .build_call(exit, &[i32_type.const_int(1, false).into()], "call")
-            .unwrap();
-        self.builder.build_return(None).unwrap();
+        // TODO: boolean
+        self.module.add_function(
+            "stringEqual",
+            i32_type.fn_type(
+                &[
+                    self.string_type.ptr_type(AddressSpace::default()).into(),
+                    self.string_type.ptr_type(AddressSpace::default()).into(),
+                ],
+                false,
+            ),
+            Some(Linkage::External),
+        );
     }
 
     fn llvm_basic_type(&self, ty: &Type) -> BasicTypeEnum<'ctx> {
@@ -306,7 +141,10 @@ impl<'ctx> CodeGen<'ctx> {
                     Type::Bool => self.context.bool_type().fn_type(&args, false),
                     Type::Int => self.context.i32_type().fn_type(&args, false),
                     Type::Function(_, _) => panic!("function type is not a basic llvm type"),
-                    Type::LatteString => self.string_type.ptr_type(AddressSpace::default()).fn_type(&args, false),
+                    Type::LatteString => self
+                        .string_type
+                        .ptr_type(AddressSpace::default())
+                        .fn_type(&args, false),
                 }
             }
             _ => panic!("not a function type"),
@@ -381,40 +219,27 @@ impl<'ctx> CodeGen<'ctx> {
                     }
                     Value::String(s) => {
                         // TODO: fix leak
+                        let len = self.context.i32_type().const_int(s.len() as u64, false);
                         let const_str = self.context.const_string(s.as_bytes(), false);
-                        let len = self
-                            .context
-                            .i32_type()
-                            .const_int(s.len().try_into().unwrap(), false);
-                        let buf_ptr = self
+                        let str_ptr = self
                             .builder
-                            .build_array_malloc(self.context.i8_type(), len, "buf")
+                            .build_alloca(const_str.get_type(), "str_ptr")
                             .unwrap();
-                        self.builder.build_store(buf_ptr, const_str).unwrap();
-                        // let buf_ptr = self.context.i8_type().ptr_type(AddressSpace::default()).const_null();
+                        self.builder.build_store(str_ptr, const_str).unwrap();
+                        let str_ptr = self
+                            .builder
+                            .build_bitcast(
+                                str_ptr,
+                                self.context.i8_type().ptr_type(AddressSpace::default()),
+                                "str_ptr",
+                            )
+                            .unwrap();
+                        let new_string_fn = self.module.get_function("newString").unwrap();
                         let string_ptr = self
                             .builder
-                            .build_malloc(self.string_type, "string")
+                            .build_call(new_string_fn, &[str_ptr.into(), len.into()], "new_string")
                             .unwrap();
-                        // let string = self.string_type.const_named_struct(&[buf_ptr.into(), len.into(), len.into()]);
-                        let string_buffer_ptr_ptr = self
-                            .builder
-                            .build_struct_gep(self.string_type, string_ptr, 0, "buf_ptr")
-                            .unwrap();
-                        let string_len_ptr = self
-                            .builder
-                            .build_struct_gep(self.string_type, string_ptr, 1, "len_ptr")
-                            .unwrap();
-                        let string_cap_ptr = self
-                            .builder
-                            .build_struct_gep(self.string_type, string_ptr, 2, "len_ptr")
-                            .unwrap();
-                        self.builder
-                            .build_store(string_buffer_ptr_ptr, buf_ptr)
-                            .unwrap();
-                        self.builder.build_store(string_len_ptr, len).unwrap();
-                        self.builder.build_store(string_cap_ptr, len).unwrap();
-                        values.insert(id, string_ptr.into());
+                        values.insert(id, string_ptr.try_as_basic_value().unwrap_left());
                     }
                     Value::Bool(b) => {
                         values.insert(
@@ -445,120 +270,19 @@ impl<'ctx> CodeGen<'ctx> {
                             BinaryOpCode::Add => {
                                 if let Type::LatteString = value_types[&lhs] {
                                     let lhs = values[&lhs].into_pointer_value();
-                                    let lhs_buf_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, lhs, 0, "buf_ptr")
-                                        .unwrap();
-                                    let lhs_len_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, lhs, 1, "len_ptr")
-                                        .unwrap();
                                     let rhs = values[&rhs].into_pointer_value();
-                                    let rhs_buf_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, rhs, 0, "buf_ptr")
-                                        .unwrap();
-                                    let rhs_len_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, rhs, 1, "len_ptr")
-                                        .unwrap();
-                                    let lhs_buf = self
-                                        .builder
-                                        .build_load(
-                                            self.context.i8_type().ptr_type(AddressSpace::default()),
-                                            lhs_buf_ptr,
-                                            "buf",
-                                        )
-                                        .unwrap()
-                                        .into_pointer_value();
-                                    let lhs_len = self
-                                        .builder
-                                        .build_load(
-                                            self.context.i32_type(),
-                                            lhs_len_ptr,
-                                            "len",
-                                        )
-                                        .unwrap()
-                                        .into_int_value();
-                                    let rhs_buf = self
-                                        .builder
-                                        .build_load(
-                                            self.context.i8_type().ptr_type(AddressSpace::default()),
-                                            rhs_buf_ptr,
-                                            "buf",
-                                        )
-                                        .unwrap()
-                                        .into_pointer_value();
-                                    let rhs_len = self
-                                        .builder
-                                        .build_load(
-                                            self.context.i32_type(),
-                                            rhs_len_ptr,
-                                            "len",
-                                        )
-                                        .unwrap()
-                                        .into_int_value();
-                                    let new_len = self.builder.build_int_add(
-                                        lhs_len,
-                                        rhs_len,
-                                        "new_len",
-                                    ).unwrap();
-                                    let new_buf = self
-                                        .builder
-                                        .build_array_malloc(
-                                            self.context.i8_type(),
-                                            new_len,
-                                            "new_buf",
-                                        )
-                                        .unwrap();
+                                    let string_concat_fn =
+                                        self.module.get_function("stringConcat").unwrap();
                                     let new_string = self
                                         .builder
-                                        .build_malloc(self.string_type, "new_string")
-                                        .unwrap();
-                                    let memcpy =
-                                        self.module.get_function("memcpy").unwrap();
-                                    self.builder.build_call(
-                                        memcpy,
-                                        &[
-                                            new_buf.into(),
-                                            lhs_buf.into(),
-                                            lhs_len.into(),
-                                        ],
-                                        "memcpy",
-                                    ).unwrap();
-                                    let new_buf_second_part = unsafe {
-                                        self.builder.build_gep(
-                                            self.context.i8_type(),
-                                            new_buf,
-                                            &[lhs_len],
-                                            "new_buf_second_part",
+                                        .build_call(
+                                            string_concat_fn,
+                                            &[lhs.into(), rhs.into()],
+                                            "new_string",
                                         )
-                                    }.unwrap();
-                                    self.builder.build_call(
-                                        memcpy,
-                                        &[
-                                            new_buf_second_part.into(),
-                                            rhs_buf.into(),
-                                            rhs_len.into(),
-                                        ],
-                                        "memcpy",
-                                    ).unwrap();
-                                    let new_buf_ptr_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, new_string, 0, "buf_ptr")
                                         .unwrap();
-                                    let new_len_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, new_string, 1, "len_ptr")
-                                        .unwrap();
-                                    let new_cap_ptr = self
-                                        .builder
-                                        .build_struct_gep(self.string_type, new_string, 2, "cap_ptr")
-                                        .unwrap();
-                                    self.builder.build_store(new_buf_ptr_ptr, new_buf).unwrap();
-                                    self.builder.build_store(new_len_ptr, new_len).unwrap();
-                                    self.builder.build_store(new_cap_ptr, new_len).unwrap();
-                                    values.insert(id, new_string.into());
+                                    values
+                                        .insert(id, new_string.try_as_basic_value().unwrap_left());
                                 } else if let Type::Int = value_types[&lhs] {
                                     let lhs = values[&lhs].into_int_value();
                                     let rhs = values[&rhs].into_int_value();

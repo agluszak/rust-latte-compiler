@@ -22,15 +22,34 @@ fn read_latte_inputs(directory: &str) -> Vec<PathBuf> {
 fn main() {
     lalrpop::process_root().unwrap();
 
-    // Compile runtime.ll
-    let status = Command::new("llvm-as-16")
-        .arg("./lib/runtime.ll")
+    let clang = "clang";
+
+    // Compile runtime.c
+    let status = Command::new(clang)
+        .args([
+            "-emit-llvm",
+            "-c",
+            "./lib/runtime.c",
+            "-o",
+            "./lib/runtime.bc",
+        ])
         .status()
-        .unwrap()
-        ;
+        .unwrap();
 
     assert!(status.success());
 
+    let status = Command::new(clang)
+        .args([
+            "-emit-llvm",
+            "-S",
+            "./lib/runtime.c",
+            "-o",
+            "./lib/runtime.ll",
+        ])
+        .status()
+        .unwrap();
+
+    assert!(status.success());
 
     let mut test_file = File::create("./tests/generated_from_inputs.rs").unwrap();
 

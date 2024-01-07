@@ -5,17 +5,23 @@ description: "/* parity of positive integers by loop */\n\nint main () {\n  int 
 ; ModuleID = 'core016'
 source_filename = "core016"
 
-declare void @memcpy(ptr, ptr, i32)
+%string = type { i8*, i32 }
 
 declare void @printInt(i32)
 
-declare void @printString(ptr)
+declare void @printString(%string*)
 
 declare i32 @readInt()
 
-declare ptr @readString()
+declare %string* @readString()
 
 declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:

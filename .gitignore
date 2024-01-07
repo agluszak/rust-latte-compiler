@@ -2,3 +2,5 @@
 .idea
 junk
 *.bc
+lib/*.ll
+latc_llvm

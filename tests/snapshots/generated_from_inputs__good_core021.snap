@@ -5,17 +5,23 @@ description: "int main() {\n    if (true) {\n      printInt(1);\n      return 0;
 ; ModuleID = 'core021'
 source_filename = "core021"
 
-declare void @memcpy(ptr, ptr, i32)
+%string = type { i8*, i32 }
 
 declare void @printInt(i32)
 
-declare void @printString(ptr)
+declare void @printString(%string*)
 
 declare i32 @readInt()
 
-declare ptr @readString()
+declare %string* @readString()
 
 declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:

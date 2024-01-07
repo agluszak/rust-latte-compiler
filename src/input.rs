@@ -8,6 +8,8 @@ pub struct Input {
 
 // FIXME: huh, ariadne is weird
 impl Cache<String> for &Input {
+    type Storage = String;
+
     fn fetch(&mut self, _id: &String) -> Result<&Source, Box<dyn std::fmt::Debug + '_>> {
         Ok(&self.source)
     }
