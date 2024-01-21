@@ -66,6 +66,13 @@ pub enum TypedExprKind {
         target: Box<Spanned<TypedExpr>>,
         args: Vec<Spanned<TypedExpr>>,
     },
+    New {
+        ty: Spanned<Type>,
+    },
+    NewArray {
+        ty: Spanned<Type>,
+        size: Box<Spanned<TypedExpr>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

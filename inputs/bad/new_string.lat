@@ -1,0 +1,5 @@
+int main() {
+    int test = new int;
+
+    return 0;
+}

@@ -12,6 +12,11 @@ extern {
     type Error = Spanned<LexingError>;
 
     enum Token {
+        "new" => Token::New,
+        "int" => Token::Int,
+        "bool" => Token::Bool,
+        "string" => Token::String,
+        "void" => Token::Void,
         "true" => Token::True,
         "false" => Token::False,
         "num" => Token::Num(<i64>),
@@ -71,8 +76,22 @@ Spanned<Rule>: Spanned<Rule> =
     <l: @L> <rule: Rule> <r: @R> =>
         Spanned::new(l..r, rule);
 
+SimpleType: SimpleType = {
+    "int" => SimpleType::Int,
+    "bool" => SimpleType::Bool,
+    "string" => SimpleType::String,
+    "void" => SimpleType::Void,
+    <t:TypeName> => SimpleType::Custom(t),
+};
 
-Type: TypeName = <s:"ident"> => TypeName(s.to_string());
+TypeName: TypeName = {
+    <s:"ident"> => TypeName(s.to_string()),
+};
+
+Type: AstType = {
+    <t:SimpleType> => AstType::Simple(t),
+    <t:Spanned<Type>> "[" "]" => AstType::Array(Box::new(t)),
+};
 
 Ident: Ident = <s:"ident"> => Ident(s.to_string());
 
@@ -188,6 +207,8 @@ Literal: Literal = {
 Term: Expr = {
     <i:Ident> => Expr::Variable(i),
     <l:Literal> => Expr::Literal(l),
+    "new" <ty:Spanned<SimpleType>> "[" <size:Spanned<Expr>> "]" => Expr::NewArray { ty, size: Box::new(size) },
+    "new" <ty:Spanned<SimpleType>> => Expr::New { ty },
     <target:Spanned<Term>> "(" <args:Comma<Spanned<Expr>>> ")" => Expr::Application { target: Box::new(target), args },
     "(" <e:Expr> ")" => e,
 };

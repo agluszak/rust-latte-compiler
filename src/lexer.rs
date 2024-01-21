@@ -80,6 +80,16 @@ fn escape_str(s: &str) -> Result<String, LexingError> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Logos)]
 #[logos(error = LexingError)]
 pub enum Token {
+    #[token("new")]
+    New,
+    #[token("int")]
+    Int,
+    #[token("string")]
+    String,
+    #[token("bool")]
+    Bool,
+    #[token("void")]
+    Void,
     #[token("true")]
     True,
     #[token("false")]

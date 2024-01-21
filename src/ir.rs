@@ -79,6 +79,7 @@ pub enum Value {
     String(String),
     Bool(bool),
     Call(VariableId, Vec<ValueId>),
+    NewArray(Type, ValueId),
     Argument(u32),
     BinaryOp(BinaryOpCode, ValueId, ValueId),
     UnaryOp(UnaryOpCode, ValueId),
@@ -89,7 +90,20 @@ pub enum Value {
 
 impl Value {
     pub fn const_evaluable(&self) -> bool {
-        !matches!(self, Value::Call(_, _))
+        match self {
+            Value::Call(_, _) => false,
+            Value::NewArray(_, _) => false,
+            Value::Undef => false,
+            Value::Int(_) => true,
+            Value::String(_) => true,
+            Value::Bool(_) => true,
+            Value::Argument(_) => true,
+            Value::BinaryOp(_, _, _) => true,
+            Value::UnaryOp(_, _) => true,
+            Value::Phi(_) => true,
+            Value::Rerouted(_) => true,
+
+        }
     }
 }
 
@@ -788,6 +802,12 @@ impl FunctionIr {
                 let val = context.new_value(Value::Call(id, arg_values), expr.ty);
                 (val, current_block_id)
             }
+            TypedExprKind::New { .. } => todo!(),
+            TypedExprKind::NewArray { ty, size } => {
+                let (size, block_id) = Self::translate_expr(context, size.value, block_id);
+                let val = context.new_value(Value::NewArray(ty.value, size), expr.ty);
+                (val, block_id)
+            }
         };
         if let Value::Phi(phi) = &context.values[&value] {
             context.add_instruction(phi.block, value);
@@ -817,13 +837,17 @@ impl FunctionIr {
         final_continuation
     }
 
-    fn default_value(ty: &Type) -> Value {
+    fn default_value(  context: &mut IrContext, ty: &Type) -> Value {
         match ty {
             Type::Int => Value::Int(0),
             Type::Bool => Value::Bool(false),
             Type::LatteString => Value::String(String::new()),
             Type::Function(_, _) => panic!("Function cannot have a default value"),
             Type::Void => panic!("Void cannot have a default value"),
+            Type::Array(ty) => {
+                let zero = context.new_value(Value::Int(0), Type::Int);
+                Value::NewArray(*ty.clone(), zero)
+            },
         }
     }
 
@@ -848,7 +872,7 @@ impl FunctionIr {
                             context.write_variable(item.value.var_id, block_id, expr);
                             expr_blocks.push(block_id);
                         } else {
-                            let default = Self::default_value(&item.value.ty);
+                            let default = Self::default_value(context, &item.value.ty);
                             let default = context.new_value(default, item.value.ty);
                             context.add_instruction(block_id, default);
                             context.write_variable(item.value.var_id, block_id, default);

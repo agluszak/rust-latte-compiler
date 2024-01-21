@@ -36,6 +36,13 @@ pub enum Stmt {
 pub enum Expr {
     Variable(Ident),
     Literal(Literal),
+    New {
+        ty: Spanned<SimpleType>,
+    },
+    NewArray {
+        ty: Spanned<SimpleType>,
+        size: Box<Spanned<Expr>>,
+    },
     Binary {
         lhs: Box<Spanned<Expr>>,
         op: Spanned<BinaryOp>,
@@ -84,11 +91,11 @@ pub enum Literal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decl {
     Var {
-        ty: Spanned<TypeName>,
+        ty: Spanned<AstType>,
         items: Vec<Spanned<Item>>,
     },
     Fn {
-        return_type: Spanned<TypeName>,
+        return_type: Spanned<AstType>,
         name: Spanned<Ident>,
         args: Vec<Spanned<Arg>>,
         body: Spanned<Block>,
@@ -103,7 +110,7 @@ pub struct Item {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arg {
-    pub ty: Spanned<TypeName>,
+    pub ty: Spanned<AstType>,
     pub name: Spanned<Ident>,
 }
 
@@ -113,6 +120,48 @@ pub struct Ident(pub String); // TODO: interned
 impl Ident {
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AstType {
+    Simple(SimpleType),
+    Array(Box<Spanned<AstType>>),
+}
+
+impl Display for AstType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            AstType::Simple(ty) => write!(f, "{}", ty),
+            AstType::Array(ty) => write!(f, "{}[]", ty),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SimpleType {
+    Int,
+    Bool,
+    String,
+    Void,
+    Custom(TypeName)
+}
+
+impl Into<Spanned<AstType>> for Spanned<SimpleType> {
+    fn into(self) -> Spanned<AstType> {
+        Spanned::new(self.span, AstType::Simple(self.value))
+    }
+}
+
+impl Display for SimpleType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            SimpleType::Int => write!(f, "int"),
+            SimpleType::Bool => write!(f, "bool"),
+            SimpleType::String => write!(f, "string"),
+            SimpleType::Void => write!(f, "void"),
+            SimpleType::Custom(name) => write!(f, "{}", name),
+        }
     }
 }
 
@@ -229,6 +278,8 @@ impl Display for Expr {
                 }
                 write!(f, ")")
             }
+            Expr::New { ty } => write!(f, "new {ty}()"),
+            Expr::NewArray { ty, size } => write!(f, "new {ty}[{size}]"),
         }
     }
 }

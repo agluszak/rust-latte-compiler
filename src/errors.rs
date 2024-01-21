@@ -106,6 +106,12 @@ pub fn typechecking_reports(
                         .with_message("Invalid lvalue")
                         .with_color(color),
                 ),
+
+                TypecheckingErrorKind::NestedArray => report.with_label(
+                    Label::new((filename.to_string(), err.location))
+                        .with_message("Nested arrays are not supported")
+                        .with_color(color),
+                ),
             };
 
             report.finish()

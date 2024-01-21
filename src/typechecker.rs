@@ -8,6 +8,7 @@ use crate::{ast, lexer};
 use std::collections::{BTreeMap, BTreeSet};
 
 use std::fmt::{Display, Formatter};
+use crate::ast::{AstType, SimpleType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Environment {
@@ -152,6 +153,7 @@ pub enum Type {
     LatteString,
     Void,
     Function(Vec<Type>, Box<Type>),
+    Array(Box<Type>),
 }
 
 impl Display for Type {
@@ -171,6 +173,7 @@ impl Display for Type {
                 }
                 write!(f, ") -> {ret}")
             }
+            Type::Array(ty) => write!(f, "{}[]", ty),
         }
     }
 }
@@ -198,6 +201,7 @@ pub enum TypecheckingErrorKind {
     VoidReturn,
     NoMain,
     InvalidLvalue,
+    NestedArray,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -293,6 +297,13 @@ impl TypecheckingError {
     pub fn invalid_lvalue(location: lexer::Span) -> Self {
         Self {
             kind: TypecheckingErrorKind::InvalidLvalue,
+            location,
+        }
+    }
+
+    pub fn nested_array(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::NestedArray,
             location,
         }
     }
@@ -542,6 +553,26 @@ fn typecheck_expr(
                 ty,
             })
         }
+        ast::Expr::New { ty } => {
+            todo!()
+
+        },
+        ast::Expr::NewArray { ty, size } => {
+            let span = ty.span();
+            let ast_ty: Spanned<AstType> = ty.into();
+            let ty = resolve_type(&ast_ty, env)?;
+            let typed_size = typecheck_expr(size, env)?;
+            let size_ty = typed_size.value().ty.clone();
+            ensure_type(Type::Int, &size_ty, typed_size.span())?;
+
+            Ok(TypedExpr {
+                    expr: TypedExprKind::NewArray {
+                        ty: Spanned::new(span, ty.clone()),
+                        size: Box::new(typed_size),
+                    },
+                    ty: Type::Array(Box::new(ty)),
+                })
+        }
     }?;
     Ok(Spanned::new(span, typed_expr))
 }
@@ -562,20 +593,34 @@ fn typecheck_block(
 }
 
 fn resolve_type(
-    name: &impl SpannedAst<Inner = ast::TypeName>,
+    ty: &impl SpannedAst<Inner = ast::AstType>,
     _env: &Environment,
 ) -> Result<Type, TypecheckingError> {
-    // TODO: This will change once we have classes
-    // TODO: And also if we implement string interning
-    match name.value().0.as_str() {
-        "int" => Ok(Type::Int),
-        "boolean" => Ok(Type::Bool),
-        "string" => Ok(Type::LatteString),
-        "void" => Ok(Type::Void),
-        _ => Err(TypecheckingError::unknown_type(
-            name.value().clone(),
-            name.span(),
-        )),
+    match ty.value() {
+        AstType::Simple(st) => match st {
+            SimpleType::Int => Ok(Type::Int),
+            SimpleType::Bool => Ok(Type::Bool),
+            SimpleType::String => Ok(Type::LatteString),
+            SimpleType::Void => Ok(Type::Void),
+            // TODO: This will change once we have classes
+            // TODO: And also if we implement string interning
+            SimpleType::Custom(name) => Err(TypecheckingError::unknown_type(
+                ast::TypeName(name.0.clone()),
+                ty.span(),
+            )),
+        }
+        AstType::Array(t) => {
+            let span = ty.span();
+            let ty = resolve_type(t, _env)?;
+            if let Type::Array(_) = ty {
+                return Err(TypecheckingError::nested_array(span));
+            }
+
+            if ty == Type::Void {
+                return Err(TypecheckingError::void_variable(t.span()));
+            }
+            return Ok(Type::Array(Box::new(ty)));
+        }
     }
 }
 
@@ -586,7 +631,7 @@ struct FunctionHeader {
 }
 
 fn resolve_function_header(
-    return_type: &Spanned<ast::TypeName>,
+    return_type: &Spanned<ast::AstType>,
     args: &[Spanned<ast::Arg>],
     env: &Environment,
 ) -> Result<FunctionHeader, TypecheckingError> {

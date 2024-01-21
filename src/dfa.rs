@@ -144,6 +144,8 @@ fn data_flow_analysis(expr: &TypedExpr, env: &Environment) -> TriLogic {
             }
         }
         TypedExprKind::Application { .. } => TriLogic::Unknown,
+        TypedExprKind::New { .. } => TriLogic::Unknown,
+        TypedExprKind::NewArray { .. } => TriLogic::Unknown,
     }
 }
 
