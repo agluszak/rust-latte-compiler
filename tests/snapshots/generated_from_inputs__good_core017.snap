@@ -99,15 +99,15 @@ b12:                                              ; preds = %b11
   br label %b13
 
 b13:                                              ; preds = %b12, %b11
-  %v34 = phi i1 [ true, %b11 ], [ true, %b12 ]
-  br i1 %v34, label %b14, label %b15
+  %v39 = phi i1 [ true, %b11 ], [ true, %b12 ]
+  br i1 %v39, label %b14, label %b15
 
 b14:                                              ; preds = %b13
   br label %b15
 
 b15:                                              ; preds = %b14, %b13
-  %v36 = phi i1 [ %v34, %b13 ], [ true, %b14 ]
-  call void @printBool(i1 %v36)
+  %v41 = phi i1 [ %v39, %b13 ], [ true, %b14 ]
+  call void @printBool(i1 %v41)
   %implies = call i1 @implies(i1 false, i1 false)
   call void @printBool(i1 %implies)
   %implies3 = call i1 @implies(i1 false, i1 true)

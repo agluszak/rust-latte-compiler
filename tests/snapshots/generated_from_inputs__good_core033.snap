@@ -40,16 +40,16 @@ b3:                                               ; preds = %b2
   br i1 %0, label %b6, label %b5
 
 b4:                                               ; preds = %b6, %b2
-  %v7 = phi i1 [ %v3, %b2 ], [ %v6, %b6 ]
-  br i1 %v7, label %b7, label %b8
+  %v9 = phi i1 [ %v3, %b2 ], [ %v8, %b6 ]
+  br i1 %v9, label %b7, label %b8
 
 b5:                                               ; preds = %b3
-  %v4 = xor i1 %1, true
+  %v6 = xor i1 %1, true
   br label %b6
 
 b6:                                               ; preds = %b5, %b3
-  %v5 = phi i1 [ %0, %b3 ], [ %v4, %b5 ]
-  %v6 = xor i1 %v5, true
+  %v7 = phi i1 [ %0, %b3 ], [ %v6, %b5 ]
+  %v8 = xor i1 %v7, true
   br label %b4
 
 b7:                                               ; preds = %b4

@@ -38,19 +38,19 @@ b2:                                               ; preds = %b1, %b0
   br i1 %v6, label %b4, label %b3
 
 b3:                                               ; preds = %b2
-  %v8 = icmp slt i32 %0, 0
-  br i1 %v8, label %b5, label %b6
+  %v9 = icmp slt i32 %0, 0
+  br i1 %v9, label %b5, label %b6
 
 b4:                                               ; preds = %b6, %b2
-  %v12 = phi i1 [ %v6, %b2 ], [ %v11, %b6 ]
-  br i1 %v12, label %b7, label %b8
+  %v14 = phi i1 [ %v6, %b2 ], [ %v13, %b6 ]
+  br i1 %v14, label %b7, label %b8
 
 b5:                                               ; preds = %b3
-  %v10 = icmp slt i32 %1, 0
+  %v12 = icmp slt i32 %1, 0
   br label %b6
 
 b6:                                               ; preds = %b5, %b3
-  %v11 = phi i1 [ %v8, %b3 ], [ %v10, %b5 ]
+  %v13 = phi i1 [ %v9, %b3 ], [ %v12, %b5 ]
   br label %b4
 
 b7:                                               ; preds = %b4

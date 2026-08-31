@@ -52,8 +52,8 @@ b1:                                               ; preds = %b0
 
 b2:                                               ; preds = %b1, %b0
   %strings_equal11 = call i32 @stringEqual(%string* %new_string, %string* %new_string7)
-  %v6 = icmp eq i32 %strings_equal11, 0
-  br i1 %v6, label %b3, label %b4
+  %v8 = icmp eq i32 %strings_equal11, 0
+  br i1 %v8, label %b3, label %b4
 
 b3:                                               ; preds = %b2
   %str_ptr12 = alloca [13 x i8], align 1
@@ -66,4 +66,3 @@ b3:                                               ; preds = %b2
 b4:                                               ; preds = %b3, %b2
   ret i32 0
 }
-

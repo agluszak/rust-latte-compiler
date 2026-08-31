@@ -16,16 +16,6 @@ impl Display for BlockId {
     }
 }
 
-impl BlockId {
-    pub(crate) fn from_index(index: usize) -> Self {
-        Self(index as u32)
-    }
-
-    pub(crate) fn index(self) -> usize {
-        self.0 as usize
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct ValueId(u32);
@@ -33,12 +23,6 @@ pub struct ValueId(u32);
 impl Display for ValueId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "v{}", self.0)
-    }
-}
-
-impl ValueId {
-    pub(crate) fn index(self) -> usize {
-        self.0 as usize
     }
 }
 
@@ -152,11 +136,13 @@ pub enum Terminator {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct IrBuilder {
+    next_value_id: u32,
+    next_block_id: u32,
     current_definitions: BTreeMap<VariableId, BTreeMap<BlockId, ValueId>>,
     variable_types: BTreeMap<VariableId, Type>,
-    values: Vec<BuildingValueData>,
-    aliases: Vec<Option<ValueId>>,
-    blocks: Vec<BuildingBlock>,
+    values: BTreeMap<ValueId, BuildingValueData>,
+    aliases: BTreeMap<ValueId, ValueId>,
+    blocks: BTreeMap<BlockId, BuildingBlock>,
     incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, ValueId>>,
 }
 
@@ -170,60 +156,66 @@ pub struct BasicBlock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionIr {
     pub ty: Type,
-    pub values: Vec<ValueData>,
-    pub blocks: Vec<BasicBlock>,
+    pub values: BTreeMap<ValueId, ValueData>,
+    pub blocks: BTreeMap<BlockId, BasicBlock>,
 }
 
 impl IrBuilder {
     fn new() -> Self {
         Self {
+            next_value_id: 0,
+            next_block_id: 0,
             current_definitions: BTreeMap::new(),
             variable_types: BTreeMap::new(),
-            values: Vec::new(),
-            aliases: Vec::new(),
-            blocks: Vec::new(),
+            values: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+            blocks: BTreeMap::new(),
             incomplete_phis: BTreeMap::new(),
         }
     }
 
+    fn new_value_id(&mut self) -> ValueId {
+        let id = ValueId(self.next_value_id);
+        self.next_value_id += 1;
+        id
+    }
+
+    fn new_block_id(&mut self) -> BlockId {
+        let id = BlockId(self.next_block_id);
+        self.next_block_id += 1;
+        id
+    }
+
     fn allocate(&mut self, kind: BuildingValue, ty: Type) -> ValueId {
-        let id = ValueId(self.values.len() as u32);
-        self.values.push(BuildingValueData { ty, kind });
-        self.aliases.push(None);
+        let id = self.new_value_id();
+        self.values.insert(id, BuildingValueData { ty, kind });
         id
     }
 
     fn emit(&mut self, block: BlockId, kind: BuildingValue, ty: Type) -> ValueId {
-        assert!(self.blocks[block.index()].terminator.is_none());
+        assert!(self.blocks[&block].terminator.is_none());
         let id = self.allocate(kind, ty);
-        self.blocks[block.index()].instructions.push(id);
+        self.blocks.get_mut(&block).unwrap().instructions.push(id);
         id
     }
 
     fn new_phi(&mut self, block: BlockId, ty: Type) -> ValueId {
         let id = self.allocate(BuildingValue::Phi(BuildingPhi::new(block)), ty);
-        self.blocks[block.index()].phis.push(id);
+        self.blocks.get_mut(&block).unwrap().phis.push(id);
         id
     }
 
     fn resolve_alias(&mut self, id: ValueId) -> ValueId {
-        let Some(next) = self.aliases[id.index()] else {
+        let Some(&next) = self.aliases.get(&id) else {
             return id;
         };
         let resolved = self.resolve_alias(next);
-        self.aliases[id.index()] = Some(resolved);
+        self.aliases.insert(id, resolved);
         resolved
     }
 
-    fn resolve_alias_readonly(&self, mut id: ValueId) -> ValueId {
-        while let Some(next) = self.aliases[id.index()] {
-            id = next;
-        }
-        id
-    }
-
     fn finish_block(&mut self, block_id: BlockId, terminator: Terminator) {
-        assert!(self.blocks[block_id.index()].terminator.is_none());
+        assert!(self.blocks[&block_id].terminator.is_none());
         match &terminator {
             Terminator::Return(_) | Terminator::ReturnNoValue => {}
             Terminator::Branch(_, then, else_) => {
@@ -234,11 +226,11 @@ impl IrBuilder {
                 self.add_predecessor(*target, block_id);
             }
         }
-        self.blocks[block_id.index()].terminator = Some(terminator);
+        self.blocks.get_mut(&block_id).unwrap().terminator = Some(terminator);
     }
 
     fn add_predecessor(&mut self, block: BlockId, pred: BlockId) {
-        let block = &mut self.blocks[block.index()];
+        let block = self.blocks.get_mut(&block).unwrap();
         assert!(!block.sealed);
         if !block.predecessors.contains(&pred) {
             block.predecessors.push(pred);
@@ -246,20 +238,23 @@ impl IrBuilder {
     }
 
     fn new_block(&mut self) -> BlockId {
-        let id = BlockId(self.blocks.len() as u32);
-        self.blocks.push(BuildingBlock {
-            phis: Vec::new(),
-            instructions: Vec::new(),
-            terminator: None,
-            predecessors: Vec::new(),
-            sealed: false,
-        });
+        let id = self.new_block_id();
+        self.blocks.insert(
+            id,
+            BuildingBlock {
+                phis: Vec::new(),
+                instructions: Vec::new(),
+                terminator: None,
+                predecessors: Vec::new(),
+                sealed: false,
+            },
+        );
         id
     }
 
     fn write_variable(&mut self, variable: VariableId, block: BlockId, value: ValueId) {
         let value = self.resolve_alias(value);
-        let value_ty = self.values[value.index()].ty.clone();
+        let value_ty = self.values[&value].ty.clone();
         self.variable_types.insert(variable, value_ty);
         self.current_definitions
             .entry(variable)
@@ -276,8 +271,8 @@ impl IrBuilder {
         {
             self.resolve_alias(value)
         } else {
-            let sealed = self.blocks[block_id.index()].sealed;
-            let predecessors = self.blocks[block_id.index()].predecessors.clone();
+            let sealed = self.blocks[&block_id].sealed;
+            let predecessors = self.blocks[&block_id].predecessors.clone();
             let ty = self
                 .variable_types
                 .get(&variable)
@@ -309,7 +304,7 @@ impl IrBuilder {
     fn add_phi_operands(&mut self, variable: VariableId, phi_id: ValueId) -> ValueId {
         let phi_id = self.resolve_alias(phi_id);
         let phi_block = self.get_phi(phi_id).unwrap().block;
-        for pred in self.blocks[phi_block.index()].predecessors.clone() {
+        for pred in self.blocks[&phi_block].predecessors.clone() {
             let pred_val = self.read_variable(variable, pred);
             self.add_phi_incoming(phi_id, pred, pred_val);
         }
@@ -331,15 +326,15 @@ impl IrBuilder {
     }
 
     fn get_phi(&mut self, phi_id: ValueId) -> Option<&mut BuildingPhi> {
-        match &mut self.values[phi_id.index()].kind {
+        match &mut self.values.get_mut(&phi_id)?.kind {
             BuildingValue::Phi(phi) => Some(phi),
             _ => None,
         }
     }
 
     fn seal_block(&mut self, block_id: BlockId) {
-        assert!(!self.blocks[block_id.index()].sealed);
-        self.blocks[block_id.index()].sealed = true;
+        assert!(!self.blocks[&block_id].sealed);
+        self.blocks.get_mut(&block_id).unwrap().sealed = true;
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
             for (variable, phi_id) in incomplete_phis {
                 self.add_phi_operands(variable, phi_id);
@@ -370,23 +365,25 @@ impl IrBuilder {
         }
         if same.is_none() {
             // This phi is unreachable or in the entry block
-            let ty = self.values[phi_id.index()].ty.clone();
+            let ty = self.values[&phi_id].ty.clone();
             let undef = self.allocate(BuildingValue::Undef, ty);
-            self.blocks[phi.block.index()].instructions.push(undef);
+            self.blocks
+                .get_mut(&phi.block)
+                .unwrap()
+                .instructions
+                .push(undef);
             same = Some(undef);
         }
         // Remember all users except the phi itself
         phi.users.retain(|&user| user != phi_id);
         let replacement = self.resolve_alias(same.unwrap());
-        self.aliases[phi_id.index()] = Some(replacement);
+        self.aliases.insert(phi_id, replacement);
 
         // Transfer the users to the replacement phi, so that if the
         // replacement itself becomes trivial later, these users are
         // reconsidered as well.
-        if let Some(BuildingValue::Phi(replacement_phi)) = self
-            .values
-            .get_mut(replacement.index())
-            .map(|data| &mut data.kind)
+        if let Some(BuildingValue::Phi(replacement_phi)) =
+            self.values.get_mut(&replacement).map(|data| &mut data.kind)
         {
             for user in &phi.users {
                 replacement_phi.add_user(*user);
@@ -396,7 +393,7 @@ impl IrBuilder {
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
             let user = self.resolve_alias(user);
-            if matches!(self.values[user.index()].kind, BuildingValue::Phi(_)) {
+            if matches!(self.values[&user].kind, BuildingValue::Phi(_)) {
                 self.try_remove_trivial_phi(user);
             }
         }
@@ -405,88 +402,94 @@ impl IrBuilder {
 
     fn finish(mut self, ty: Type) -> FunctionIr {
         assert!(self.incomplete_phis.is_empty());
-        assert!(self.blocks.iter().all(|block| block.sealed));
-        assert!(self.blocks.iter().all(|block| block.terminator.is_some()));
+        assert!(self.blocks.values().all(|block| block.sealed));
+        assert!(self.blocks.values().all(|block| block.terminator.is_some()));
 
-        for id in 0..self.values.len() {
-            self.resolve_alias(ValueId(id as u32));
+        // Path-compress every alias so surviving operands resolve in one step.
+        let aliased: Vec<ValueId> = self.aliases.keys().copied().collect();
+        for id in aliased {
+            self.resolve_alias(id);
         }
 
-        let mut canonical_ids = vec![None; self.values.len()];
-        let mut next_id = 0;
-        for (old_id, final_id) in canonical_ids.iter_mut().enumerate() {
-            if self.aliases[old_id].is_none() {
-                *final_id = Some(ValueId(next_id));
-                next_id += 1;
+        let aliases = std::mem::take(&mut self.aliases);
+        let remap = |id: ValueId| {
+            let mut id = id;
+            while let Some(&next) = aliases.get(&id) {
+                id = next;
             }
-        }
-        let remapped_ids: Vec<ValueId> = (0..self.values.len())
-            .map(|id| {
-                let canonical = self.resolve_alias_readonly(ValueId(id as u32));
-                canonical_ids[canonical.index()].expect("canonical value was discarded")
+            id
+        };
+
+        let building_values = std::mem::take(&mut self.values);
+        let values = building_values
+            .into_iter()
+            .filter_map(|(id, data)| {
+                if aliases.contains_key(&id) {
+                    // The value was replaced by another one; the finalized IR
+                    // simply does not contain it anymore.
+                    return None;
+                }
+                Some((
+                    id,
+                    ValueData {
+                        ty: data.ty,
+                        kind: finalize_value(data.kind, &remap),
+                    },
+                ))
             })
             .collect();
-        let remap = |id: ValueId| remapped_ids[id.index()];
 
-        let values = self
-            .values
+        let building_blocks = std::mem::take(&mut self.blocks);
+        let blocks = building_blocks
             .into_iter()
-            .enumerate()
-            .filter_map(|(old_id, data)| {
-                canonical_ids[old_id]?;
-                let kind = match data.kind {
-                    BuildingValue::Int(value) => Value::Int(value),
-                    BuildingValue::String(value) => Value::String(value),
-                    BuildingValue::Bool(value) => Value::Bool(value),
-                    BuildingValue::Argument(index) => Value::Argument(index),
-                    BuildingValue::Call(function, args) => {
-                        Value::Call(function, args.into_iter().map(remap).collect())
-                    }
-                    BuildingValue::BinaryOp(op, lhs, rhs) => {
-                        Value::BinaryOp(op, remap(lhs), remap(rhs))
-                    }
-                    BuildingValue::UnaryOp(op, operand) => Value::UnaryOp(op, remap(operand)),
-                    BuildingValue::Phi(phi) => Value::Phi(Phi {
-                        incoming: phi
-                            .incoming
-                            .into_iter()
-                            .map(|(block, value)| (block, remap(value)))
-                            .collect(),
-                    }),
-                    BuildingValue::Undef => Value::Undef,
+            .map(|(id, block)| {
+                let operands = |ids: Vec<ValueId>| -> Vec<ValueId> {
+                    ids.into_iter()
+                        .filter(|id| !aliases.contains_key(id))
+                        .map(remap)
+                        .collect()
                 };
-                Some(ValueData { ty: data.ty, kind })
-            })
-            .collect();
-
-        let blocks = self
-            .blocks
-            .into_iter()
-            .map(|block| BasicBlock {
-                phis: block
-                    .phis
-                    .into_iter()
-                    .filter(|id| self.aliases[id.index()].is_none())
-                    .map(remap)
-                    .collect(),
-                instructions: block
-                    .instructions
-                    .into_iter()
-                    .filter(|id| self.aliases[id.index()].is_none())
-                    .map(remap)
-                    .collect(),
-                terminator: match block.terminator.unwrap() {
-                    Terminator::Return(value) => Terminator::Return(remap(value)),
-                    Terminator::ReturnNoValue => Terminator::ReturnNoValue,
-                    Terminator::Branch(condition, then_block, else_block) => {
-                        Terminator::Branch(remap(condition), then_block, else_block)
-                    }
-                    Terminator::Jump(target) => Terminator::Jump(target),
-                },
+                (
+                    id,
+                    BasicBlock {
+                        phis: operands(block.phis),
+                        instructions: operands(block.instructions),
+                        terminator: match block.terminator.unwrap() {
+                            Terminator::Return(value) => Terminator::Return(remap(value)),
+                            Terminator::ReturnNoValue => Terminator::ReturnNoValue,
+                            Terminator::Branch(condition, then_block, else_block) => {
+                                Terminator::Branch(remap(condition), then_block, else_block)
+                            }
+                            Terminator::Jump(target) => Terminator::Jump(target),
+                        },
+                    },
+                )
             })
             .collect();
 
         FunctionIr { ty, values, blocks }
+    }
+}
+
+fn finalize_value(kind: BuildingValue, remap: &impl Fn(ValueId) -> ValueId) -> Value {
+    match kind {
+        BuildingValue::Int(value) => Value::Int(value),
+        BuildingValue::String(value) => Value::String(value),
+        BuildingValue::Bool(value) => Value::Bool(value),
+        BuildingValue::Argument(index) => Value::Argument(index),
+        BuildingValue::Call(function, args) => {
+            Value::Call(function, args.into_iter().map(remap).collect())
+        }
+        BuildingValue::BinaryOp(op, lhs, rhs) => Value::BinaryOp(op, remap(lhs), remap(rhs)),
+        BuildingValue::UnaryOp(op, operand) => Value::UnaryOp(op, remap(operand)),
+        BuildingValue::Phi(phi) => Value::Phi(Phi {
+            incoming: phi
+                .incoming
+                .into_iter()
+                .map(|(block, value)| (block, remap(value)))
+                .collect(),
+        }),
+        BuildingValue::Undef => Value::Undef,
     }
 }
 
@@ -537,22 +540,13 @@ impl Ir {
         let mut result = String::new();
         for (name, function) in &self.functions {
             result.push_str(&format!("Function {}\n", name));
-            for (index, block) in function.blocks.iter().enumerate() {
-                let id = BlockId(index as u32);
+            for (id, block) in &function.blocks {
                 result.push_str(&format!("{}:\n", id));
                 for phi in &block.phis {
-                    result.push_str(&format!(
-                        "  {:?}: {:?}\n",
-                        phi,
-                        function.values[phi.index()]
-                    ));
+                    result.push_str(&format!("  {:?}: {:?}\n", phi, function.values[phi]));
                 }
                 for instr in &block.instructions {
-                    result.push_str(&format!(
-                        "  {:?}: {:?}\n",
-                        instr,
-                        function.values[instr.index()]
-                    ));
+                    result.push_str(&format!("  {:?}: {:?}\n", instr, function.values[instr]));
                 }
                 result.push_str(&format!("  {:?}\n", block.terminator));
             }
@@ -747,7 +741,7 @@ impl FunctionIr {
             } => {
                 let (cond, block_id) = Self::translate_expr(context, cond.value, block_id);
                 let cond = context.resolve_alias(cond);
-                if let BuildingValue::Bool(constant) = &context.values[cond.index()].kind {
+                if let BuildingValue::Bool(constant) = &context.values[&cond].kind {
                     return if *constant {
                         Self::translate_stmt(context, then.value, block_id)
                     } else if let Some(otherwise) = otherwise {
@@ -807,7 +801,7 @@ impl FunctionIr {
                 let (cond, cond_block) = Self::translate_expr(context, cond.value, cond_block);
 
                 let cond = context.resolve_alias(cond);
-                if let BuildingValue::Bool(constant) = &context.values[cond.index()].kind {
+                if let BuildingValue::Bool(constant) = &context.values[&cond].kind {
                     return if !*constant {
                         let after_block = context.new_block();
                         context.finish_block(cond_block, Terminator::Jump(after_block));
@@ -888,8 +882,8 @@ mod tests {
     use std::collections::BTreeSet;
 
     fn assert_operands_are_valid(ir: &FunctionIr) {
-        let valid = |id: ValueId| id.index() < ir.values.len();
-        for value in &ir.values {
+        let valid = |id: ValueId| ir.values.contains_key(&id);
+        for value in ir.values.values() {
             match &value.kind {
                 Value::Call(_, args) => assert!(args.iter().copied().all(valid)),
                 Value::BinaryOp(_, lhs, rhs) => assert!(valid(*lhs) && valid(*rhs)),
@@ -906,56 +900,54 @@ mod tests {
         }
 
         // Predecessor sets, derived from terminators only.
-        let mut predecessors: Vec<BTreeSet<BlockId>> = vec![BTreeSet::new(); ir.blocks.len()];
-        for (index, block) in ir.blocks.iter().enumerate() {
-            let from = BlockId(index as u32);
+        let mut predecessors: BTreeMap<BlockId, BTreeSet<BlockId>> =
+            ir.blocks.keys().map(|id| (*id, BTreeSet::new())).collect();
+        for (id, block) in &ir.blocks {
             match block.terminator {
                 Terminator::Return(_) | Terminator::ReturnNoValue => {}
                 Terminator::Branch(_, then_block, else_block) => {
-                    predecessors[then_block.index()].insert(from);
-                    predecessors[else_block.index()].insert(from);
+                    predecessors.entry(then_block).or_default().insert(*id);
+                    predecessors.entry(else_block).or_default().insert(*id);
                 }
                 Terminator::Jump(target) => {
-                    predecessors[target.index()].insert(from);
+                    predecessors.entry(target).or_default().insert(*id);
                 }
             }
         }
 
-        for (index, block) in ir.blocks.iter().enumerate() {
-            for &id in &block.phis {
-                assert!(valid(id));
+        for (id, block) in &ir.blocks {
+            for &phi in &block.phis {
+                assert!(valid(phi));
                 assert!(
-                    matches!(ir.values[id.index()].kind, Value::Phi(_)),
+                    matches!(ir.values[&phi].kind, Value::Phi(_)),
                     "block.phis must only contain phi values"
                 );
             }
-            for &id in &block.instructions {
-                assert!(valid(id));
+            for &instr in &block.instructions {
+                assert!(valid(instr));
                 assert!(
-                    !matches!(ir.values[id.index()].kind, Value::Phi(_)),
+                    !matches!(ir.values[&instr].kind, Value::Phi(_)),
                     "phi {:?} must live in block.phis, not instructions",
-                    id
+                    instr
                 );
             }
 
             // Every phi's incoming edges must match the block's real CFG
             // predecessors exactly: one incoming edge per predecessor.
             for &phi in &block.phis {
-                let Value::Phi(phi_data) = &ir.values[phi.index()].kind else {
+                let Value::Phi(phi_data) = &ir.values[&phi].kind else {
                     unreachable!()
                 };
                 let incoming_blocks: BTreeSet<BlockId> =
                     phi_data.incoming.iter().map(|(block, _)| *block).collect();
                 assert_eq!(
-                    incoming_blocks,
-                    predecessors[index],
+                    incoming_blocks, predecessors[id],
                     "phi {:?} incoming edges do not match CFG predecessors of {}",
-                    phi,
-                    BlockId(index as u32)
+                    phi, id
                 );
                 assert_eq!(
                     phi_data.incoming.len(),
-                    predecessors[index].len(),
+                    predecessors[id].len(),
                     "phi {:?} has duplicate incoming edges for one predecessor",
                     phi
                 );
@@ -970,8 +962,17 @@ mod tests {
         }
     }
 
+    fn assert_values_are_single_definitions(ir: &FunctionIr) {
+        let mut seen = BTreeSet::new();
+        for block in ir.blocks.values() {
+            for &id in block.phis.iter().chain(block.instructions.iter()) {
+                assert!(seen.insert(id), "value {:?} defined twice", id);
+            }
+        }
+    }
+
     #[test]
-    fn recursive_trivial_phis_are_removed_and_values_are_compacted() {
+    fn recursive_trivial_phis_are_removed_and_values_are_canonicalized() {
         let mut builder = IrBuilder::new();
         let entry = builder.new_block();
         let left = builder.new_block();
@@ -1002,26 +1003,11 @@ mod tests {
         assert!(
             ir.values
                 .iter()
-                .all(|value| !matches!(value.kind, Value::Phi(_)))
+                .all(|(_, value)| !matches!(value.kind, Value::Phi(_)))
         );
         assert_eq!(ir.values.len(), 2);
         assert_operands_are_valid(&ir);
-        assert_values_are_dense(&ir);
-    }
-
-    fn assert_values_are_dense(ir: &FunctionIr) {
-        let mut seen = vec![false; ir.values.len()];
-        for block in &ir.blocks {
-            for &id in block.phis.iter().chain(block.instructions.iter()) {
-                assert!(!seen[id.index()], "value {:?} defined twice", id);
-                seen[id.index()] = true;
-            }
-        }
-        assert!(
-            seen.iter().all(|&seen| seen),
-            "value ids are not dense: {:?}",
-            seen
-        );
+        assert_values_are_single_definitions(&ir);
     }
 
     #[test]
@@ -1066,11 +1052,11 @@ mod tests {
         assert!(
             ir.values
                 .iter()
-                .all(|value| !matches!(value.kind, Value::Phi(_))),
+                .all(|(_, value)| !matches!(value.kind, Value::Phi(_))),
             "a trivial phi survived finalization"
         );
         assert_operands_are_valid(&ir);
-        assert_values_are_dense(&ir);
+        assert_values_are_single_definitions(&ir);
     }
 
     #[test]
@@ -1109,7 +1095,7 @@ mod tests {
         let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
         let phis: Vec<_> = ir
             .values
-            .iter()
+            .values()
             .filter_map(|value| match &value.kind {
                 Value::Phi(phi) => Some(phi),
                 _ => None,
@@ -1118,16 +1104,16 @@ mod tests {
         assert_eq!(phis.len(), 1);
         assert_eq!(phis[0].incoming.len(), 2);
         assert_operands_are_valid(&ir);
-        assert_values_are_dense(&ir);
+        assert_values_are_single_definitions(&ir);
 
         // Phis are structural: they live in block.phis, never in instructions.
-        let header_block = &ir.blocks[header.index()];
+        let header_block = &ir.blocks[&header];
         assert_eq!(header_block.phis.len(), 1);
         assert!(
             header_block
                 .instructions
                 .iter()
-                .all(|&id| !matches!(ir.values[id.index()].kind, Value::Phi(_)))
+                .all(|&id| !matches!(ir.values[&id].kind, Value::Phi(_)))
         );
     }
 }

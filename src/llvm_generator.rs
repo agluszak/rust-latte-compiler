@@ -1,4 +1,4 @@
-use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Terminator, UnaryOpCode, Value};
+use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Terminator, UnaryOpCode, Value, ValueId};
 use crate::typechecker::{ReadyEnvironment, Type};
 use inkwell::AddressSpace;
 use inkwell::basic_block::BasicBlock;
@@ -7,6 +7,7 @@ use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicTypeEnum, FunctionType, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum, PhiValue};
+use std::collections::BTreeMap;
 
 pub struct CodeGen<'ctx> {
     context: &'ctx Context,
@@ -168,39 +169,45 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn generate(&self, name: &str, ir: &FunctionIr) {
         let function = self.module.get_function(name).unwrap();
-        let basic_blocks: Vec<BasicBlock> = (0..ir.blocks.len())
-            .map(|index| {
-                let name = BlockId::from_index(index);
-                self.context.append_basic_block(function, &name.to_string())
+        let basic_blocks: BTreeMap<BlockId, BasicBlock> = ir
+            .blocks
+            .keys()
+            .map(|id| {
+                (
+                    *id,
+                    self.context.append_basic_block(function, &id.to_string()),
+                )
             })
             .collect();
-        let mut values: Vec<Option<BasicValueEnum>> = vec![None; ir.values.len()];
-        let mut phis: Vec<Option<PhiValue>> = vec![None; ir.values.len()];
-        for (block_index, block) in ir.blocks.iter().enumerate() {
-            let this_block = basic_blocks[block_index];
+        let mut values: BTreeMap<ValueId, BasicValueEnum> = BTreeMap::new();
+        let mut phis: BTreeMap<ValueId, PhiValue> = BTreeMap::new();
+        for (&id, block) in &ir.blocks {
+            let this_block = basic_blocks[&id];
             self.builder.position_at_end(this_block);
             // Phis come first, so their values are available to all instructions.
-            for &id in &block.phis {
-                let value_data = &ir.values[id.index()];
+            for &value in &block.phis {
+                let value_data = &ir.values[&value];
                 debug_assert!(matches!(value_data.kind, Value::Phi(_)));
                 // Incoming values will be set later
                 let llvm_phi = self
                     .builder
-                    .build_phi(self.llvm_basic_type(&value_data.ty), &id.to_string())
+                    .build_phi(self.llvm_basic_type(&value_data.ty), &value.to_string())
                     .unwrap();
-                phis[id.index()] = Some(llvm_phi);
+                phis.insert(value, llvm_phi);
 
-                values[id.index()] = Some(llvm_phi.as_basic_value());
+                values.insert(value, llvm_phi.as_basic_value());
             }
 
             // Then the rest
-            for &id in &block.instructions {
-                let value_data = &ir.values[id.index()];
-                let value = &value_data.kind;
-                match value {
+            for &value in &block.instructions {
+                let value_data = &ir.values[&value];
+                let value_kind = &value_data.kind;
+                match value_kind {
                     Value::Int(i) => {
-                        values[id.index()] =
-                            Some(self.context.i32_type().const_int(*i as u64, true).into());
+                        values.insert(
+                            value,
+                            self.context.i32_type().const_int(*i as u64, true).into(),
+                        );
                     }
                     Value::String(s) => {
                         // TODO: fix leak
@@ -224,35 +231,37 @@ impl<'ctx> CodeGen<'ctx> {
                             .builder
                             .build_call(new_string_fn, &[str_ptr.into(), len.into()], "new_string")
                             .unwrap();
-                        values[id.index()] = Some(string_ptr.try_as_basic_value().unwrap_basic());
+                        values.insert(value, string_ptr.try_as_basic_value().unwrap_basic());
                     }
                     Value::Bool(b) => {
-                        values[id.index()] =
-                            Some(self.context.bool_type().const_int(*b as u64, false).into());
+                        values.insert(
+                            value,
+                            self.context.bool_type().const_int(*b as u64, false).into(),
+                        );
                     }
                     Value::Call(var_id, args) => {
                         let name = &self.env.names[var_id];
                         let function = self.module.get_function(name).unwrap();
                         let args = args
                             .iter()
-                            .map(|arg| values[arg.index()].unwrap().into())
+                            .map(|arg| values[arg].into())
                             .collect::<Vec<_>>();
-                        let value = self
+                        let call = self
                             .builder
                             .build_call(function, args.as_slice(), name)
                             .unwrap();
-                        if let Some(value) = value.try_as_basic_value().basic() {
-                            values[id.index()] = Some(value);
+                        if let Some(result) = call.try_as_basic_value().basic() {
+                            values.insert(value, result);
                         }
                     }
                     Value::Argument(i) => {
-                        values[id.index()] = Some(function.get_nth_param(*i).unwrap());
+                        values.insert(value, function.get_nth_param(*i).unwrap());
                     }
                     Value::BinaryOp(op, lhs, rhs) => match op {
                         BinaryOpCode::Add => {
-                            if let Type::LatteString = ir.values[lhs.index()].ty {
-                                let lhs = values[lhs.index()].unwrap().into_pointer_value();
-                                let rhs = values[rhs.index()].unwrap().into_pointer_value();
+                            if let Type::LatteString = ir.values[lhs].ty {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
                                 let string_concat_fn =
                                     self.module.get_function("stringConcat").unwrap();
                                 let new_string = self
@@ -263,14 +272,15 @@ impl<'ctx> CodeGen<'ctx> {
                                         "new_string",
                                     )
                                     .unwrap();
-                                values[id.index()] =
-                                    Some(new_string.try_as_basic_value().unwrap_basic());
-                            } else if let Type::Int = ir.values[lhs.index()].ty {
-                                let lhs = values[lhs.index()].unwrap().into_int_value();
-                                let rhs = values[rhs.index()].unwrap().into_int_value();
-                                values[id.index()] = Some(
+                                values
+                                    .insert(value, new_string.try_as_basic_value().unwrap_basic());
+                            } else if let Type::Int = ir.values[lhs].ty {
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
+                                values.insert(
+                                    value,
                                     self.builder
-                                        .build_int_add(lhs, rhs, &id.to_string())
+                                        .build_int_add(lhs, rhs, &value.to_string())
                                         .unwrap()
                                         .into(),
                                 );
@@ -279,109 +289,117 @@ impl<'ctx> CodeGen<'ctx> {
                             }
                         }
                         BinaryOpCode::Sub => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
-                                    .build_int_sub(lhs, rhs, &id.to_string())
+                                    .build_int_sub(lhs, rhs, &value.to_string())
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Mul => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
-                                    .build_int_mul(lhs, rhs, &id.to_string())
+                                    .build_int_mul(lhs, rhs, &value.to_string())
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Div => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
-                                    .build_int_signed_div(lhs, rhs, &id.to_string())
+                                    .build_int_signed_div(lhs, rhs, &value.to_string())
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Mod => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
-                                    .build_int_signed_rem(lhs, rhs, &id.to_string())
+                                    .build_int_signed_rem(lhs, rhs, &value.to_string())
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Gt => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
                                     .build_int_compare(
                                         inkwell::IntPredicate::SGT,
                                         lhs,
                                         rhs,
-                                        &id.to_string(),
+                                        &value.to_string(),
                                     )
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Lt => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
                                     .build_int_compare(
                                         inkwell::IntPredicate::SLT,
                                         lhs,
                                         rhs,
-                                        &id.to_string(),
+                                        &value.to_string(),
                                     )
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Gte => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
                                     .build_int_compare(
                                         inkwell::IntPredicate::SGE,
                                         lhs,
                                         rhs,
-                                        &id.to_string(),
+                                        &value.to_string(),
                                     )
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Lte => {
-                            let lhs = values[lhs.index()].unwrap().into_int_value();
-                            let rhs = values[rhs.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let lhs = values[lhs].into_int_value();
+                            let rhs = values[rhs].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
                                     .build_int_compare(
                                         inkwell::IntPredicate::SLE,
                                         lhs,
                                         rhs,
-                                        &id.to_string(),
+                                        &value.to_string(),
                                     )
                                     .unwrap()
                                     .into(),
                             );
                         }
                         BinaryOpCode::Eq => {
-                            if let Type::LatteString = ir.values[lhs.index()].ty {
-                                let lhs = values[lhs.index()].unwrap().into_pointer_value();
-                                let rhs = values[rhs.index()].unwrap().into_pointer_value();
+                            if let Type::LatteString = ir.values[lhs].ty {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
                                 let string_equal = self
                                     .builder
                                     .build_call(
@@ -393,27 +411,29 @@ impl<'ctx> CodeGen<'ctx> {
                                     .try_as_basic_value()
                                     .unwrap_basic()
                                     .into_int_value();
-                                values[id.index()] = Some(
+                                values.insert(
+                                    value,
                                     self.builder
                                         .build_int_compare(
                                             inkwell::IntPredicate::NE,
                                             string_equal,
                                             string_equal.get_type().const_zero(),
-                                            &id.to_string(),
+                                            &value.to_string(),
                                         )
                                         .unwrap()
                                         .into(),
                                 );
                             } else {
-                                let lhs = values[lhs.index()].unwrap().into_int_value();
-                                let rhs = values[rhs.index()].unwrap().into_int_value();
-                                values[id.index()] = Some(
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
+                                values.insert(
+                                    value,
                                     self.builder
                                         .build_int_compare(
                                             inkwell::IntPredicate::EQ,
                                             lhs,
                                             rhs,
-                                            &id.to_string(),
+                                            &value.to_string(),
                                         )
                                         .unwrap()
                                         .into(),
@@ -421,9 +441,9 @@ impl<'ctx> CodeGen<'ctx> {
                             }
                         }
                         BinaryOpCode::Neq => {
-                            if let Type::LatteString = ir.values[lhs.index()].ty {
-                                let lhs = values[lhs.index()].unwrap().into_pointer_value();
-                                let rhs = values[rhs.index()].unwrap().into_pointer_value();
+                            if let Type::LatteString = ir.values[lhs].ty {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
                                 let string_equal = self
                                     .builder
                                     .build_call(
@@ -435,27 +455,29 @@ impl<'ctx> CodeGen<'ctx> {
                                     .try_as_basic_value()
                                     .unwrap_basic()
                                     .into_int_value();
-                                values[id.index()] = Some(
+                                values.insert(
+                                    value,
                                     self.builder
                                         .build_int_compare(
                                             inkwell::IntPredicate::EQ,
                                             string_equal,
                                             string_equal.get_type().const_zero(),
-                                            &id.to_string(),
+                                            &value.to_string(),
                                         )
                                         .unwrap()
                                         .into(),
                                 );
                             } else {
-                                let lhs = values[lhs.index()].unwrap().into_int_value();
-                                let rhs = values[rhs.index()].unwrap().into_int_value();
-                                values[id.index()] = Some(
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
+                                values.insert(
+                                    value,
                                     self.builder
                                         .build_int_compare(
                                             inkwell::IntPredicate::NE,
                                             lhs,
                                             rhs,
-                                            &id.to_string(),
+                                            &value.to_string(),
                                         )
                                         .unwrap()
                                         .into(),
@@ -463,64 +485,70 @@ impl<'ctx> CodeGen<'ctx> {
                             }
                         }
                     },
-                    Value::UnaryOp(op, val) => match op {
+                    Value::UnaryOp(op, operand) => match op {
                         UnaryOpCode::Neg => {
-                            let val = values[val.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
+                            let operand = values[operand].into_int_value();
+                            values.insert(
+                                value,
                                 self.builder
-                                    .build_int_neg(val, &id.to_string())
+                                    .build_int_neg(operand, &value.to_string())
                                     .unwrap()
                                     .into(),
                             );
                         }
                         UnaryOpCode::Not => {
-                            let val = values[val.index()].unwrap().into_int_value();
-                            values[id.index()] =
-                                Some(self.builder.build_not(val, &id.to_string()).unwrap().into());
+                            let operand = values[operand].into_int_value();
+                            values.insert(
+                                value,
+                                self.builder
+                                    .build_not(operand, &value.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
                         }
                     },
                     Value::Phi(_) => unreachable!("phi values live in block.phis"),
                     Value::Undef => {
-                        values[id.index()] = Some(self.llvm_undef(&value_data.ty));
+                        values.insert(value, self.llvm_undef(&value_data.ty));
                     }
                 }
             }
             match block.terminator {
                 Terminator::Return(val) => {
-                    let val = values[val.index()].unwrap();
+                    let val = values[&val];
                     self.builder.build_return(Some(&val)).unwrap();
                 }
                 Terminator::ReturnNoValue => {
                     self.builder.build_return(None).unwrap();
                 }
                 Terminator::Branch(val, then, else_) => {
-                    let val = values[val.index()].unwrap().into_int_value();
-                    let then = basic_blocks[then.index()];
-                    let else_ = basic_blocks[else_.index()];
+                    let val = values[&val].into_int_value();
+                    let then = basic_blocks[&then];
+                    let else_ = basic_blocks[&else_];
                     self.builder
                         .build_conditional_branch(val, then, else_)
                         .unwrap();
                 }
-                Terminator::Jump(block) => {
-                    let block = basic_blocks[block.index()];
-                    self.builder.build_unconditional_branch(block).unwrap();
+                Terminator::Jump(target) => {
+                    let target = basic_blocks[&target];
+                    self.builder.build_unconditional_branch(target).unwrap();
                 }
             }
         }
 
         // The incoming-edge pass reads the authoritative `Value::Phi` data from
         // the IR and pairs it with the LLVM phis created earlier.
-        for block in ir.blocks.iter() {
-            for &id in &block.phis {
-                let llvm_phi = phis[id.index()].unwrap();
-                let Value::Phi(phi) = &ir.values[id.index()].kind else {
+        for block in ir.blocks.values() {
+            for &value in &block.phis {
+                let llvm_phi = &phis[&value];
+                let Value::Phi(phi) = &ir.values[&value].kind else {
                     unreachable!("block.phis must only contain phi values");
                 };
 
                 let mut incoming: Vec<(BasicValueEnum, BasicBlock)> = Vec::new();
-                for (block, value) in &phi.incoming {
-                    let value = values[value.index()].unwrap();
-                    incoming.push((value, basic_blocks[block.index()]));
+                for (block, operand) in &phi.incoming {
+                    let operand = values[operand];
+                    incoming.push((operand, basic_blocks[block]));
                 }
                 let incoming: Vec<(&dyn BasicValue, BasicBlock)> = incoming
                     .iter()
