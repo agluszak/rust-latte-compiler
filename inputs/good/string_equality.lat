@@ -1,12 +1,13 @@
 int main() {
     string test = "test";
     string test2 = "test";
+    string test3 = "blah";
     
     if (test == test2) {
         printString("test == test2");
     }
-    if (test != test2) {
-        printString("test != test2");
+    if (test != test3) {
+        printString("test != test3");
     }
     return 0;
 }

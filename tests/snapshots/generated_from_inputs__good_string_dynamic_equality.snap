@@ -1,0 +1,42 @@
+---
+source: tests/fixtures.rs
+assertion_line: 73
+description: "int main() {\n    string a = readString();\n    string b = readString();\n    if (a == b)\n        return 0;\n    return 1;\n}\n"
+input_file: inputs/good/string_dynamic_equality.lat
+---
+; ModuleID = 'string_dynamic_equality'
+source_filename = "string_dynamic_equality"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %readString = call %string* @readString()
+  %readString1 = call %string* @readString()
+  %strings_equal = call i32 @stringEqual(%string* %readString, %string* %readString1)
+  %v2 = icmp ne i32 %strings_equal, 0
+  br i1 %v2, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  ret i32 0
+
+b2:                                               ; preds = %b0
+  ret i32 1
+}
+
