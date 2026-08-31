@@ -8,7 +8,6 @@ use inkwell::types::{BasicTypeEnum, FunctionType, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum};
 use inkwell::AddressSpace;
 use std::collections::BTreeMap;
-use std::path::Path;
 
 pub struct CodeGen<'ctx> {
     context: &'ctx Context,
@@ -520,15 +519,7 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    pub fn print(&self) {
-        self.module.print_to_stderr();
-    }
-
-    pub fn compile_to_string(&self) -> String {
-        self.module.print_to_string().to_string()
-    }
-
-    pub fn compile<P: AsRef<Path>>(&self, path: P) {
-        self.module.print_to_file(path).unwrap();
+    pub fn into_module(self) -> Module<'ctx> {
+        self.module
     }
 }

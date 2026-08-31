@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 ariadne = "0.4"
-anyhow = "1"
 lalrpop-util = { version = "0.20", features = ["lexer"] }
 logos = "0.13"
 either = "1"
@@ -30,4 +29,3 @@ opt-level = 3
 
 [profile.dev.package.similar]
 opt-level = 3
-

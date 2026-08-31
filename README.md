@@ -18,7 +18,6 @@ Wersja LLVM: 14.
 - lalrpop - generator parserów
 - insta - snapshot testing
 - ariadne - ładne raportowanie błędów
-- anyhow - konwersja błędów
 - either, tempfile - używane w testach
 - inkwell - rustowe API do LLVM
 

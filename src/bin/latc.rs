@@ -1,9 +1,10 @@
 use rust_latte_compiler::compile;
 use rust_latte_compiler::input::Input;
 
-use std::fs::File;
-use std::io::{Read, Write};
-use std::process::{Command, ExitCode};
+use inkwell::context::Context;
+use std::io::Read;
+use std::path::Path;
+use std::process::ExitCode;
 
 fn read_from_path(path: &str) -> Result<Input, String> {
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -33,26 +34,6 @@ pub fn read_input() -> Result<Input, String> {
     }
 }
 
-fn compile_llvm_ir(ir: &str, filename: &str) -> anyhow::Result<()> {
-    let output_basename = filename.replace(".lat", "");
-
-    let ll_path = format!("{}.ll", output_basename);
-    let bc_path = format!("{}.bc", output_basename);
-
-    let mut ll_file = File::create(&ll_path)?;
-    ll_file.write_all(ir.as_bytes())?;
-
-    let status = Command::new("llvm-as")
-        .args(["-o", &bc_path, &ll_path])
-        .status()?;
-
-    if !status.success() {
-        anyhow::bail!("llvm-as failed");
-    }
-
-    Ok(())
-}
-
 fn main() -> ExitCode {
     let input = {
         match read_input() {
@@ -64,16 +45,26 @@ fn main() -> ExitCode {
         }
     };
 
-    let result = compile(&input.text, &input.filename);
+    let context = Context::create();
+    let result = compile(&context, &input.text, &input.filename);
 
     match result {
-        Ok(ir) => {
+        Ok(module) => {
             if rust_latte_compiler::DBG.load(std::sync::atomic::Ordering::Relaxed) {
-                println!("{}", ir);
+                println!("{}", module.print_to_string().to_string());
             }
 
-            if let Err(err) = compile_llvm_ir(&ir, &input.filename) {
-                eprintln!("ERROR\n {err}");
+            if let Err(err) = module.verify() {
+                eprintln!("ERROR\n generated invalid LLVM IR: {err}");
+                return ExitCode::FAILURE;
+            }
+
+            let output = Path::new(&input.filename).with_extension("bc");
+            if !module.write_bitcode_to_path(&output) {
+                eprintln!(
+                    "ERROR\n failed to write LLVM bitcode to {}",
+                    output.display()
+                );
                 return ExitCode::FAILURE;
             }
 

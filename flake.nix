@@ -27,6 +27,14 @@
 
         LLVM_SYS_140_PREFIX = "${llvm14.llvm.dev}";
 
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+          llvm14Pkgs.libffi
+          llvm14Pkgs.libxml2
+          llvm14Pkgs.ncurses
+          llvm14Pkgs.zlib
+          pkgs.stdenv.cc.cc.lib
+        ];
+
         # llvm-sys links LLVM 14 statically by default with this Inkwell version.
         buildInputs = [
           llvm14Pkgs.libffi

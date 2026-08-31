@@ -9,6 +9,7 @@ use ariadne::Report;
 use crate::ir::Ir;
 use crate::llvm_generator::CodeGen;
 use inkwell::context::Context;
+use inkwell::module::Module;
 use std::ops::Range;
 
 use std::sync::atomic::AtomicBool;
@@ -28,7 +29,11 @@ pub static DBG: AtomicBool = AtomicBool::new(false);
 
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 
-pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<AriadneReport<'a>>> {
+pub fn compile<'ctx, 'src>(
+    context: &'ctx Context,
+    input: &'src str,
+    filename: &'src str,
+) -> Result<Module<'ctx>, Vec<AriadneReport<'src>>> {
     let lexer = Lexer::new(input);
     let parsed = ProgramParser::new()
         .parse(lexer)
@@ -51,8 +56,7 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
         println!("{}", ir.dump());
     }
 
-    let context = Context::create();
-    let codegen = CodeGen::new(&context, filename, env);
+    let codegen = CodeGen::new(context, filename, env);
 
     for (name, func) in &ir.functions {
         codegen.declare(name, func);
@@ -62,5 +66,5 @@ pub fn compile<'a>(input: &'a str, filename: &'a str) -> Result<String, Vec<Aria
         codegen.generate(&name, &func);
     }
 
-    Ok(codegen.compile_to_string())
+    Ok(codegen.into_module())
 }
