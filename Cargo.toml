@@ -20,6 +20,12 @@ inkwell = {
 
 [dev-dependencies]
 insta = "1"
+libtest-mimic = "0.7"
+
+[[test]]
+name = "fixtures"
+path = "tests/fixtures.rs"
+harness = false
 
 [build-dependencies]
 lalrpop = "0.20"
