@@ -5,7 +5,7 @@ use crate::lexer::LexingError;
 
 grammar<'input>;
 
-pub Program: Program = Spanned<Decl>* => Program(<>);
+pub Program: Program = Spanned<FnDecl>* => Program(<>);
 
 extern {
     type Location = usize;
@@ -25,8 +25,6 @@ extern {
         "}" => Token::RBrace,
         "(" => Token::LParen,
         ")" => Token::RParen,
-        "[" => Token::LBracket,
-        "]" => Token::RBracket,
         "," => Token::Comma,
         ";" => Token::Semicolon,
         "+" => Token::Plus,
@@ -91,25 +89,26 @@ Item: Item = {
 
 Arg: Arg = <ty:Spanned<Type>> <name:Spanned<Ident>> => Arg { ty, name };
 
-Decl: Decl = {
-    <ty: Spanned<Type>> <items: CommaNonEmpty<Spanned<Item>>> ";" => Decl::Var {
+VarDecl: VarDecl =
+    <ty: Spanned<Type>> <items: CommaNonEmpty<Spanned<Item>>> ";" => VarDecl {
         ty,
         items,
-    },
-    <return_type: Spanned<Type>> <name: Spanned<Ident>> "(" <args: Comma<Spanned<Arg>>> ")" <body: Spanned<Block>> => Decl::Fn {
+    };
+
+FnDecl: FnDecl =
+    <return_type: Spanned<Type>> <name: Spanned<Ident>> "(" <args: Comma<Spanned<Arg>>> ")" <body: Spanned<Block>> => FnDecl {
           return_type,
           name,
           args,
           body,
-     },
-};
+     };
 
 Stmt = Stmt_<"I">; // Handle dangling elses
 
 Stmt_<I>: Stmt = {
     ";" => Stmt::Empty,
     <b:Spanned<Block>> => Stmt::Block(b),
-    <d:Spanned<Decl>> => Stmt::Decl(d),
+    <d:Spanned<VarDecl>> => Stmt::Decl(d),
     <target:Spanned<Ident>> "=" <expr:Spanned<Expr>> ";" => Stmt::Assignment { target, expr },
     "return" <expr:Spanned<Expr>> ";" => Stmt::Return(Some(expr)),
     "return" ";" => Stmt::Return(None),
@@ -186,7 +185,7 @@ Literal: Literal = {
         }),
     "true" => Literal::Bool(true),
     "false" => Literal::Bool(false),
-    <s:"str"> => Literal::String(s.to_string()),
+    <s:"str"> => Literal::String(s),
 };
 
 Term: Expr = {
@@ -194,53 +193,4 @@ Term: Expr = {
     <l:Literal> => Expr::Literal(l),
     <target:Spanned<Term>> "(" <args:Comma<Spanned<Expr>>> ")" => Expr::Application { target: Box::new(target), args },
     "(" <e:Expr> ")" => e,
-};
-
-// Handle escaped chars
-String: String = <s:"str"> => {
-    let mut result = String::new();
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('r') => result.push('\r'),
-                Some('t') => result.push('\t'),
-                Some('b') => result.push('\x08'),
-                Some('f') => result.push('\x0c'),
-                Some('\'') => result.push('\''),
-                Some('\"') => result.push('\"'),
-                Some('\\') => result.push('\\'),
-                Some('u') => {
-                    let mut code = 0;
-                    for _ in 0..4 {
-                        code = code * 16 + match chars.next() {
-                            Some('0') => 0,
-                            Some('1') => 1,
-                            Some('2') => 2,
-                            Some('3') => 3,
-                            Some('4') => 4,
-                            Some('5') => 5,
-                            Some('6') => 6,
-                            Some('7') => 7,
-                            Some('8') => 8,
-                            Some('9') => 9,
-                            Some('a') | Some('A') => 10,
-                            Some('b') | Some('B') => 11,
-                            Some('c') | Some('C') => 12,
-                            Some('d') | Some('D') => 13,
-                            Some('e') | Some('E') => 14,
-                            Some('f') | Some('F') => 15,
-                            _ => panic!("Invalid unicode escape"),
-                        };
-                    }
-                    result.push(std::char::from_u32(code).unwrap());
-                },
-                _ => panic!("Invalid escape"),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
 };

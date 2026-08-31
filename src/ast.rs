@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Program(pub Vec<Spanned<Decl>>);
+pub struct Program(pub Vec<Spanned<FnDecl>>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block(pub Vec<Spanned<Stmt>>);
@@ -12,7 +12,7 @@ pub struct Block(pub Vec<Spanned<Stmt>>);
 pub enum Stmt {
     Empty,
     Block(Spanned<Block>),
-    Decl(Spanned<Decl>),
+    Decl(Spanned<VarDecl>),
     Assignment {
         target: Spanned<Ident>,
         expr: Spanned<Expr>,
@@ -82,17 +82,17 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Decl {
-    Var {
-        ty: Spanned<TypeName>,
-        items: Vec<Spanned<Item>>,
-    },
-    Fn {
-        return_type: Spanned<TypeName>,
-        name: Spanned<Ident>,
-        args: Vec<Spanned<Arg>>,
-        body: Spanned<Block>,
-    },
+pub struct VarDecl {
+    pub ty: Spanned<TypeName>,
+    pub items: Vec<Spanned<Item>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FnDecl {
+    pub return_type: Spanned<TypeName>,
+    pub name: Spanned<Ident>,
+    pub args: Vec<Spanned<Arg>>,
+    pub body: Spanned<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,39 +176,33 @@ impl Display for Stmt {
     }
 }
 
-impl Display for Decl {
+impl Display for VarDecl {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Decl::Var { ty, items } => {
-                write!(f, "{ty} ")?;
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{item}")?;
-                }
-                write!(f, ";")
+        write!(f, "{} ", self.ty)?;
+        for (i, item) in self.items.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
             }
-            Decl::Fn {
-                return_type: ty,
-                name: ident,
-                args,
-                body,
-            } => {
-                write!(f, "{ty} {ident}(")?;
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{arg}")?;
-                }
-                write!(f, ") {{")?;
-                for stmt in &body.value.0 {
-                    write!(f, "{stmt}")?;
-                }
-                write!(f, "}}")
-            }
+            write!(f, "{}", item)?;
         }
+        write!(f, ";")
+    }
+}
+
+impl Display for FnDecl {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} {}(", self.return_type, self.name)?;
+        for (i, arg) in self.args.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{arg}")?;
+        }
+        write!(f, ") {{")?;
+        for stmt in &self.body.value.0 {
+            write!(f, "{stmt}")?;
+        }
+        write!(f, "}}")
     }
 }
 

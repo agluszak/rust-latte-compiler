@@ -10,5 +10,5 @@ input_file: inputs/bad/bad004.lat
  [38;5;240m  │[0m         [31m┬[0m  
  [38;5;240m  │[0m         [31m╰[0m[31m─[0m[31m─[0m Unrecognized token `RParen`
  [38;5;240m  │[0m         [31m│[0m  
- [38;5;240m  │[0m         [31m╰[0m[31m─[0m[31m─[0m Expected one of: "(", ",", ";", "="
+ [38;5;240m  │[0m         [31m╰[0m[31m─[0m[31m─[0m Expected one of: "("
 [38;5;246m───╯[0m

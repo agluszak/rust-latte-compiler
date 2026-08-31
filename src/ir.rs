@@ -2,7 +2,7 @@ use crate::ast::Literal;
 use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::ir::Value::Undef;
 use crate::typechecker::Type;
-use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt, VariableId};
+use crate::typed_ast::{TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedStmt, VariableId};
 use crate::{DBG, ast};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
@@ -416,29 +416,22 @@ impl Ir {
         }
     }
 
-    pub fn translate_function(&mut self, decl: TypedDecl) {
+    pub fn translate_function(&mut self, decl: TypedFnDecl) {
         let mut ir = IrContext::new();
         let ty = decl.ty();
-        let function_name = match decl {
-            TypedDecl::Var { .. } => panic!("Global variables are not supported yet"),
-            TypedDecl::Fn {
-                name, body, args, ..
-            } => {
-                let entry_block = ir.new_block();
-                ir.seal_block(entry_block);
-                for (arg, i) in args.into_iter().zip(0..) {
-                    let argument = ir.new_value(Value::Argument(i), arg.value.ty);
-                    ir.write_variable(arg.value.var_id, entry_block, argument);
-                    ir.add_instruction(entry_block, argument);
-                }
+        let entry_block = ir.new_block();
+        ir.seal_block(entry_block);
+        for (arg, i) in decl.args.into_iter().zip(0..) {
+            let argument = ir.new_value(Value::Argument(i), arg.value.ty);
+            ir.write_variable(arg.value.var_id, entry_block, argument);
+            ir.add_instruction(entry_block, argument);
+        }
 
-                let continuation = FunctionIr::translate_block(&mut ir, body.value, entry_block);
-                if let ContinueBlock(block_id) = continuation {
-                    ir.add_terminator(block_id, Terminator::ReturnNoValue);
-                }
-                name.value.0
-            }
-        };
+        let continuation = FunctionIr::translate_block(&mut ir, decl.body.value, entry_block);
+        if let ContinueBlock(block_id) = continuation {
+            ir.add_terminator(block_id, Terminator::ReturnNoValue);
+        }
+        let function_name = decl.name.value.0;
         let ir = ir.ready();
         let function_ir = FunctionIr { ir, ty };
 
@@ -482,16 +475,7 @@ impl FunctionIr {
             TypedExprKind::Literal(lit) => {
                 let val = match lit {
                     Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                    Literal::String(s) => context.new_value(
-                        Value::String(
-                            s.strip_prefix('"')
-                                .unwrap()
-                                .strip_suffix('"')
-                                .unwrap()
-                                .to_string(),
-                        ),
-                        Type::LatteString,
-                    ),
+                    Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
                     Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
                 };
                 (val, block_id)
@@ -656,29 +640,26 @@ impl FunctionIr {
         match stmt {
             TypedStmt::Empty => ContinueBlock(block_id),
             TypedStmt::Block(block) => Self::translate_block(context, block.value, block_id),
-            TypedStmt::Decl(decl) => match decl.value {
-                TypedDecl::Var { items, .. } => {
-                    let mut block_id = block_id;
-                    for item in items {
-                        context
-                            .variable_names
-                            .insert(item.value.var_id, item.value.ident.value.0);
-                        if let Some(expr) = item.value.init {
-                            let (expr, continuation_block) =
-                                Self::translate_expr(context, expr.value, block_id);
-                            block_id = continuation_block;
-                            context.write_variable(item.value.var_id, block_id, expr);
-                        } else {
-                            let default = Self::default_value(&item.value.ty);
-                            let default = context.new_value(default, item.value.ty);
-                            context.add_instruction(block_id, default);
-                            context.write_variable(item.value.var_id, block_id, default);
-                        }
+            TypedStmt::Decl(decl) => {
+                let mut block_id = block_id;
+                for item in decl.value.items {
+                    context
+                        .variable_names
+                        .insert(item.value.var_id, item.value.ident.value.0);
+                    if let Some(expr) = item.value.init {
+                        let (expr, continuation_block) =
+                            Self::translate_expr(context, expr.value, block_id);
+                        block_id = continuation_block;
+                        context.write_variable(item.value.var_id, block_id, expr);
+                    } else {
+                        let default = Self::default_value(&item.value.ty);
+                        let default = context.new_value(default, item.value.ty);
+                        context.add_instruction(block_id, default);
+                        context.write_variable(item.value.var_id, block_id, default);
                     }
-                    ContinueBlock(block_id)
                 }
-                TypedDecl::Fn { .. } => panic!("Nested functions are not supported yet"),
-            },
+                ContinueBlock(block_id)
+            }
             TypedStmt::Assignment {
                 target: _,
                 target_id,

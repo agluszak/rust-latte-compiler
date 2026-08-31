@@ -36,6 +36,10 @@ impl From<ParseIntError> for LexingError {
 }
 
 fn escape_str(s: &str) -> Result<String, LexingError> {
+    let s = s
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap();
     let mut result = String::new();
     let mut chars = s.chars();
     while let Some(c) = chars.next() {
@@ -122,10 +126,6 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
-    #[token("[")]
-    LBracket,
-    #[token("]")]
-    RBracket,
     #[token(",")]
     Comma,
     #[token(";")]

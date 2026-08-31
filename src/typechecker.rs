@@ -1,8 +1,8 @@
 use crate::lexer::{Span, Spanned};
 use crate::return_analysis::check_function_returns;
 use crate::typed_ast::{
-    TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
-    VariableId,
+    TypedArg, TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedItem, TypedProgram,
+    TypedStmt, TypedVarDecl, VariableId,
 };
 use crate::{ast, lexer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -594,95 +594,100 @@ fn resolve_function_header(
     Ok(header)
 }
 
-fn typecheck_decl(
-    decl: impl SpannedAst<Inner = ast::Decl>,
+fn typecheck_fn_decl(
+    decl: impl SpannedAst<Inner = ast::FnDecl>,
     env: &mut Environment,
-) -> Result<Spanned<TypedDecl>, TypecheckingError> {
+) -> Result<Spanned<TypedFnDecl>, TypecheckingError> {
     let span = decl.span();
-    let typed_decl = match decl.into_value() {
-        ast::Decl::Fn {
-            return_type,
+    let ast::FnDecl {
+        return_type,
+        name,
+        args,
+        body,
+    } = decl.into_value();
+    let header = resolve_function_header(&return_type, &args, env)?;
+
+    let (args, body) = env.with_scope(|env| {
+        let mut typed_args = Vec::new();
+
+        for (name, ty) in header.args {
+            let var_id = env.fresh_variable_id();
+            let span = name.span();
+            let typed_arg = Spanned::new(
+                span,
+                TypedArg {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    var_id,
+                },
+            );
+            let data = VariableData::new(ty, name.span, var_id);
+            env.overwrite_data(name.value, data);
+            typed_args.push(typed_arg);
+        }
+
+        let typed_block = typecheck_block(body, env, &header.return_type)?;
+        Ok((typed_args, typed_block))
+    })?;
+
+    Ok(Spanned::new(
+        span,
+        TypedFnDecl {
+            return_type: header.return_type,
             name,
             args,
             body,
-        } => {
-            let header = resolve_function_header(&return_type, &args, env)?;
+        },
+    ))
+}
 
-            let (args, body) = env.with_scope(|env| {
-                let mut typed_args = Vec::new();
+fn typecheck_var_decl(
+    decl: impl SpannedAst<Inner = ast::VarDecl>,
+    env: &mut Environment,
+) -> Result<Spanned<TypedVarDecl>, TypecheckingError> {
+    let span = decl.span();
+    let ast::VarDecl { ty, items } = decl.into_value();
+    let ty = resolve_type(&ty, env)?;
+    if ty == Type::Void {
+        return Err(TypecheckingError::void_variable(span));
+    }
 
-                // Define all the arguments in the environment
-                for (name, ty) in header.args {
-                    let var_id = env.fresh_variable_id();
-                    let span = name.span();
-                    let typed_arg = Spanned::new(
-                        span,
-                        TypedArg {
-                            name: name.clone(),
-                            ty: ty.clone(),
-                            var_id,
-                        },
-                    );
-                    let data = VariableData::new(ty, name.span, var_id);
-                    env.overwrite_data(name.value, data);
-                    typed_args.push(typed_arg);
-                }
+    let typed_items = items
+        .into_iter()
+        .map(|item| {
+            let span = item.span();
+            let item = item.into_value();
+            let ident = item.ident;
+            let ty = ty.clone();
+            let typed_init = if let Some(init) = item.init {
+                let typed_init = typecheck_expr(init, env)?;
+                ensure_type(ty.clone(), &typed_init.value().ty, typed_init.span())?;
+                Some(typed_init)
+            } else {
+                None
+            };
+            let var_id = env.fresh_variable_id();
+            let data = VariableData::new(ty.clone(), span.clone(), var_id);
+            env.insert_data(ident.value.clone(), data)?;
+            Ok(Spanned::new(
+                span,
+                TypedItem {
+                    ident,
+                    ty,
+                    var_id,
+                    init: typed_init,
+                },
+            ))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
-                let typed_block = typecheck_block(body, env, &header.return_type)?;
-
-                Ok((typed_args, typed_block))
-            })?;
-
-            TypedDecl::Fn {
-                return_type: header.return_type,
-                name,
-                args,
-                body,
-            }
-        }
-
-        ast::Decl::Var { ty, items } => {
-            let ty = resolve_type(&ty, env)?;
-            if ty == Type::Void {
-                return Err(TypecheckingError::void_variable(span));
-            }
-
-            let typed_items = items
-                .into_iter()
-                .map(|item| {
-                    let span = item.span();
-                    let item = item.into_value();
-                    let ident = item.ident;
-                    let ty = ty.clone();
-                    let typed_init = if let Some(init) = item.init {
-                        let typed_init = typecheck_expr(init, env)?;
-                        ensure_type(ty.clone(), &typed_init.value().ty, typed_init.span())?;
-                        Some(typed_init)
-                    } else {
-                        None
-                    };
-                    let var_id = env.fresh_variable_id();
-                    let data = VariableData::new(ty.clone(), span.clone(), var_id);
-                    env.insert_data(ident.value.clone(), data)?;
-                    Ok(Spanned::new(
-                        span,
-                        TypedItem {
-                            ident,
-                            ty,
-                            var_id,
-                            init: typed_init,
-                        },
-                    ))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            TypedDecl::Var {
-                ty,
-                items: typed_items,
-            }
-        }
-    };
-    Ok(Spanned::new(span, typed_decl))
+    Ok(Spanned::new(
+        span,
+        TypedVarDecl {
+            ty,
+            items: typed_items,
+        },
+    ))
 }
 
 fn typecheck_stmt(
@@ -699,7 +704,7 @@ fn typecheck_stmt(
             TypedStmt::Block(typed_block)
         }
         ast::Stmt::Decl(decl) => {
-            let typed_decl = typecheck_decl(decl, env)?;
+            let typed_decl = typecheck_var_decl(decl, env)?;
             TypedStmt::Decl(typed_decl)
         }
         ast::Stmt::Assignment { target, expr } => {
@@ -809,31 +814,19 @@ pub fn typecheck_program(
 
     // Before typechecking bodies, first add all the function declarations to the environment
     for decl in &program.0 {
-        match decl.value() {
-            ast::Decl::Fn {
-                return_type,
-                name,
-                args,
-                body: _,
-            } => {
-                let header = resolve_function_header(return_type, args, &env);
-                match header {
-                    Ok(header) => {
-                        let var_id = env.fresh_variable_id();
-                        let data =
-                            VariableData::new(header.function_type, name.span.clone(), var_id);
-                        let result = env.insert_data(name.value.clone(), data);
-                        if let Err(err) = result {
-                            errors.push(err);
-                        }
-                    }
-                    Err(err) => {
-                        errors.push(err);
-                    }
+        let decl = decl.value();
+        let header = resolve_function_header(&decl.return_type, &decl.args, &env);
+        match header {
+            Ok(header) => {
+                let var_id = env.fresh_variable_id();
+                let data = VariableData::new(header.function_type, decl.name.span.clone(), var_id);
+                let result = env.insert_data(decl.name.value.clone(), data);
+                if let Err(err) = result {
+                    errors.push(err);
                 }
             }
-            ast::Decl::Var { .. } => {
-                panic!("Global variables are not supported");
+            Err(err) => {
+                errors.push(err);
             }
         }
     }
@@ -842,7 +835,7 @@ pub fn typecheck_program(
 
     // Typecheck bodies
     for decl in program.0 {
-        match typecheck_decl(decl, &mut env) {
+        match typecheck_fn_decl(decl, &mut env) {
             Ok(decl) => typed_decls.push(decl),
             Err(err) => errors.push(err),
         }

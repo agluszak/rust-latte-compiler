@@ -13,7 +13,7 @@ impl VariableId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedProgram(pub Vec<Spanned<TypedDecl>>);
+pub struct TypedProgram(pub Vec<Spanned<TypedFnDecl>>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedBlock(pub Vec<Spanned<TypedStmt>>);
@@ -22,7 +22,7 @@ pub struct TypedBlock(pub Vec<Spanned<TypedStmt>>);
 pub enum TypedStmt {
     Empty,
     Block(Spanned<TypedBlock>),
-    Decl(Spanned<TypedDecl>),
+    Decl(Spanned<TypedVarDecl>),
     Assignment {
         target: Spanned<Ident>,
         target_id: VariableId,
@@ -69,33 +69,26 @@ pub enum TypedExprKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypedDecl {
-    Var {
-        ty: Type,
-        items: Vec<Spanned<TypedItem>>,
-    },
-    Fn {
-        return_type: Type,
-        name: Spanned<Ident>,
-        args: Vec<Spanned<TypedArg>>, // TODO: or params?
-        body: Spanned<TypedBlock>,
-    },
+pub struct TypedVarDecl {
+    pub ty: Type,
+    pub items: Vec<Spanned<TypedItem>>,
 }
 
-impl TypedDecl {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedFnDecl {
+    pub return_type: Type,
+    pub name: Spanned<Ident>,
+    pub args: Vec<Spanned<TypedArg>>,
+    pub body: Spanned<TypedBlock>,
+}
+
+impl TypedFnDecl {
     pub fn ty(&self) -> Type {
-        match self {
-            TypedDecl::Var { ty, .. } => ty.clone(),
-            TypedDecl::Fn {
-                return_type, args, ..
-            } => {
-                let mut arg_types = Vec::new();
-                for arg in args {
-                    arg_types.push(arg.value.ty.clone());
-                }
-                Type::Function(arg_types, Box::new(return_type.clone()))
-            }
+        let mut arg_types = Vec::new();
+        for arg in &self.args {
+            arg_types.push(arg.value.ty.clone());
         }
+        Type::Function(arg_types, Box::new(self.return_type.clone()))
     }
 }
 

@@ -7,7 +7,7 @@ Ok(
         [
             Spanned {
                 span: 0..73,
-                value: Fn {
+                value: FnDecl {
                     return_type: Spanned {
                         span: 0..3,
                         value: TypeName(
@@ -133,7 +133,7 @@ Ok(
             },
             Spanned {
                 span: 90..205,
-                value: Fn {
+                value: FnDecl {
                     return_type: Spanned {
                         span: 90..93,
                         value: TypeName(
@@ -174,7 +174,7 @@ Ok(
                                     value: Decl(
                                         Spanned {
                                             span: 111..120,
-                                            value: Var {
+                                            value: VarDecl {
                                                 ty: Spanned {
                                                     span: 111..114,
                                                     value: TypeName(
@@ -383,7 +383,7 @@ Ok(
             },
             Spanned {
                 span: 224..310,
-                value: Fn {
+                value: FnDecl {
                     return_type: Spanned {
                         span: 224..227,
                         value: TypeName(

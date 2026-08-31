@@ -1,6 +1,6 @@
 use crate::ast::{BinaryOp, Literal, UnaryOp};
 use crate::typechecker::{Type, TypecheckingError};
-use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt};
+use crate::typed_ast::{TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedStmt};
 
 fn const_bool(expr: &TypedExpr) -> Option<bool> {
     match &expr.expr {
@@ -60,14 +60,9 @@ fn statement_always_returns(stmt: &TypedStmt) -> bool {
     }
 }
 
-pub fn check_function_returns(decl: &TypedDecl) -> Result<(), TypecheckingError> {
-    if let TypedDecl::Fn {
-        return_type, body, ..
-    } = decl
-        && return_type != &Type::Void
-        && !block_always_returns(&body.value)
-    {
-        return Err(TypecheckingError::missing_return(body.span.clone()));
+pub fn check_function_returns(decl: &TypedFnDecl) -> Result<(), TypecheckingError> {
+    if decl.return_type != Type::Void && !block_always_returns(&decl.body.value) {
+        return Err(TypecheckingError::missing_return(decl.body.span.clone()));
     }
     Ok(())
 }

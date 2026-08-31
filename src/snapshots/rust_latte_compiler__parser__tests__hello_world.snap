@@ -7,7 +7,7 @@ Ok(
         [
             Spanned {
                 span: 16..75,
-                value: Fn {
+                value: FnDecl {
                     return_type: Spanned {
                         span: 16..19,
                         value: TypeName(
@@ -44,7 +44,7 @@ Ok(
                                                         span: 44..57,
                                                         value: Literal(
                                                             String(
-                                                                "\"hello world\"",
+                                                                "hello world",
                                                             ),
                                                         ),
                                                     },

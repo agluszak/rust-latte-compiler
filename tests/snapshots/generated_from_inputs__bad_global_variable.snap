@@ -1,0 +1,14 @@
+---
+source: tests/fixtures.rs
+description: "int global;\n\nint main() {\n    return 0;\n}\n"
+input_file: inputs/bad/global_variable.lat
+---
+[31mError:[0m Syntax error
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m global_variable:1:11 [38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m1 │[0m [38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mg[0m[38;5;249ml[0m[38;5;249mo[0m[38;5;249mb[0m[38;5;249ma[0m[38;5;249ml[0m[31m;[0m
+ [38;5;240m  │[0m           [31m┬[0m  
+ [38;5;240m  │[0m           [31m╰[0m[31m─[0m[31m─[0m Unrecognized token `Semicolon`
+ [38;5;240m  │[0m           [31m│[0m  
+ [38;5;240m  │[0m           [31m╰[0m[31m─[0m[31m─[0m Expected one of: "("
+[38;5;246m───╯[0m

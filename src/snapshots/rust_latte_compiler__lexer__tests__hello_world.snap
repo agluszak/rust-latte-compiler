@@ -62,7 +62,7 @@ description: "// Hello world\n\nint main () {\n  printString(\"hello world\") ;\
         (
             44,
             Str(
-                "\"hello world\"",
+                "hello world",
             ),
             57,
         ),
