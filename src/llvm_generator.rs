@@ -179,19 +179,20 @@ impl<'ctx> CodeGen<'ctx> {
         for (block_index, block) in ir.blocks.iter().enumerate() {
             let this_block = basic_blocks[block_index];
             self.builder.position_at_end(this_block);
-            // First add phis
-            for &id in &block.instructions {
+            // Phis come first, so their values are available to all instructions.
+            for &id in &block.phis {
                 let value_data = &ir.values[id.index()];
-                if let Value::Phi(phi) = &value_data.kind {
-                    // Incoming values will be set later
-                    let llvm_phi = self
-                        .builder
-                        .build_phi(self.llvm_basic_type(&value_data.ty), &id.to_string())
-                        .unwrap();
-                    phis[id.index()] = Some((phi.clone(), llvm_phi));
+                let Value::Phi(phi) = &value_data.kind else {
+                    unreachable!("block.phis must only contain phi values");
+                };
+                // Incoming values will be set later
+                let llvm_phi = self
+                    .builder
+                    .build_phi(self.llvm_basic_type(&value_data.ty), &id.to_string())
+                    .unwrap();
+                phis[id.index()] = Some((phi.clone(), llvm_phi));
 
-                    values[id.index()] = Some(llvm_phi.as_basic_value());
-                }
+                values[id.index()] = Some(llvm_phi.as_basic_value());
             }
 
             // Then the rest
@@ -200,9 +201,8 @@ impl<'ctx> CodeGen<'ctx> {
                 let value = &value_data.kind;
                 match value {
                     Value::Int(i) => {
-                        values[id.index()] = Some(
-                            self.context.i32_type().const_int(*i as u64, true).into(),
-                        );
+                        values[id.index()] =
+                            Some(self.context.i32_type().const_int(*i as u64, true).into());
                     }
                     Value::String(s) => {
                         // TODO: fix leak
@@ -229,9 +229,8 @@ impl<'ctx> CodeGen<'ctx> {
                         values[id.index()] = Some(string_ptr.try_as_basic_value().unwrap_basic());
                     }
                     Value::Bool(b) => {
-                        values[id.index()] = Some(
-                            self.context.bool_type().const_int(*b as u64, false).into(),
-                        );
+                        values[id.index()] =
+                            Some(self.context.bool_type().const_int(*b as u64, false).into());
                     }
                     Value::Call(var_id, args) => {
                         let name = &self.env.names[var_id];
@@ -266,7 +265,8 @@ impl<'ctx> CodeGen<'ctx> {
                                         "new_string",
                                     )
                                     .unwrap();
-                                values[id.index()] = Some(new_string.try_as_basic_value().unwrap_basic());
+                                values[id.index()] =
+                                    Some(new_string.try_as_basic_value().unwrap_basic());
                             } else if let Type::Int = ir.values[lhs.index()].ty {
                                 let lhs = values[lhs.index()].unwrap().into_int_value();
                                 let rhs = values[rhs.index()].unwrap().into_int_value();
@@ -477,12 +477,11 @@ impl<'ctx> CodeGen<'ctx> {
                         }
                         UnaryOpCode::Not => {
                             let val = values[val.index()].unwrap().into_int_value();
-                            values[id.index()] = Some(
-                                self.builder.build_not(val, &id.to_string()).unwrap().into(),
-                            );
+                            values[id.index()] =
+                                Some(self.builder.build_not(val, &id.to_string()).unwrap().into());
                         }
                     },
-                    Value::Phi(_) => {}
+                    Value::Phi(_) => unreachable!("phi values live in block.phis"),
                     Value::Undef => {
                         values[id.index()] = Some(self.llvm_undef(&value_data.ty));
                     }
