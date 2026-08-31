@@ -1,4 +1,5 @@
 use ariadne::{Cache, Source};
+use std::fmt::{Debug, Display};
 
 pub struct Input {
     pub source: Source,
@@ -10,11 +11,14 @@ pub struct Input {
 impl Cache<String> for &Input {
     type Storage = String;
 
-    fn fetch(&mut self, _id: &String) -> Result<&Source, Box<dyn std::fmt::Debug + '_>> {
-        Ok(&self.source)
+    fn fetch(
+        &mut self,
+        _id: &String,
+    ) -> Result<&Source<<Self as Cache<String>>::Storage>, impl Debug> {
+        Ok::<&Source, ()>(&self.source)
     }
 
-    fn display<'a>(&self, id: &'a String) -> Option<Box<dyn std::fmt::Display + 'a>> {
+    fn display<'a>(&self, id: &'a String) -> Option<impl Display + 'a> {
         Some(Box::new(id))
     }
 }
