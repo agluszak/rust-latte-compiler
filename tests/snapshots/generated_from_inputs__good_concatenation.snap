@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "// Author: Tomasz Wysocki 277696\nint main() {\n    printString(\"a\" + \"b\");\n    return 0;\n}\n"
+input_file: inputs/good/concatenation.lat
 ---
 ; ModuleID = 'concatenation'
 source_filename = "concatenation"
@@ -33,11 +34,8 @@ b0:
   store [1 x i8] c"b", [1 x i8]* %str_ptr2, align 1
   %str_ptr3 = bitcast [1 x i8]* %str_ptr2 to i8*
   %new_string4 = call %string* @newString(i8* %str_ptr3, i32 1)
-  %str_ptr5 = alloca [2 x i8], align 1
-  store [2 x i8] c"ab", [2 x i8]* %str_ptr5, align 1
-  %str_ptr6 = bitcast [2 x i8]* %str_ptr5 to i8*
-  %new_string7 = call %string* @newString(i8* %str_ptr6, i32 2)
-  call void @printString(%string* %new_string7)
+  %new_string5 = call %string* @stringConcat(%string* %new_string, %string* %new_string4)
+  call void @printString(%string* %new_string5)
   ret i32 0
 }
 

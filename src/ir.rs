@@ -40,8 +40,6 @@ pub enum BinaryOpCode {
     Lte,
     Eq,
     Neq,
-    And,
-    Or,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -85,12 +83,6 @@ pub enum Value {
     Phi(Phi),
     Rerouted(ValueId),
     Undef,
-}
-
-impl Value {
-    pub fn const_evaluable(&self) -> bool {
-        !matches!(self, Value::Call(_, _))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -480,150 +472,6 @@ pub struct FunctionIr {
 }
 
 impl FunctionIr {
-    fn fold_binary(
-        context: &mut IrContext,
-        op: BinaryOpCode,
-        lhs_id: ValueId,
-        rhs_id: ValueId,
-    ) -> Option<ValueId> {
-        let lhs = context.values[&lhs_id].clone();
-        let rhs = context.values[&rhs_id].clone();
-
-        let result = match (lhs, rhs, op) {
-            // Constant folding
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Add) => {
-                context.new_value(Value::Int(lhs + rhs), Type::Int)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Sub) => {
-                context.new_value(Value::Int(lhs - rhs), Type::Int)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mul) => {
-                context.new_value(Value::Int(lhs * rhs), Type::Int)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Div) => {
-                context.new_value(Value::Int(lhs / rhs), Type::Int)
-            }
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Mod) => {
-                context.new_value(Value::Int(lhs % rhs), Type::Int)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gt) => {
-                context.new_value(Value::Bool(lhs > rhs), Type::Bool)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lt) => {
-                context.new_value(Value::Bool(lhs < rhs), Type::Bool)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Gte) => {
-                context.new_value(Value::Bool(lhs >= rhs), Type::Bool)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Lte) => {
-                context.new_value(Value::Bool(lhs <= rhs), Type::Bool)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Eq) => {
-                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
-            }
-
-            (Value::Int(lhs), Value::Int(rhs), BinaryOpCode::Neq) => {
-                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
-            }
-
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Add) => {
-                context.new_value(Value::String(lhs + &rhs), Type::LatteString)
-            }
-
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Eq) => {
-                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
-            }
-
-            (Value::String(lhs), Value::String(rhs), BinaryOpCode::Neq) => {
-                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
-            }
-
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::And) => {
-                context.new_value(Value::Bool(lhs && rhs), Type::Bool)
-            }
-
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Or) => {
-                context.new_value(Value::Bool(lhs || rhs), Type::Bool)
-            }
-
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Eq) => {
-                context.new_value(Value::Bool(lhs == rhs), Type::Bool)
-            }
-
-            (Value::Bool(lhs), Value::Bool(rhs), BinaryOpCode::Neq) => {
-                context.new_value(Value::Bool(lhs != rhs), Type::Bool)
-            }
-
-            // Expression simplification
-            (lhs, rhs, BinaryOpCode::Eq)
-                if lhs == rhs && lhs.const_evaluable() && rhs.const_evaluable() =>
-            {
-                context.new_value(Value::Bool(true), Type::Bool)
-            }
-            (lhs, rhs, BinaryOpCode::Neq)
-                if lhs == rhs && lhs.const_evaluable() && rhs.const_evaluable() =>
-            {
-                context.new_value(Value::Bool(false), Type::Bool)
-            }
-            (Value::Int(0), _rhs, BinaryOpCode::Add) => rhs_id,
-            (Value::Int(0), _rhs, BinaryOpCode::Sub) => {
-                context.new_value(Value::UnaryOp(UnaryOpCode::Neg, rhs_id), Type::Int)
-            }
-            (Value::Int(1), _rhs, BinaryOpCode::Mul) => rhs_id,
-            (Value::Int(0), rhs, BinaryOpCode::Mul) if rhs.const_evaluable() => {
-                context.new_value(Value::Int(0), Type::Int)
-            }
-            (_lhs, Value::Int(0), BinaryOpCode::Add) => lhs_id,
-            (_lhs, Value::Int(0), BinaryOpCode::Sub) => lhs_id,
-            (_lhs, Value::Int(1), BinaryOpCode::Mul) => lhs_id,
-            (lhs, Value::Int(0), BinaryOpCode::Mul) if lhs.const_evaluable() => {
-                context.new_value(Value::Int(0), Type::Int)
-            }
-            (_lhs, Value::Int(1), BinaryOpCode::Div) => lhs_id,
-            // Short-circuiting SHOULD NOT overoptimize
-            (_lhs, Value::Bool(true), BinaryOpCode::And) => lhs_id,
-            (lhs, Value::Bool(false), BinaryOpCode::And) if lhs.const_evaluable() => {
-                context.new_value(Value::Bool(false), Type::Bool)
-            }
-            (lhs, Value::Bool(true), BinaryOpCode::Or) if lhs.const_evaluable() => {
-                context.new_value(Value::Bool(true), Type::Bool)
-            }
-            (_lhs, Value::Bool(false), BinaryOpCode::Or) => lhs_id,
-            (Value::Bool(true), _rhs, BinaryOpCode::And) => rhs_id,
-            (Value::Bool(false), _rhs, BinaryOpCode::Or) => rhs_id,
-            // Short circuiting SHOULD optimize
-            (Value::Bool(false), _rhs, BinaryOpCode::And) => {
-                context.new_value(Value::Bool(false), Type::Bool)
-            }
-            (Value::Bool(true), _rhs, BinaryOpCode::Or) => {
-                context.new_value(Value::Bool(true), Type::Bool)
-            }
-            _ => return None,
-        };
-        Some(result)
-    }
-
-    fn fold_unary(context: &mut IrContext, op: UnaryOpCode, expr_id: ValueId) -> Option<ValueId> {
-        let expr = context.values[&expr_id].clone();
-
-        let result = match (expr, op) {
-            (Value::Int(expr), UnaryOpCode::Neg) => context.new_value(Value::Int(-expr), Type::Int),
-            (Value::Bool(expr), UnaryOpCode::Not) => {
-                context.new_value(Value::Bool(!expr), Type::Bool)
-            }
-            _ => return None,
-        };
-        Some(result)
-    }
-
     fn translate_expr(
         context: &mut IrContext,
         expr: TypedExpr,
@@ -649,25 +497,8 @@ impl FunctionIr {
                 (val, block_id)
             }
             TypedExprKind::Binary { lhs, op, rhs } => {
-                let op = match op.value {
-                    ast::BinaryOp::Add => BinaryOpCode::Add,
-                    ast::BinaryOp::Sub => BinaryOpCode::Sub,
-                    ast::BinaryOp::Mul => BinaryOpCode::Mul,
-                    ast::BinaryOp::Div => BinaryOpCode::Div,
-                    ast::BinaryOp::Mod => BinaryOpCode::Mod,
-                    ast::BinaryOp::Gt => BinaryOpCode::Gt,
-                    ast::BinaryOp::Lt => BinaryOpCode::Lt,
-                    ast::BinaryOp::Gte => BinaryOpCode::Gte,
-                    ast::BinaryOp::Lte => BinaryOpCode::Lte,
-                    ast::BinaryOp::Eq => BinaryOpCode::Eq,
-                    ast::BinaryOp::Neq => BinaryOpCode::Neq,
-                    ast::BinaryOp::And => BinaryOpCode::And,
-                    ast::BinaryOp::Or => BinaryOpCode::Or,
-                };
-
-                // Handle short-circuiting
-                // TODO: const eval
-                if let BinaryOpCode::And = op {
+                // Logical operators are represented exclusively by short-circuit CFG.
+                if op.value == ast::BinaryOp::And {
                     let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
 
                     let true_block = context.new_block();
@@ -698,7 +529,7 @@ impl FunctionIr {
                     let phi = context.new_value(Value::Phi(phi), Type::Bool);
                     context.add_instruction(join_block, phi);
                     return (phi, join_block);
-                } else if let BinaryOpCode::Or = op {
+                } else if op.value == ast::BinaryOp::Or {
                     let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
 
                     let true_block = context.new_block();
@@ -731,15 +562,26 @@ impl FunctionIr {
                     return (phi, join_block);
                 }
 
+                let op = match op.value {
+                    ast::BinaryOp::Add => BinaryOpCode::Add,
+                    ast::BinaryOp::Sub => BinaryOpCode::Sub,
+                    ast::BinaryOp::Mul => BinaryOpCode::Mul,
+                    ast::BinaryOp::Div => BinaryOpCode::Div,
+                    ast::BinaryOp::Mod => BinaryOpCode::Mod,
+                    ast::BinaryOp::Gt => BinaryOpCode::Gt,
+                    ast::BinaryOp::Lt => BinaryOpCode::Lt,
+                    ast::BinaryOp::Gte => BinaryOpCode::Gte,
+                    ast::BinaryOp::Lte => BinaryOpCode::Lte,
+                    ast::BinaryOp::Eq => BinaryOpCode::Eq,
+                    ast::BinaryOp::Neq => BinaryOpCode::Neq,
+                    ast::BinaryOp::And | ast::BinaryOp::Or => unreachable!(),
+                };
+
                 let (lhs, block_id) = Self::translate_expr(context, lhs.value, block_id);
                 let (rhs, block_id) = Self::translate_expr(context, rhs.value, block_id);
 
-                if let Some(folded) = Self::fold_binary(context, op, lhs, rhs) {
-                    (folded, block_id)
-                } else {
-                    let val = context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty);
-                    (val, block_id)
-                }
+                let val = context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty);
+                (val, block_id)
             }
             TypedExprKind::Unary { op, expr: target } => {
                 let (val, block_id) = Self::translate_expr(context, target.value, block_id);
@@ -747,12 +589,8 @@ impl FunctionIr {
                     ast::UnaryOp::Neg => UnaryOpCode::Neg,
                     ast::UnaryOp::Not => UnaryOpCode::Not,
                 };
-                if let Some(folded) = Self::fold_unary(context, op, val) {
-                    (folded, block_id)
-                } else {
-                    let val = context.new_value(Value::UnaryOp(op, val), expr.ty);
-                    (val, block_id)
-                }
+                let val = context.new_value(Value::UnaryOp(op, val), expr.ty);
+                (val, block_id)
             }
             TypedExprKind::Application { target, args } => {
                 let TypedExprKind::Variable(_, id) = target.value.expr else {

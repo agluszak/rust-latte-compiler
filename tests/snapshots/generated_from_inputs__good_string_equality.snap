@@ -38,15 +38,31 @@ b0:
   store [4 x i8] c"blah", [4 x i8]* %str_ptr5, align 1
   %str_ptr6 = bitcast [4 x i8]* %str_ptr5 to i8*
   %new_string7 = call %string* @newString(i8* %str_ptr6, i32 4)
+  %strings_equal = call i32 @stringEqual(%string* %new_string, %string* %new_string4)
+  %v3 = icmp ne i32 %strings_equal, 0
+  br i1 %v3, label %b1, label %b2
+
+b1:                                               ; preds = %b0
   %str_ptr8 = alloca [13 x i8], align 1
   store [13 x i8] c"test == test2", [13 x i8]* %str_ptr8, align 1
   %str_ptr9 = bitcast [13 x i8]* %str_ptr8 to i8*
   %new_string10 = call %string* @newString(i8* %str_ptr9, i32 13)
   call void @printString(%string* %new_string10)
-  %str_ptr11 = alloca [13 x i8], align 1
-  store [13 x i8] c"test != test3", [13 x i8]* %str_ptr11, align 1
-  %str_ptr12 = bitcast [13 x i8]* %str_ptr11 to i8*
-  %new_string13 = call %string* @newString(i8* %str_ptr12, i32 13)
-  call void @printString(%string* %new_string13)
+  br label %b2
+
+b2:                                               ; preds = %b1, %b0
+  %strings_equal11 = call i32 @stringEqual(%string* %new_string, %string* %new_string7)
+  %v8 = icmp eq i32 %strings_equal11, 0
+  br i1 %v8, label %b3, label %b4
+
+b3:                                               ; preds = %b2
+  %str_ptr12 = alloca [13 x i8], align 1
+  store [13 x i8] c"test != test3", [13 x i8]* %str_ptr12, align 1
+  %str_ptr13 = bitcast [13 x i8]* %str_ptr12 to i8*
+  %new_string14 = call %string* @newString(i8* %str_ptr13, i32 13)
+  call void @printString(%string* %new_string14)
+  br label %b4
+
+b4:                                               ; preds = %b3, %b2
   ret i32 0
 }

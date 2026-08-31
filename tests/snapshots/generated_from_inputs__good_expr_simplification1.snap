@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "void simpl(int a) {\n    if (a == a) {\n        printInt(1);\n    } else {\n        // This call should not be GENERATED at all\n        printInt(0);\n    }\n}\n\nint main() {\n    simpl(1);\n    return 0;\n}\n"
+input_file: inputs/good/expr_simplification1.lat
 ---
 ; ModuleID = 'expr_simplification1'
 source_filename = "expr_simplification1"
@@ -31,7 +32,18 @@ b0:
 
 define void @simpl(i32 %0) {
 b0:
+  %v1 = icmp eq i32 %0, %0
+  br i1 %v1, label %b1, label %b2
+
+b1:                                               ; preds = %b0
   call void @printInt(i32 1)
+  br label %b3
+
+b2:                                               ; preds = %b0
+  call void @printInt(i32 0)
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
   ret void
 }
 

@@ -488,28 +488,6 @@ impl<'ctx> CodeGen<'ctx> {
                                 );
                             }
                         }
-                        BinaryOpCode::And => {
-                            let lhs = values.get(lhs).unwrap().into_int_value();
-                            let rhs = values.get(rhs).unwrap().into_int_value();
-                            values.insert(
-                                id,
-                                self.builder
-                                    .build_and(lhs, rhs, &id.to_string())
-                                    .unwrap()
-                                    .into(),
-                            );
-                        }
-                        BinaryOpCode::Or => {
-                            let lhs = values.get(lhs).unwrap().into_int_value();
-                            let rhs = values.get(rhs).unwrap().into_int_value();
-                            values.insert(
-                                id,
-                                self.builder
-                                    .build_or(lhs, rhs, &id.to_string())
-                                    .unwrap()
-                                    .into(),
-                            );
-                        }
                     },
                     Value::UnaryOp(op, val) => match op {
                         UnaryOpCode::Neg => {

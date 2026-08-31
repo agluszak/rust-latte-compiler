@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "/* usage of variable initialized in both branches. */\n\nint main () {\n  int x;\n  int y = 56;\n  if (y + 45 <= 2) {\n    x = 1;\n  } else {\n    x = 2;\n  }\n  printInt(x);\n  return 0 ;\n\n}"
+input_file: inputs/good/core005.lat
 ---
 ; ModuleID = 'core005'
 source_filename = "core005"
@@ -25,7 +26,17 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  call void @printInt(i32 2)
+  br i1 false, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  br label %b3
+
+b2:                                               ; preds = %b0
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
+  %v8 = phi i32 [ 1, %b1 ], [ 2, %b2 ]
+  call void @printInt(i32 %v8)
   ret i32 0
 }
 
