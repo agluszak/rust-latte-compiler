@@ -179,7 +179,11 @@ LogicalOrOp: BinaryOp = {
 };
 
 Literal: Literal = {
-    <i:"num"> => Literal::Int(i),
+    <l:@L> <i:"num"> <r:@R> =>? i32::try_from(i)
+        .map(Literal::Int)
+        .map_err(|_| lalrpop_util::ParseError::User {
+            error: Spanned::new(l..r, LexingError::IntegerOutOfRange),
+        }),
     "true" => Literal::Bool(true),
     "false" => Literal::Bool(false),
     <s:"str"> => Literal::String(s.to_string()),

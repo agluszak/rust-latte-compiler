@@ -73,7 +73,7 @@ impl Phi {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
-    Int(i64),
+    Int(i32),
     String(String),
     Bool(bool),
     Call(VariableId, Vec<ValueId>),

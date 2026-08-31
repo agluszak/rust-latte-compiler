@@ -210,9 +210,8 @@ impl<'ctx> CodeGen<'ctx> {
                     Value::Int(i) => {
                         values.insert(
                             id,
-                            self.context.i32_type().const_int(*i as u64, false).into(),
+                            self.context.i32_type().const_int(*i as u64, true).into(),
                         );
-                        // TODO: 64 bit vs 32 bit
                     }
                     Value::String(s) => {
                         // TODO: fix leak

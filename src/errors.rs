@@ -176,6 +176,11 @@ pub fn parsing_reports(
                         .with_message("Number too long")
                         .with_color(color),
                 ),
+                LexingError::IntegerOutOfRange => syntax_error(filename, span.start).with_label(
+                    Label::new((filename.to_string(), span))
+                        .with_message("Integer literal is outside the 32-bit signed range")
+                        .with_color(color),
+                ),
                 LexingError::UnexpectedEscape(c) => syntax_error(filename, span.start).with_label(
                     Label::new((filename.to_string(), span))
                         .with_message(format!("Unexpected escape character `{}`", c))

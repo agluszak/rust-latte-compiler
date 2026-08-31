@@ -20,6 +20,7 @@ impl<T> Spanned<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum LexingError {
     NumberTooLong,
+    IntegerOutOfRange,
     UnexpectedEscape(char),
     InvalidUnicodeEscape(String),
     InvalidUnicodeChar(u32),

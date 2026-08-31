@@ -1,0 +1,13 @@
+---
+source: tests/fixtures.rs
+description: "int main() {\n    return 2147483648;\n}\n"
+input_file: inputs/bad/integer_out_of_range.lat
+---
+[31mError:[0m Syntax error
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m integer_out_of_range:2:12 [38;5;246m][0m
+   [38;5;246m│[0m
+ [38;5;246m2 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mr[0m[38;5;249me[0m[38;5;249mt[0m[38;5;249mu[0m[38;5;249mr[0m[38;5;249mn[0m[38;5;249m [0m[31m2[0m[31m1[0m[31m4[0m[31m7[0m[31m4[0m[31m8[0m[31m3[0m[31m6[0m[31m4[0m[31m8[0m[38;5;249m;[0m
+ [38;5;240m  │[0m            [31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m┬[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m  
+ [38;5;240m  │[0m                 [31m╰[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m Integer literal is outside the 32-bit signed range
+[38;5;246m───╯[0m
+
