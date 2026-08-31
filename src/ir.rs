@@ -135,6 +135,7 @@ pub struct ValueData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BuildingBlock {
+    phis: Vec<ValueId>,
     instructions: Vec<ValueId>,
     terminator: Option<Terminator>,
     predecessors: Vec<BlockId>,
@@ -161,6 +162,7 @@ struct IrBuilder {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BasicBlock {
+    pub phis: Vec<ValueId>,
     pub instructions: Vec<ValueId>,
     pub terminator: Terminator,
 }
@@ -200,7 +202,7 @@ impl IrBuilder {
 
     fn new_phi(&mut self, block: BlockId, ty: Type) -> ValueId {
         let id = self.allocate(BuildingValue::Phi(BuildingPhi::new(block)), ty);
-        self.blocks[block.index()].instructions.push(id);
+        self.blocks[block.index()].phis.push(id);
         id
     }
 
@@ -246,6 +248,7 @@ impl IrBuilder {
     fn new_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len() as u32);
         self.blocks.push(BuildingBlock {
+            phis: Vec::new(),
             instructions: Vec::new(),
             terminator: None,
             predecessors: Vec::new(),
@@ -316,9 +319,7 @@ impl IrBuilder {
             {
                 pred_phi.add_user(phi_id);
             }
-            self.get_phi(phi_id)
-                .unwrap()
-                .add_incoming(pred, pred_val);
+            self.get_phi(phi_id).unwrap().add_incoming(pred, pred_val);
         }
         self.try_remove_trivial_phi(phi_id)
     }
@@ -372,6 +373,19 @@ impl IrBuilder {
         phi.users.retain(|&user| user != phi_id);
         let replacement = self.resolve_alias(same.unwrap());
         self.aliases[phi_id.index()] = Some(replacement);
+
+        if let Some(BuildingValue::Phi(replacement_phi)) = self
+            .values
+            .get_mut(replacement.index())
+            .map(|data| &mut data.kind)
+        {
+            for user in &phi.users {
+                replacement_phi.add_user(*user);
+            }
+        }
+        // Transfer the users to the replacement phi, so that if the
+        // replacement itself becomes trivial later, these users are
+        // reconsidered as well.
 
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
@@ -432,7 +446,8 @@ impl IrBuilder {
                             .into_iter()
                             .map(|(block, value)| (block, remap(value)))
                             .collect(),
-                    }),                    BuildingValue::Undef => Value::Undef,
+                    }),
+                    BuildingValue::Undef => Value::Undef,
                 };
                 Some(ValueData { ty: data.ty, kind })
             })
@@ -442,6 +457,12 @@ impl IrBuilder {
             .blocks
             .into_iter()
             .map(|block| BasicBlock {
+                phis: block
+                    .phis
+                    .into_iter()
+                    .filter(|id| self.aliases[id.index()].is_none())
+                    .map(remap)
+                    .collect(),
                 instructions: block
                     .instructions
                     .into_iter()
@@ -513,6 +534,13 @@ impl Ir {
             for (index, block) in function.blocks.iter().enumerate() {
                 let id = BlockId(index as u32);
                 result.push_str(&format!("{}:\n", id));
+                for phi in &block.phis {
+                    result.push_str(&format!(
+                        "  {:?}: {:?}\n",
+                        phi,
+                        function.values[phi.index()]
+                    ));
+                }
                 for instr in &block.instructions {
                     result.push_str(&format!(
                         "  {:?}: {:?}\n",
@@ -563,11 +591,11 @@ impl FunctionIr {
                         .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
                     context.seal_block(true_block);
                     context.seal_block(false_block);
+                    let true_ = context.emit(true_block, BuildingValue::Bool(true), Type::Bool);
                     context.finish_block(true_block, Terminator::Jump(join_block));
+                    let false_ = context.emit(false_block, BuildingValue::Bool(false), Type::Bool);
                     context.finish_block(false_block, Terminator::Jump(join_block));
                     context.seal_block(join_block);
-                    let true_ = context.emit(join_block, BuildingValue::Bool(true), Type::Bool);
-                    let false_ = context.emit(join_block, BuildingValue::Bool(false), Type::Bool);
                     let phi = context.new_phi(join_block, Type::Bool);
                     let phi_data = context.get_phi(phi).unwrap();
                     phi_data.add_incoming(true_block, true_);
@@ -588,11 +616,11 @@ impl FunctionIr {
                         .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
                     context.seal_block(true_block);
                     context.seal_block(false_block);
+                    let true_ = context.emit(true_block, BuildingValue::Bool(true), Type::Bool);
                     context.finish_block(true_block, Terminator::Jump(join_block));
+                    let false_ = context.emit(false_block, BuildingValue::Bool(false), Type::Bool);
                     context.finish_block(false_block, Terminator::Jump(join_block));
                     context.seal_block(join_block);
-                    let true_ = context.emit(join_block, BuildingValue::Bool(true), Type::Bool);
-                    let false_ = context.emit(join_block, BuildingValue::Bool(false), Type::Bool);
                     let phi = context.new_phi(join_block, Type::Bool);
                     let phi_data = context.get_phi(phi).unwrap();
                     phi_data.add_incoming(true_block, true_);
@@ -943,7 +971,7 @@ mod tests {
     fn assert_values_are_dense(ir: &FunctionIr) {
         let mut seen = vec![false; ir.values.len()];
         for block in &ir.blocks {
-            for &id in &block.instructions {
+            for &id in block.phis.iter().chain(block.instructions.iter()) {
                 assert!(!seen[id.index()], "value {:?} defined twice", id);
                 seen[id.index()] = true;
             }
@@ -953,6 +981,55 @@ mod tests {
             "value ids are not dense: {:?}",
             seen
         );
+    }
+
+    #[test]
+    fn users_are_transferred_when_a_trivial_phi_is_replaced_by_another_phi() {
+        let mut builder = IrBuilder::new();
+        let entry = builder.new_block();
+        let left = builder.new_block();
+        let right = builder.new_block();
+        let join = builder.new_block();
+        builder.seal_block(entry);
+
+        let condition = builder.emit(entry, BuildingValue::Bool(true), Type::Bool);
+        let x = builder.emit(entry, BuildingValue::Int(7), Type::Int);
+        builder.finish_block(entry, Terminator::Branch(condition, left, right));
+        builder.seal_block(left);
+        builder.seal_block(right);
+        builder.finish_block(left, Terminator::Jump(join));
+        builder.finish_block(right, Terminator::Jump(join));
+        builder.seal_block(join);
+
+        // B merges the same value on both edges, but is not removed yet.
+        let b = builder.new_phi(join, Type::Int);
+        builder.get_phi(b).unwrap().incoming = [(left, x), (right, x)].into();
+        // A is trivially replaced by B.
+        let a = builder.new_phi(join, Type::Int);
+        builder.get_phi(a).unwrap().incoming = [(left, b), (right, b)].into();
+        // C uses A and X, so it is not trivial while A is still alive.
+        let c = builder.new_phi(join, Type::Int);
+        builder.get_phi(c).unwrap().incoming = [(left, a), (right, x)].into();
+        builder.get_phi(a).unwrap().add_user(c);
+
+        // A -> B. C must be transferred to B's users.
+        assert_eq!(builder.try_remove_trivial_phi(a), b);
+
+        // B -> X later. C has effectively become phi(X, X) and must go too.
+        assert_eq!(builder.try_remove_trivial_phi(b), x);
+        assert_eq!(builder.resolve_alias(c), x);
+
+        builder.finish_block(join, Terminator::Return(c));
+
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        assert!(
+            ir.values
+                .iter()
+                .all(|value| !matches!(value.kind, Value::Phi(_))),
+            "a trivial phi survived finalization"
+        );
+        assert_operands_are_valid(&ir);
+        assert_values_are_dense(&ir);
     }
 
     #[test]
@@ -1001,5 +1078,15 @@ mod tests {
         assert_eq!(phis[0].incoming.len(), 2);
         assert_operands_are_valid(&ir);
         assert_values_are_dense(&ir);
+
+        // Phis are structural: they live in block.phis, never in instructions.
+        let header_block = &ir.blocks[header.index()];
+        assert_eq!(header_block.phis.len(), 1);
+        assert!(
+            header_block
+                .instructions
+                .iter()
+                .all(|&id| !matches!(ir.values[id.index()].kind, Value::Phi(_)))
+        );
     }
 }
