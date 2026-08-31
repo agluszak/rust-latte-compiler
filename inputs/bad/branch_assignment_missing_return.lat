@@ -1,0 +1,13 @@
+int f(boolean condition) {
+    boolean shouldReturn = false;
+    if (condition) {
+        shouldReturn = true;
+    }
+    if (shouldReturn) {
+        return 1;
+    }
+}
+
+int main() {
+    return 0;
+}

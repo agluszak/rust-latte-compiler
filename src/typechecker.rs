@@ -1,4 +1,4 @@
-use crate::dfa::top_level_return_analysis;
+use crate::return_analysis::check_function_returns;
 use crate::lexer::{Span, Spanned};
 use crate::typed_ast::{
     TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
@@ -901,7 +901,7 @@ pub fn typecheck_program(
 
     // Return analysis
     for decl in &typed_decls {
-        if let Err(err) = top_level_return_analysis(&decl.value) {
+        if let Err(err) = check_function_returns(&decl.value) {
             errors.push(err);
         }
     }

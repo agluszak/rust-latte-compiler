@@ -17,13 +17,13 @@ use std::ops::Range;
 use std::sync::atomic::AtomicBool;
 
 mod ast;
-mod dfa;
 mod errors;
 pub mod input;
 pub mod ir;
 pub mod lexer;
 pub mod llvm_generator;
 pub mod parser;
+mod return_analysis;
 mod typechecker;
 mod typed_ast;
 

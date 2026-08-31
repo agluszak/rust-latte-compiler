@@ -24,8 +24,7 @@ Wersja LLVM: 14.
 ## Struktura
 Projekt podzielony na moduły. 
 Przepływ informacji jest standardowy: 
-lexer -> parser -> typechecker -> dfa (w tym momencie trochę zbędne, bo robione na poziomie AST)
--> ssa ir (algorytm Brauna) -> codegen llvm
+lexer -> parser -> typechecker -> return analysis -> ssa ir (algorytm Brauna) -> codegen llvm
 
 ## Rozszerzenia
 W tym momencie brak.

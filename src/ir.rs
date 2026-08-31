@@ -480,7 +480,7 @@ pub struct FunctionIr {
 }
 
 impl FunctionIr {
-    fn dfa_binary(
+    fn fold_binary(
         context: &mut IrContext,
         op: BinaryOpCode,
         lhs_id: ValueId,
@@ -611,7 +611,7 @@ impl FunctionIr {
         Some(result)
     }
 
-    fn dfa_unary(context: &mut IrContext, op: UnaryOpCode, expr_id: ValueId) -> Option<ValueId> {
+    fn fold_unary(context: &mut IrContext, op: UnaryOpCode, expr_id: ValueId) -> Option<ValueId> {
         let expr = context.values[&expr_id].clone();
 
         let result = match (expr, op) {
@@ -751,8 +751,8 @@ impl FunctionIr {
                 let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, block_id);
                 let block_id = Self::join_blocks(context, &[lhs_block, rhs_block]);
 
-                if let Some(dfa) = Self::dfa_binary(context, op, lhs, rhs) {
-                    (dfa, block_id)
+                if let Some(folded) = Self::fold_binary(context, op, lhs, rhs) {
+                    (folded, block_id)
                 } else {
                     let val = context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty);
                     (val, block_id)
@@ -764,8 +764,8 @@ impl FunctionIr {
                     ast::UnaryOp::Neg => UnaryOpCode::Neg,
                     ast::UnaryOp::Not => UnaryOpCode::Not,
                 };
-                if let Some(dfa) = Self::dfa_unary(context, op, val) {
-                    (dfa, block_id)
+                if let Some(folded) = Self::fold_unary(context, op, val) {
+                    (folded, block_id)
                 } else {
                     let val = context.new_value(Value::UnaryOp(op, val), expr.ty);
                     (val, block_id)
