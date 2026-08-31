@@ -9,19 +9,19 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 struct Environment {
-    parent: Option<Box<Environment>>,
-    names: BTreeMap<ast::Ident, VariableData>,
+    scopes: Vec<BTreeMap<ast::Ident, VariableData>>,
     next_variable_id: u32,
 }
 
 impl Environment {
     pub fn ready(self) -> ReadyEnvironment {
+        assert_eq!(self.scopes.len(), 1);
         let mut globals = BTreeMap::new();
         let mut names = BTreeMap::new();
 
-        for (name, data) in self.names {
+        for (name, data) in self.scopes.into_iter().next().unwrap() {
             let id = data.id;
             globals.insert(name.0.clone(), data.ty);
             names.insert(id, name.0);
@@ -59,7 +59,7 @@ impl Environment {
 
     fn add_predefined_fn(&mut self, name: &str, args: Vec<Type>, ret: Type) {
         let id = self.fresh_variable_id();
-        self.names.insert(
+        self.scopes.last_mut().unwrap().insert(
             ast::Ident::new(name),
             VariableData {
                 ty: Type::Function(args, Box::new(ret)),
@@ -71,8 +71,7 @@ impl Environment {
 
     fn global() -> Self {
         let mut env = Environment {
-            parent: None,
-            names: BTreeMap::new(),
+            scopes: vec![BTreeMap::new()],
             next_variable_id: 0,
         };
 
@@ -85,24 +84,13 @@ impl Environment {
         env
     }
 
-    fn local(&self) -> Self {
-        Environment {
-            parent: Some(Box::new(self.clone())),
-            names: BTreeMap::new(),
-            next_variable_id: self.next_variable_id,
-        }
-    }
-
-    fn with_local<T>(
+    fn with_scope<T>(
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<T, TypecheckingError>,
     ) -> Result<T, TypecheckingError> {
-        let mut local = self.local();
-
-        let result = f(&mut local);
-
-        self.next_variable_id = local.next_variable_id;
-
+        self.scopes.push(BTreeMap::new());
+        let result = f(self);
+        self.scopes.pop().unwrap();
         result
     }
 
@@ -111,11 +99,7 @@ impl Environment {
     }
 
     fn get_data(&self, name: &ast::Ident) -> Option<&VariableData> {
-        self.names.get(name).or_else(|| {
-            self.parent
-                .as_ref()
-                .and_then(|parent| parent.get_data(name))
-        })
+        self.scopes.iter().rev().find_map(|scope| scope.get(name))
     }
 
     fn get_span(&self, name: &ast::Ident) -> Option<&Span> {
@@ -141,7 +125,7 @@ impl Environment {
     }
 
     fn overwrite_data(&mut self, name: ast::Ident, data: VariableData) -> Option<VariableData> {
-        self.names.insert(name, data)
+        self.scopes.last_mut().unwrap().insert(name, data)
     }
 }
 
@@ -624,7 +608,7 @@ fn typecheck_decl(
         } => {
             let header = resolve_function_header(&return_type, &args, env)?;
 
-            let (args, body) = env.with_local(|env| {
+            let (args, body) = env.with_scope(|env| {
                 let mut typed_args = Vec::new();
 
                 // Define all the arguments in the environment
@@ -711,7 +695,7 @@ fn typecheck_stmt(
         ast::Stmt::Empty => TypedStmt::Empty,
         ast::Stmt::Block(block) => {
             let typed_block =
-                env.with_local(|env| typecheck_block(block, env, expected_return_type))?;
+                env.with_scope(|env| typecheck_block(block, env, expected_return_type))?;
             TypedStmt::Block(typed_block)
         }
         ast::Stmt::Decl(decl) => {
