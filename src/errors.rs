@@ -11,7 +11,7 @@ use std::ops::Range;
 pub fn typechecking_reports(
     errs: Vec<TypecheckingError>,
     filename: &str,
-) -> Vec<Report<(String, Range<usize>)>> {
+) -> Vec<Report<'_, (String, Range<usize>)>> {
     let color = Color::Red;
 
     errs.into_iter()
@@ -113,11 +113,14 @@ pub fn typechecking_reports(
         .collect()
 }
 
-fn syntax_error(filename: &str, offset: usize) -> ReportBuilder<(String, Span)> {
+fn syntax_error(filename: &str, offset: usize) -> ReportBuilder<'_, (String, Span)> {
     Report::build(ReportKind::Error, filename, offset).with_message("Syntax error".to_string())
 }
 
-pub fn parsing_reports(err: ParsingError, filename: &str) -> Vec<Report<(String, Range<usize>)>> {
+pub fn parsing_reports(
+    err: ParsingError,
+    filename: &str,
+) -> Vec<Report<'_, (String, Range<usize>)>> {
     let color = Color::Red;
 
     let mut reports = Vec::new();

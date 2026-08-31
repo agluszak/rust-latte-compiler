@@ -64,10 +64,10 @@ pub fn check_function_returns(decl: &TypedDecl) -> Result<(), TypecheckingError>
     if let TypedDecl::Fn {
         return_type, body, ..
     } = decl
+        && return_type != &Type::Void
+        && !block_always_returns(&body.value)
     {
-        if return_type != &Type::Void && !block_always_returns(&body.value) {
-            return Err(TypecheckingError::missing_return(body.span.clone()));
-        }
+        return Err(TypecheckingError::missing_return(body.span.clone()));
     }
     Ok(())
 }

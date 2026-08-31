@@ -1,12 +1,12 @@
 use crate::ir::{BinaryOpCode, FunctionIr, Terminator, UnaryOpCode, Value, ValueId};
 use crate::typechecker::{ReadyEnvironment, Type};
 use either::Left;
+use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicTypeEnum, FunctionType, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum};
-use inkwell::AddressSpace;
 use std::collections::BTreeMap;
 
 pub struct CodeGen<'ctx> {
@@ -246,7 +246,7 @@ impl<'ctx> CodeGen<'ctx> {
                         );
                     }
                     Value::Call(var_id, args) => {
-                        let name = &self.env.names[&var_id];
+                        let name = &self.env.names[var_id];
                         let function = self.module.get_function(name).unwrap();
                         let args = args
                             .iter()
@@ -263,258 +263,255 @@ impl<'ctx> CodeGen<'ctx> {
                     Value::Argument(i) => {
                         values.insert(id, function.get_nth_param(*i).unwrap());
                     }
-                    Value::BinaryOp(op, lhs, rhs) => {
-                        match op {
-                            BinaryOpCode::Add => {
-                                if let Type::LatteString = value_types[&lhs] {
-                                    let lhs = values[&lhs].into_pointer_value();
-                                    let rhs = values[&rhs].into_pointer_value();
-                                    let string_concat_fn =
-                                        self.module.get_function("stringConcat").unwrap();
-                                    let new_string = self
-                                        .builder
-                                        .build_call(
-                                            string_concat_fn,
-                                            &[lhs.into(), rhs.into()],
-                                            "new_string",
-                                        )
-                                        .unwrap();
-                                    values
-                                        .insert(id, new_string.try_as_basic_value().unwrap_left());
-                                } else if let Type::Int = value_types[&lhs] {
-                                    let lhs = values[&lhs].into_int_value();
-                                    let rhs = values[&rhs].into_int_value();
-                                    values.insert(
-                                        id,
-                                        self.builder
-                                            .build_int_add(lhs, rhs, &id.to_string())
-                                            .unwrap()
-                                            .into(),
-                                    );
-                                } else {
-                                    panic!("invalid type for add");
-                                }
-                            }
-                            BinaryOpCode::Sub => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
+                    Value::BinaryOp(op, lhs, rhs) => match op {
+                        BinaryOpCode::Add => {
+                            if let Type::LatteString = value_types[lhs] {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
+                                let string_concat_fn =
+                                    self.module.get_function("stringConcat").unwrap();
+                                let new_string = self
+                                    .builder
+                                    .build_call(
+                                        string_concat_fn,
+                                        &[lhs.into(), rhs.into()],
+                                        "new_string",
+                                    )
+                                    .unwrap();
+                                values.insert(id, new_string.try_as_basic_value().unwrap_left());
+                            } else if let Type::Int = value_types[lhs] {
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
                                 values.insert(
                                     id,
                                     self.builder
-                                        .build_int_sub(lhs, rhs, &id.to_string())
+                                        .build_int_add(lhs, rhs, &id.to_string())
                                         .unwrap()
                                         .into(),
                                 );
+                            } else {
+                                panic!("invalid type for add");
                             }
-                            BinaryOpCode::Mul => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_mul(lhs, rhs, &id.to_string())
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Div => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_signed_div(lhs, rhs, &id.to_string())
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Mod => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_signed_rem(lhs, rhs, &id.to_string())
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Gt => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
+                        }
+                        BinaryOpCode::Sub => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_sub(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Mul => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_mul(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Div => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_signed_div(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Mod => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_signed_rem(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Gt => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_compare(
+                                        inkwell::IntPredicate::SGT,
+                                        lhs,
+                                        rhs,
+                                        &id.to_string(),
+                                    )
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Lt => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_compare(
+                                        inkwell::IntPredicate::SLT,
+                                        lhs,
+                                        rhs,
+                                        &id.to_string(),
+                                    )
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Gte => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_compare(
+                                        inkwell::IntPredicate::SGE,
+                                        lhs,
+                                        rhs,
+                                        &id.to_string(),
+                                    )
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Lte => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_int_compare(
+                                        inkwell::IntPredicate::SLE,
+                                        lhs,
+                                        rhs,
+                                        &id.to_string(),
+                                    )
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Eq => {
+                            if let Type::LatteString = value_types[lhs] {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
+                                let string_equal = self
+                                    .builder
+                                    .build_call(
+                                        self.module.get_function("stringEqual").unwrap(),
+                                        &[lhs.into(), rhs.into()],
+                                        "strings_equal",
+                                    )
+                                    .unwrap()
+                                    .try_as_basic_value()
+                                    .unwrap_left()
+                                    .into_int_value();
                                 values.insert(
                                     id,
                                     self.builder
                                         .build_int_compare(
-                                            inkwell::IntPredicate::SGT,
-                                            lhs,
-                                            rhs,
+                                            inkwell::IntPredicate::NE,
+                                            string_equal,
+                                            string_equal.get_type().const_zero(),
                                             &id.to_string(),
                                         )
                                         .unwrap()
                                         .into(),
                                 );
-                            }
-                            BinaryOpCode::Lt => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
+                            } else {
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
                                 values.insert(
                                     id,
                                     self.builder
                                         .build_int_compare(
-                                            inkwell::IntPredicate::SLT,
+                                            inkwell::IntPredicate::EQ,
                                             lhs,
                                             rhs,
                                             &id.to_string(),
                                         )
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Gte => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_compare(
-                                            inkwell::IntPredicate::SGE,
-                                            lhs,
-                                            rhs,
-                                            &id.to_string(),
-                                        )
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Lte => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_int_compare(
-                                            inkwell::IntPredicate::SLE,
-                                            lhs,
-                                            rhs,
-                                            &id.to_string(),
-                                        )
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Eq => {
-                                if let Type::LatteString = value_types[&lhs] {
-                                    let lhs = values[&lhs].into_pointer_value();
-                                    let rhs = values[&rhs].into_pointer_value();
-                                    let string_equal = self
-                                        .builder
-                                        .build_call(
-                                            self.module.get_function("stringEqual").unwrap(),
-                                            &[lhs.into(), rhs.into()],
-                                            "strings_equal",
-                                        )
-                                        .unwrap()
-                                        .try_as_basic_value()
-                                        .unwrap_left()
-                                        .into_int_value();
-                                    values.insert(
-                                        id,
-                                        self.builder
-                                            .build_int_compare(
-                                                inkwell::IntPredicate::NE,
-                                                string_equal,
-                                                string_equal.get_type().const_zero(),
-                                                &id.to_string(),
-                                            )
-                                            .unwrap()
-                                            .into(),
-                                    );
-                                } else {
-                                    let lhs = values[&lhs].into_int_value();
-                                    let rhs = values[&rhs].into_int_value();
-                                    values.insert(
-                                        id,
-                                        self.builder
-                                            .build_int_compare(
-                                                inkwell::IntPredicate::EQ,
-                                                lhs,
-                                                rhs,
-                                                &id.to_string(),
-                                            )
-                                            .unwrap()
-                                            .into(),
-                                    );
-                                }
-                            }
-                            BinaryOpCode::Neq => {
-                                if let Type::LatteString = value_types[&lhs] {
-                                    let lhs = values[&lhs].into_pointer_value();
-                                    let rhs = values[&rhs].into_pointer_value();
-                                    let string_equal = self
-                                        .builder
-                                        .build_call(
-                                            self.module.get_function("stringEqual").unwrap(),
-                                            &[lhs.into(), rhs.into()],
-                                            "strings_equal",
-                                        )
-                                        .unwrap()
-                                        .try_as_basic_value()
-                                        .unwrap_left()
-                                        .into_int_value();
-                                    values.insert(
-                                        id,
-                                        self.builder
-                                            .build_int_compare(
-                                                inkwell::IntPredicate::EQ,
-                                                string_equal,
-                                                string_equal.get_type().const_zero(),
-                                                &id.to_string(),
-                                            )
-                                            .unwrap()
-                                            .into(),
-                                    );
-                                } else {
-                                    let lhs = values[&lhs].into_int_value();
-                                    let rhs = values[&rhs].into_int_value();
-                                    values.insert(
-                                        id,
-                                        self.builder
-                                            .build_int_compare(
-                                                inkwell::IntPredicate::NE,
-                                                lhs,
-                                                rhs,
-                                                &id.to_string(),
-                                            )
-                                            .unwrap()
-                                            .into(),
-                                    );
-                                }
-                            }
-                            BinaryOpCode::And => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_and(lhs, rhs, &id.to_string())
-                                        .unwrap()
-                                        .into(),
-                                );
-                            }
-                            BinaryOpCode::Or => {
-                                let lhs = values.get(lhs).unwrap().into_int_value();
-                                let rhs = values.get(rhs).unwrap().into_int_value();
-                                values.insert(
-                                    id,
-                                    self.builder
-                                        .build_or(lhs, rhs, &id.to_string())
                                         .unwrap()
                                         .into(),
                                 );
                             }
                         }
-                    }
+                        BinaryOpCode::Neq => {
+                            if let Type::LatteString = value_types[lhs] {
+                                let lhs = values[lhs].into_pointer_value();
+                                let rhs = values[rhs].into_pointer_value();
+                                let string_equal = self
+                                    .builder
+                                    .build_call(
+                                        self.module.get_function("stringEqual").unwrap(),
+                                        &[lhs.into(), rhs.into()],
+                                        "strings_equal",
+                                    )
+                                    .unwrap()
+                                    .try_as_basic_value()
+                                    .unwrap_left()
+                                    .into_int_value();
+                                values.insert(
+                                    id,
+                                    self.builder
+                                        .build_int_compare(
+                                            inkwell::IntPredicate::EQ,
+                                            string_equal,
+                                            string_equal.get_type().const_zero(),
+                                            &id.to_string(),
+                                        )
+                                        .unwrap()
+                                        .into(),
+                                );
+                            } else {
+                                let lhs = values[lhs].into_int_value();
+                                let rhs = values[rhs].into_int_value();
+                                values.insert(
+                                    id,
+                                    self.builder
+                                        .build_int_compare(
+                                            inkwell::IntPredicate::NE,
+                                            lhs,
+                                            rhs,
+                                            &id.to_string(),
+                                        )
+                                        .unwrap()
+                                        .into(),
+                                );
+                            }
+                        }
+                        BinaryOpCode::And => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_and(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                        BinaryOpCode::Or => {
+                            let lhs = values.get(lhs).unwrap().into_int_value();
+                            let rhs = values.get(rhs).unwrap().into_int_value();
+                            values.insert(
+                                id,
+                                self.builder
+                                    .build_or(lhs, rhs, &id.to_string())
+                                    .unwrap()
+                                    .into(),
+                            );
+                        }
+                    },
                     Value::UnaryOp(op, val) => match op {
                         UnaryOpCode::Neg => {
                             let val = values.get(val).unwrap().into_int_value();

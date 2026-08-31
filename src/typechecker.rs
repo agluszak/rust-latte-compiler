@@ -1,5 +1,5 @@
-use crate::return_analysis::check_function_returns;
 use crate::lexer::{Span, Spanned};
+use crate::return_analysis::check_function_returns;
 use crate::typed_ast::{
     TypedArg, TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedItem, TypedProgram, TypedStmt,
     VariableId,
@@ -362,9 +362,6 @@ trait SpannedAst {
     fn span(&self) -> lexer::Span;
     fn value(&self) -> &Self::Inner;
     fn into_value(self) -> Self::Inner;
-    fn map<F, MappedInner>(self, f: F) -> Self::Output<MappedInner>
-    where
-        F: FnOnce(Self::Inner) -> MappedInner;
 }
 
 impl<T> SpannedAst for Spanned<T> {
@@ -379,15 +376,6 @@ impl<T> SpannedAst for Spanned<T> {
     fn into_value(self) -> T {
         self.value
     }
-    fn map<F, MappedInner>(self, f: F) -> Spanned<MappedInner>
-    where
-        F: FnOnce(T) -> MappedInner,
-    {
-        Spanned {
-            span: self.span,
-            value: f(self.value),
-        }
-    }
 }
 
 impl<T> SpannedAst for Box<Spanned<T>> {
@@ -401,15 +389,6 @@ impl<T> SpannedAst for Box<Spanned<T>> {
     }
     fn into_value(self) -> T {
         self.value
-    }
-    fn map<F, MappedInner>(self, f: F) -> Box<Spanned<MappedInner>>
-    where
-        F: FnOnce(T) -> MappedInner,
-    {
-        Box::new(Spanned {
-            span: self.span,
-            value: f(self.value),
-        })
     }
 }
 

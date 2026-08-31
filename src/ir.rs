@@ -3,7 +3,7 @@ use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::ir::Value::Undef;
 use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedDecl, TypedExpr, TypedExprKind, TypedStmt, VariableId};
-use crate::{ast, DBG};
+use crate::{DBG, ast};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
 

@@ -79,16 +79,12 @@ fn escape_str(s: &str) -> Result<String, LexingError> {
 
 fn skip_line_comment(lexer: &mut logos::Lexer<'_, Token>) -> logos::Skip {
     let remainder = lexer.remainder();
-    let comment_len = remainder
-        .find(['\n', '\r'])
-        .unwrap_or(remainder.len());
+    let comment_len = remainder.find(['\n', '\r']).unwrap_or(remainder.len());
     lexer.bump(comment_len);
     logos::Skip
 }
 
-fn skip_block_comment(
-    lexer: &mut logos::Lexer<'_, Token>,
-) -> Result<logos::Skip, LexingError> {
+fn skip_block_comment(lexer: &mut logos::Lexer<'_, Token>) -> Result<logos::Skip, LexingError> {
     let Some(comment_end) = lexer.remainder().find("*/") else {
         return Err(LexingError::Other);
     };

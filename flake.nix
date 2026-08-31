@@ -20,6 +20,8 @@
         packages = [
           pkgs.cargo
           pkgs.rustc
+          pkgs.clippy
+          pkgs.rustfmt
           pkgs.gnumake
           llvm14.clang
           llvm14.llvm
