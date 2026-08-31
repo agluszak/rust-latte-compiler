@@ -1,4 +1,4 @@
-use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Phi, Terminator, UnaryOpCode, Value};
+use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Terminator, UnaryOpCode, Value};
 use crate::typechecker::{ReadyEnvironment, Type};
 use inkwell::AddressSpace;
 use inkwell::basic_block::BasicBlock;
@@ -175,22 +175,20 @@ impl<'ctx> CodeGen<'ctx> {
             })
             .collect();
         let mut values: Vec<Option<BasicValueEnum>> = vec![None; ir.values.len()];
-        let mut phis: Vec<Option<(Phi, PhiValue)>> = vec![None; ir.values.len()];
+        let mut phis: Vec<Option<PhiValue>> = vec![None; ir.values.len()];
         for (block_index, block) in ir.blocks.iter().enumerate() {
             let this_block = basic_blocks[block_index];
             self.builder.position_at_end(this_block);
             // Phis come first, so their values are available to all instructions.
             for &id in &block.phis {
                 let value_data = &ir.values[id.index()];
-                let Value::Phi(phi) = &value_data.kind else {
-                    unreachable!("block.phis must only contain phi values");
-                };
+                debug_assert!(matches!(value_data.kind, Value::Phi(_)));
                 // Incoming values will be set later
                 let llvm_phi = self
                     .builder
                     .build_phi(self.llvm_basic_type(&value_data.ty), &id.to_string())
                     .unwrap();
-                phis[id.index()] = Some((phi.clone(), llvm_phi));
+                phis[id.index()] = Some(llvm_phi);
 
                 values[id.index()] = Some(llvm_phi.as_basic_value());
             }
@@ -510,18 +508,27 @@ impl<'ctx> CodeGen<'ctx> {
             }
         }
 
-        for (phi, llvm_phi) in phis.into_iter().flatten() {
-            let mut incoming: Vec<(BasicValueEnum, BasicBlock)> = Vec::new();
-            for (block, value) in &phi.incoming {
-                let value = values[value.index()].unwrap();
-                incoming.push((value, basic_blocks[block.index()]));
-            }
-            let incoming: Vec<(&dyn BasicValue, BasicBlock)> = incoming
-                .iter()
-                .map(|(value, block)| (value as &dyn BasicValue, *block))
-                .collect();
+        // The incoming-edge pass reads the authoritative `Value::Phi` data from
+        // the IR and pairs it with the LLVM phis created earlier.
+        for block in ir.blocks.iter() {
+            for &id in &block.phis {
+                let llvm_phi = phis[id.index()].unwrap();
+                let Value::Phi(phi) = &ir.values[id.index()].kind else {
+                    unreachable!("block.phis must only contain phi values");
+                };
 
-            llvm_phi.add_incoming(incoming.as_slice());
+                let mut incoming: Vec<(BasicValueEnum, BasicBlock)> = Vec::new();
+                for (block, value) in &phi.incoming {
+                    let value = values[value.index()].unwrap();
+                    incoming.push((value, basic_blocks[block.index()]));
+                }
+                let incoming: Vec<(&dyn BasicValue, BasicBlock)> = incoming
+                    .iter()
+                    .map(|(value, block)| (value as &dyn BasicValue, *block))
+                    .collect();
+
+                llvm_phi.add_incoming(incoming.as_slice());
+            }
         }
     }
 
