@@ -198,12 +198,9 @@ impl TypecheckingError {
         }
     }
 
-    pub fn type_mismatch(expected: impl TypeMatch, found: Type, location: lexer::Span) -> Self {
+    pub fn type_mismatch(expected: Vec<Type>, found: Type, location: lexer::Span) -> Self {
         Self {
-            kind: TypecheckingErrorKind::TypeMismatch {
-                expected: expected.into_vec(),
-                found,
-            },
+            kind: TypecheckingErrorKind::TypeMismatch { expected, found },
             location,
         }
     }
@@ -282,106 +279,44 @@ impl TypecheckingError {
     }
 }
 
-pub trait TypeMatch {
-    fn matches(&self, other: &Type) -> bool;
-    fn into_vec(self) -> Vec<Type>;
-}
-
-impl TypeMatch for &Type {
-    fn matches(&self, other: &Type) -> bool {
-        *self == other
-    }
-
-    fn into_vec(self) -> Vec<Type> {
-        vec![self.clone()]
-    }
-}
-
-impl TypeMatch for Type {
-    fn matches(&self, other: &Type) -> bool {
-        self == other
-    }
-    fn into_vec(self) -> Vec<Type> {
-        vec![self]
-    }
-}
-
-impl<const N: usize> TypeMatch for [Type; N] {
-    fn matches(&self, other: &Type) -> bool {
-        self.iter().any(|t: &Type| t.matches(other))
-    }
-    fn into_vec(self) -> Vec<Type> {
-        self.to_vec()
-    }
-}
-
-impl TypeMatch for Vec<Type> {
-    fn matches(&self, other: &Type) -> bool {
-        self.iter().any(|t: &Type| t.matches(other))
-    }
-    fn into_vec(self) -> Vec<Type> {
-        self
-    }
-}
-
 fn ensure_type(
-    expected: impl TypeMatch,
+    expected: &Type,
     found: &Type,
     location: lexer::Span,
-) -> Result<Type, TypecheckingError> {
-    if expected.matches(found) {
-        Ok(found.clone())
+) -> Result<(), TypecheckingError> {
+    if expected == found {
+        Ok(())
     } else {
         Err(TypecheckingError::type_mismatch(
-            expected,
+            vec![expected.clone()],
             found.clone(),
             location,
         ))
     }
 }
 
-trait SpannedAst {
-    type Inner;
-    type Output<Inner>;
-    fn span(&self) -> lexer::Span;
-    fn value(&self) -> &Self::Inner;
-    fn into_value(self) -> Self::Inner;
-}
-
-impl<T> SpannedAst for Spanned<T> {
-    type Inner = T;
-    type Output<Inner> = Spanned<Inner>;
-    fn span(&self) -> lexer::Span {
-        self.span.clone()
-    }
-    fn value(&self) -> &T {
-        &self.value
-    }
-    fn into_value(self) -> T {
-        self.value
-    }
-}
-
-impl<T> SpannedAst for Box<Spanned<T>> {
-    type Inner = T;
-    type Output<Inner> = Box<Spanned<Inner>>;
-    fn span(&self) -> lexer::Span {
-        self.span.clone()
-    }
-    fn value(&self) -> &T {
-        &self.value
-    }
-    fn into_value(self) -> T {
-        self.value
+fn ensure_one_of(
+    expected: &[Type],
+    found: &Type,
+    location: lexer::Span,
+) -> Result<(), TypecheckingError> {
+    if expected.contains(found) {
+        Ok(())
+    } else {
+        Err(TypecheckingError::type_mismatch(
+            expected.to_vec(),
+            found.clone(),
+            location,
+        ))
     }
 }
 
 fn typecheck_expr(
-    expr: impl SpannedAst<Inner = ast::Expr>,
+    expr: Spanned<ast::Expr>,
     env: &mut Environment,
 ) -> Result<Spanned<TypedExpr>, TypecheckingError> {
-    let span = expr.span();
-    let typed_expr = match expr.into_value() {
+    let span = expr.span;
+    let typed_expr = match expr.value {
         ast::Expr::Variable(ident) => {
             let data = env.get_data(&ident).cloned().ok_or_else(|| {
                 TypecheckingError::undefined_variable(ident.clone(), span.clone())
@@ -402,11 +337,17 @@ fn typecheck_expr(
             })
         }
         ast::Expr::Unary { op, expr } => {
-            let typed_expr = typecheck_expr(expr, env)?;
-            let expr_ty = &typed_expr.value().ty;
+            let typed_expr = typecheck_expr(*expr, env)?;
+            let expr_ty = &typed_expr.value.ty;
             let ty = match &op.value {
-                ast::UnaryOp::Neg => ensure_type(Type::Int, expr_ty, op.span())?,
-                ast::UnaryOp::Not => ensure_type(Type::Bool, expr_ty, op.span())?,
+                ast::UnaryOp::Neg => {
+                    ensure_type(&Type::Int, expr_ty, op.span.clone())?;
+                    Type::Int
+                }
+                ast::UnaryOp::Not => {
+                    ensure_type(&Type::Bool, expr_ty, op.span.clone())?;
+                    Type::Bool
+                }
             };
             Ok(TypedExpr {
                 expr: TypedExprKind::Unary {
@@ -417,40 +358,41 @@ fn typecheck_expr(
             })
         }
         ast::Expr::Binary { lhs, op, rhs } => {
-            let lhs_span = lhs.span();
-            let rhs_span = rhs.span();
-
-            let lhs_typed_expr = typecheck_expr(lhs, env)?;
-            let rhs_typed_expr = typecheck_expr(rhs, env)?;
-            let lhs_ty = &lhs_typed_expr.value().ty;
-            let rhs_ty = &rhs_typed_expr.value().ty;
+            let lhs_typed_expr = typecheck_expr(*lhs, env)?;
+            let rhs_typed_expr = typecheck_expr(*rhs, env)?;
+            let lhs_ty = &lhs_typed_expr.value.ty;
+            let rhs_ty = &rhs_typed_expr.value.ty;
             let ty = match &op.value {
                 // Both strings and ints can be added
                 ast::BinaryOp::Add => {
-                    ensure_type([Type::Int, Type::LatteString], lhs_ty, lhs_span)?;
-                    ensure_type(lhs_ty, rhs_ty, rhs_span)?;
+                    ensure_one_of(
+                        &[Type::Int, Type::LatteString],
+                        lhs_ty,
+                        lhs_typed_expr.span.clone(),
+                    )?;
+                    ensure_type(lhs_ty, rhs_ty, rhs_typed_expr.span.clone())?;
                     lhs_ty.clone()
                 }
                 ast::BinaryOp::Sub
                 | ast::BinaryOp::Mul
                 | ast::BinaryOp::Div
                 | ast::BinaryOp::Mod => {
-                    ensure_type(Type::Int, lhs_ty, lhs_span)?;
-                    ensure_type(Type::Int, rhs_ty, rhs_span)?;
+                    ensure_type(&Type::Int, lhs_ty, lhs_typed_expr.span.clone())?;
+                    ensure_type(&Type::Int, rhs_ty, rhs_typed_expr.span.clone())?;
                     Type::Int
                 }
                 ast::BinaryOp::Lt | ast::BinaryOp::Lte | ast::BinaryOp::Gt | ast::BinaryOp::Gte => {
-                    ensure_type(Type::Int, lhs_ty, lhs_span)?;
-                    ensure_type(Type::Int, rhs_ty, rhs_span)?;
+                    ensure_type(&Type::Int, lhs_ty, lhs_typed_expr.span.clone())?;
+                    ensure_type(&Type::Int, rhs_ty, rhs_typed_expr.span.clone())?;
                     Type::Bool
                 }
                 ast::BinaryOp::Eq | ast::BinaryOp::Neq => {
-                    ensure_type(lhs_ty, rhs_ty, rhs_span)?;
+                    ensure_type(lhs_ty, rhs_ty, rhs_typed_expr.span.clone())?;
                     Type::Bool
                 }
                 ast::BinaryOp::And | ast::BinaryOp::Or => {
-                    ensure_type(Type::Bool, lhs_ty, lhs_span)?;
-                    ensure_type(Type::Bool, rhs_ty, rhs_span)?;
+                    ensure_type(&Type::Bool, lhs_ty, lhs_typed_expr.span.clone())?;
+                    ensure_type(&Type::Bool, rhs_ty, rhs_typed_expr.span.clone())?;
                     Type::Bool
                 }
             };
@@ -464,31 +406,24 @@ fn typecheck_expr(
             })
         }
         ast::Expr::Application { target, args } => {
-            let target_span = target.span();
-            let target_typed_expr = typecheck_expr(target, env)?;
+            let target_span = target.span.clone();
+            let target_typed_expr = typecheck_expr(*target, env)?;
             let arg_typed_exprs = args
-                .clone()
                 .into_iter()
                 .map(|arg| typecheck_expr(arg, env))
                 .collect::<Result<Vec<_>, _>>()?;
-            let arg_types: Vec<Type> = arg_typed_exprs
-                .iter()
-                .map(|arg| arg.value().ty.clone())
-                .collect();
-            let target_ty = &target_typed_expr.value().ty;
+            let target_ty = &target_typed_expr.value.ty;
             let ty = *match target_ty {
                 Type::Function(expected_arg_types, return_type) => {
-                    if expected_arg_types.len() != arg_types.len() {
+                    if expected_arg_types.len() != arg_typed_exprs.len() {
                         Err(TypecheckingError::wrong_argument_count(
                             expected_arg_types.len(),
                             arg_typed_exprs.len(),
                             target_span,
                         ))?;
                     }
-                    for ((expected, arg_expr), found) in
-                        expected_arg_types.iter().zip(args.iter()).zip(arg_types)
-                    {
-                        ensure_type(expected.clone(), &found, arg_expr.span())?;
+                    for (expected, arg) in expected_arg_types.iter().zip(&arg_typed_exprs) {
+                        ensure_type(expected, &arg.value.ty, arg.span.clone())?;
                     }
                     return_type.clone()
                 }
@@ -510,13 +445,13 @@ fn typecheck_expr(
 }
 
 fn typecheck_block(
-    stmt: impl SpannedAst<Inner = ast::Block>,
+    block: Spanned<ast::Block>,
     env: &mut Environment,
     expected_return_type: &Type,
 ) -> Result<Spanned<TypedBlock>, TypecheckingError> {
-    let span = stmt.span();
-    let typed_stmts = stmt
-        .into_value()
+    let span = block.span;
+    let typed_stmts = block
+        .value
         .0
         .into_iter()
         .map(|stmt| typecheck_stmt(stmt, env, expected_return_type))
@@ -525,19 +460,19 @@ fn typecheck_block(
 }
 
 fn resolve_type(
-    name: &impl SpannedAst<Inner = ast::TypeName>,
+    name: &Spanned<ast::TypeName>,
     _env: &Environment,
 ) -> Result<Type, TypecheckingError> {
     // TODO: This will change once we have classes
     // TODO: And also if we implement string interning
-    match name.value().0.as_str() {
+    match name.value.0.as_str() {
         "int" => Ok(Type::Int),
         "boolean" => Ok(Type::Bool),
         "string" => Ok(Type::LatteString),
         "void" => Ok(Type::Void),
         _ => Err(TypecheckingError::unknown_type(
-            name.value().clone(),
-            name.span(),
+            name.value.clone(),
+            name.span.clone(),
         )),
     }
 }
@@ -557,14 +492,14 @@ fn resolve_function_header(
     let args = args
         .iter()
         .map(|arg: &Spanned<ast::Arg>| {
-            let ty = resolve_type(&arg.value().ty, env).and_then(|ty| {
+            let ty = resolve_type(&arg.value.ty, env).and_then(|ty| {
                 if ty == Type::Void {
-                    Err(TypecheckingError::void_variable(arg.span()))
+                    Err(TypecheckingError::void_variable(arg.span.clone()))
                 } else {
                     Ok(ty)
                 }
             });
-            let name = arg.value().name.clone();
+            let name = arg.value.name.clone();
             ty.map(|ty| (name, ty))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -572,16 +507,16 @@ fn resolve_function_header(
     // Ensure that argument names are unique
     let mut arg_names = BTreeSet::new();
     for (arg_name, _) in &args {
-        if !arg_names.insert(arg_name.value().0.clone()) {
+        if !arg_names.insert(arg_name.value.0.clone()) {
             return Err(TypecheckingError::duplicate_argument(
-                arg_name.value().clone(),
-                arg_name.span(),
+                arg_name.value.clone(),
+                arg_name.span.clone(),
             ));
         }
     }
 
     let function_type = Type::Function(
-        args.clone().into_iter().map(|(_, ty)| ty).collect(),
+        args.iter().map(|(_, ty)| ty.clone()).collect(),
         Box::new(return_type.clone()),
     );
 
@@ -595,16 +530,16 @@ fn resolve_function_header(
 }
 
 fn typecheck_fn_decl(
-    decl: impl SpannedAst<Inner = ast::FnDecl>,
+    decl: Spanned<ast::FnDecl>,
     env: &mut Environment,
 ) -> Result<Spanned<TypedFnDecl>, TypecheckingError> {
-    let span = decl.span();
+    let span = decl.span;
     let ast::FnDecl {
         return_type,
         name,
         args,
         body,
-    } = decl.into_value();
+    } = decl.value;
     let header = resolve_function_header(&return_type, &args, env)?;
 
     let (args, body) = env.with_scope(|env| {
@@ -612,7 +547,7 @@ fn typecheck_fn_decl(
 
         for (name, ty) in header.args {
             let var_id = env.fresh_variable_id();
-            let span = name.span();
+            let span = name.span.clone();
             let typed_arg = Spanned::new(
                 span,
                 TypedArg {
@@ -642,11 +577,11 @@ fn typecheck_fn_decl(
 }
 
 fn typecheck_var_decl(
-    decl: impl SpannedAst<Inner = ast::VarDecl>,
+    decl: Spanned<ast::VarDecl>,
     env: &mut Environment,
 ) -> Result<Spanned<TypedVarDecl>, TypecheckingError> {
-    let span = decl.span();
-    let ast::VarDecl { ty, items } = decl.into_value();
+    let span = decl.span;
+    let ast::VarDecl { ty, items } = decl.value;
     let ty = resolve_type(&ty, env)?;
     if ty == Type::Void {
         return Err(TypecheckingError::void_variable(span));
@@ -655,13 +590,13 @@ fn typecheck_var_decl(
     let typed_items = items
         .into_iter()
         .map(|item| {
-            let span = item.span();
-            let item = item.into_value();
+            let span = item.span;
+            let item = item.value;
             let ident = item.ident;
             let ty = ty.clone();
             let typed_init = if let Some(init) = item.init {
                 let typed_init = typecheck_expr(init, env)?;
-                ensure_type(ty.clone(), &typed_init.value().ty, typed_init.span())?;
+                ensure_type(&ty, &typed_init.value.ty, typed_init.span.clone())?;
                 Some(typed_init)
             } else {
                 None
@@ -691,12 +626,12 @@ fn typecheck_var_decl(
 }
 
 fn typecheck_stmt(
-    stmt: impl SpannedAst<Inner = ast::Stmt>,
+    stmt: Spanned<ast::Stmt>,
     env: &mut Environment,
     expected_return_type: &Type,
 ) -> Result<Spanned<TypedStmt>, TypecheckingError> {
-    let span = stmt.span();
-    let typed_stmt = match stmt.into_value() {
+    let span = stmt.span;
+    let typed_stmt = match stmt.value {
         ast::Stmt::Empty => TypedStmt::Empty,
         ast::Stmt::Block(block) => {
             let typed_block =
@@ -709,14 +644,14 @@ fn typecheck_stmt(
         }
         ast::Stmt::Assignment { target, expr } => {
             let target_type = env
-                .get_data(target.value())
+                .get_data(&target.value)
                 .ok_or_else(|| {
-                    TypecheckingError::undefined_variable(target.value().clone(), target.span())
+                    TypecheckingError::undefined_variable(target.value.clone(), target.span.clone())
                 })?
                 .clone();
             let typed_expr = typecheck_expr(expr, env)?;
-            let expr_ty = typed_expr.value().ty.clone();
-            ensure_type(target_type.ty.clone(), &expr_ty, typed_expr.span())?;
+            let expr_ty = typed_expr.value.ty.clone();
+            ensure_type(&target_type.ty, &expr_ty, typed_expr.span.clone())?;
             let target_id = target_type.id;
             TypedStmt::Assignment {
                 target,
@@ -727,10 +662,10 @@ fn typecheck_stmt(
         ast::Stmt::Return(init) => {
             if let Some(init) = init {
                 let typed_init = typecheck_expr(init, env)?;
-                let init_ty = &typed_init.value().ty;
-                ensure_type(expected_return_type.clone(), init_ty, typed_init.span())?;
+                let init_ty = &typed_init.value.ty;
+                ensure_type(expected_return_type, init_ty, typed_init.span.clone())?;
                 if expected_return_type == &Type::Void {
-                    return Err(TypecheckingError::void_return(typed_init.span()));
+                    return Err(TypecheckingError::void_return(typed_init.span));
                 }
                 TypedStmt::Return(Some(typed_init))
             } else {
@@ -744,12 +679,12 @@ fn typecheck_stmt(
             otherwise,
         } => {
             let typed_cond = typecheck_expr(cond, env)?;
-            let cond_ty = typed_cond.value().ty.clone();
-            ensure_type(Type::Bool, &cond_ty, typed_cond.span())?;
-            let typed_then = typecheck_stmt(then, env, expected_return_type)?;
+            let cond_ty = typed_cond.value.ty.clone();
+            ensure_type(&Type::Bool, &cond_ty, typed_cond.span.clone())?;
+            let typed_then = typecheck_stmt(*then, env, expected_return_type)?;
             let typed_otherwise = if let Some(otherwise) = otherwise {
                 Some(Box::new(typecheck_stmt(
-                    otherwise,
+                    *otherwise,
                     env,
                     expected_return_type,
                 )?))
@@ -764,9 +699,9 @@ fn typecheck_stmt(
         }
         ast::Stmt::While { cond, body } => {
             let typed_cond = typecheck_expr(cond, env)?;
-            let cond_ty = typed_cond.value().ty.clone();
-            ensure_type(Type::Bool, &cond_ty, typed_cond.span())?;
-            let typed_body = typecheck_stmt(body, env, expected_return_type)?;
+            let cond_ty = typed_cond.value.ty.clone();
+            ensure_type(&Type::Bool, &cond_ty, typed_cond.span.clone())?;
+            let typed_body = typecheck_stmt(*body, env, expected_return_type)?;
             TypedStmt::While {
                 cond: typed_cond,
                 body: Box::new(typed_body),
@@ -789,19 +724,19 @@ fn typecheck_stmt(
 }
 
 fn typecheck_incr_decr_target(
-    target: impl SpannedAst<Inner = ast::Expr>,
+    target: Spanned<ast::Expr>,
     env: &mut Environment,
 ) -> Result<Spanned<TypedExpr>, TypecheckingError> {
     // TODO: Lvalues...
     let typed_target = typecheck_expr(target, env)?;
-    if let TypedExprKind::Variable(ident, _) = &typed_target.value().expr {
+    if let TypedExprKind::Variable(ident, _) = &typed_target.value.expr {
         let target_type = env.get_type(ident).ok_or_else(|| {
-            TypecheckingError::undefined_variable(ident.clone(), typed_target.span())
+            TypecheckingError::undefined_variable(ident.clone(), typed_target.span.clone())
         })?;
-        ensure_type(Type::Int, &target_type, typed_target.span())?;
+        ensure_type(&Type::Int, &target_type, typed_target.span.clone())?;
         Ok(typed_target)
     } else {
-        Err(TypecheckingError::invalid_lvalue(typed_target.span()))?
+        Err(TypecheckingError::invalid_lvalue(typed_target.span))?
     }
 }
 
@@ -814,7 +749,7 @@ pub fn typecheck_program(
 
     // Before typechecking bodies, first add all the function declarations to the environment
     for decl in &program.0 {
-        let decl = decl.value();
+        let decl = &decl.value;
         let header = resolve_function_header(&decl.return_type, &decl.args, &env);
         match header {
             Ok(header) => {
@@ -845,7 +780,7 @@ pub fn typecheck_program(
     let main_ident = ast::Ident::new("main".to_string());
     if let Some(main_type) = env.get_type(&main_ident) {
         if let Err(err) = ensure_type(
-            Type::Function(Vec::new(), Box::new(Type::Int)),
+            &Type::Function(Vec::new(), Box::new(Type::Int)),
             &main_type,
             env.get_span(&main_ident).unwrap().clone(),
         ) {
