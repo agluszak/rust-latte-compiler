@@ -1,0 +1,127 @@
+---
+source: tests/fixtures.rs
+description: "int main() {\n    printBool((left() && right()) == tail());\n    printPair(left() && right(), tail());\n    return 0;\n}\n\nboolean left() {\n    printString(\"left\");\n    return true;\n}\n\nboolean right() {\n    printString(\"right\");\n    return false;\n}\n\nboolean tail() {\n    printString(\"tail\");\n    return false;\n}\n\nvoid printBool(boolean value) {\n    if (value) {\n        printString(\"true\");\n    } else {\n        printString(\"false\");\n    }\n}\n\nvoid printPair(boolean first, boolean second) {\n    printBool(first);\n    printBool(second);\n}\n"
+input_file: inputs/good/expression_cfg_sequencing.lat
+---
+; ModuleID = 'expression_cfg_sequencing'
+source_filename = "expression_cfg_sequencing"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i1 @left() {
+b0:
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"left", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  ret i1 true
+}
+
+define i32 @main() {
+b0:
+  %left = call i1 @left()
+  br i1 %left, label %b2, label %b3
+
+b1:                                               ; preds = %b2
+  br label %b4
+
+b2:                                               ; preds = %b0
+  %right = call i1 @right()
+  br i1 %right, label %b1, label %b3
+
+b3:                                               ; preds = %b2, %b0
+  br label %b4
+
+b4:                                               ; preds = %b3, %b1
+  %v4 = phi i1 [ true, %b1 ], [ false, %b3 ]
+  %tail = call i1 @tail()
+  %v6 = icmp eq i1 %v4, %tail
+  call void @printBool(i1 %v6)
+  %left1 = call i1 @left()
+  br i1 %left1, label %b6, label %b7
+
+b5:                                               ; preds = %b6
+  br label %b8
+
+b6:                                               ; preds = %b4
+  %right2 = call i1 @right()
+  br i1 %right2, label %b5, label %b7
+
+b7:                                               ; preds = %b6, %b4
+  br label %b8
+
+b8:                                               ; preds = %b7, %b5
+  %v12 = phi i1 [ true, %b5 ], [ false, %b7 ]
+  %tail3 = call i1 @tail()
+  call void @printPair(i1 %v12, i1 %tail3)
+  ret i32 0
+}
+
+define void @printBool(i1 %0) {
+b0:
+  br i1 %0, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  br label %b3
+
+b2:                                               ; preds = %b0
+  %str_ptr2 = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
+  call void @printString(%string* %new_string4)
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
+  ret void
+}
+
+define void @printPair(i1 %0, i1 %1) {
+b0:
+  call void @printBool(i1 %0)
+  call void @printBool(i1 %1)
+  ret void
+}
+
+define i1 @right() {
+b0:
+  %str_ptr = alloca [5 x i8], align 1
+  store [5 x i8] c"right", [5 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
+  call void @printString(%string* %new_string)
+  ret i1 false
+}
+
+define i1 @tail() {
+b0:
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"tail", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  call void @printString(%string* %new_string)
+  ret i1 false
+}
+

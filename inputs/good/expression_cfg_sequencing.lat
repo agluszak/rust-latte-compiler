@@ -1,0 +1,33 @@
+int main() {
+    printBool((left() && right()) == tail());
+    printPair(left() && right(), tail());
+    return 0;
+}
+
+boolean left() {
+    printString("left");
+    return true;
+}
+
+boolean right() {
+    printString("right");
+    return false;
+}
+
+boolean tail() {
+    printString("tail");
+    return false;
+}
+
+void printBool(boolean value) {
+    if (value) {
+        printString("true");
+    } else {
+        printString("false");
+    }
+}
+
+void printPair(boolean first, boolean second) {
+    printBool(first);
+    printBool(second);
+}

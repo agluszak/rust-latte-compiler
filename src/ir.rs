@@ -624,22 +624,6 @@ impl FunctionIr {
         Some(result)
     }
 
-    fn join_blocks(context: &mut IrContext, block_ids: &[BlockId]) -> BlockId {
-        let mut block_ids = block_ids.to_vec();
-        block_ids.sort();
-        block_ids.dedup();
-        if block_ids.len() == 1 {
-            return block_ids[0];
-        }
-
-        let join_block = context.new_block();
-        for block_id in block_ids {
-            context.add_terminator(block_id, Terminator::Jump(join_block));
-        }
-        context.seal_block(join_block);
-        join_block
-    }
-
     fn translate_expr(
         context: &mut IrContext,
         expr: TypedExpr,
@@ -747,9 +731,8 @@ impl FunctionIr {
                     return (phi, join_block);
                 }
 
-                let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
-                let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, block_id);
-                let block_id = Self::join_blocks(context, &[lhs_block, rhs_block]);
+                let (lhs, block_id) = Self::translate_expr(context, lhs.value, block_id);
+                let (rhs, block_id) = Self::translate_expr(context, rhs.value, block_id);
 
                 if let Some(folded) = Self::fold_binary(context, op, lhs, rhs) {
                     (folded, block_id)
@@ -837,25 +820,23 @@ impl FunctionIr {
             TypedStmt::Block(block) => Self::translate_block(context, block.value, block_id),
             TypedStmt::Decl(decl) => match decl.value {
                 TypedDecl::Var { items, .. } => {
-                    let mut expr_blocks = Vec::new();
+                    let mut block_id = block_id;
                     for item in items {
                         context
                             .variable_names
                             .insert(item.value.var_id, item.value.ident.value.0);
                         if let Some(expr) = item.value.init {
-                            let (expr, block_id) =
+                            let (expr, continuation_block) =
                                 Self::translate_expr(context, expr.value, block_id);
+                            block_id = continuation_block;
                             context.write_variable(item.value.var_id, block_id, expr);
-                            expr_blocks.push(block_id);
                         } else {
                             let default = Self::default_value(&item.value.ty);
                             let default = context.new_value(default, item.value.ty);
                             context.add_instruction(block_id, default);
                             context.write_variable(item.value.var_id, block_id, default);
-                            expr_blocks.push(block_id);
                         }
                     }
-                    let block_id = Self::join_blocks(context, &expr_blocks);
                     ContinueBlock(block_id)
                 }
                 TypedDecl::Fn { .. } => panic!("Nested functions are not supported yet"),
