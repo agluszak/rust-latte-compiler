@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "/* Test boolean operators */\n\nint main () {\n  int x = 4;\n  if (3 <= x && 4 != 2 && true) {\n    printBool(true);\n  } else {\n    printString(\"apa\");\n  }\n\n  printBool(true == true || dontCallMe(1));\n  printBool(4 < -5 && dontCallMe(2));\n\n  printBool(4 == x && true == !false && true);\n\n  printBool(implies(false,false));\n  printBool(implies(false,true));\n  printBool(implies(true,false));\n  printBool(implies(true,true));\n  return 0 ;\n\n}\n\nboolean dontCallMe(int x) {\n  printInt(x);\n  return true;\n}\n\nvoid printBool(boolean b) {\n  if (b) {\n    printString(\"true\");\n  } else {\n    printString(\"false\");\n }\n return;\n}\n\nboolean implies(boolean x, boolean y) {\n  return !x || x == y;\n}\n"
+input_file: inputs/good/core017.lat
 ---
 ; ModuleID = 'core017'
 source_filename = "core017"
@@ -134,8 +135,8 @@ b22:                                              ; preds = %b21, %b19
   br label %b23
 
 b23:                                              ; preds = %b22, %b20
-  %v53 = phi i1 [ true, %b20 ], [ false, %b22 ]
-  br i1 %v53, label %b25, label %b26
+  %v44 = phi i1 [ true, %b20 ], [ false, %b22 ]
+  br i1 %v44, label %b25, label %b26
 
 b24:                                              ; preds = %b25
   br label %b27
@@ -147,8 +148,8 @@ b26:                                              ; preds = %b25, %b23
   br label %b27
 
 b27:                                              ; preds = %b26, %b24
-  %v57 = phi i1 [ true, %b24 ], [ false, %b26 ]
-  call void @printBool(i1 %v57)
+  %v48 = phi i1 [ true, %b24 ], [ false, %b26 ]
+  call void @printBool(i1 %v48)
   %implies = call i1 @implies(i1 false, i1 false)
   call void @printBool(i1 %implies)
   %implies3 = call i1 @implies(i1 false, i1 true)

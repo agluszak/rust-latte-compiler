@@ -1,10 +1,9 @@
+use crate::ast;
 use crate::ast::Literal;
 use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
-use crate::ir::Value::Undef;
 use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedStmt, VariableId};
-use crate::{DBG, ast};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -17,6 +16,16 @@ impl Display for BlockId {
     }
 }
 
+impl BlockId {
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct ValueId(u32);
@@ -24,6 +33,12 @@ pub struct ValueId(u32);
 impl Display for ValueId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "v{}", self.0)
+    }
+}
+
+impl ValueId {
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
     }
 }
 
@@ -50,23 +65,32 @@ pub enum UnaryOpCode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Phi {
-    incoming: BTreeMap<BlockId, ValueId>,
+    pub incoming: Vec<(BlockId, ValueId)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildingPhi {
     block: BlockId,
-    users: BTreeSet<ValueId>,
+    incoming: Vec<(BlockId, ValueId)>,
+    users: Vec<ValueId>,
 }
 
-impl Phi {
-    pub fn incoming(&self) -> impl Iterator<Item = (BlockId, ValueId)> + '_ {
-        self.incoming.iter().map(|(block, value)| (*block, *value))
-    }
-}
-
-impl Phi {
-    fn new(block: BlockId) -> Phi {
-        Phi {
-            incoming: BTreeMap::new(),
+impl BuildingPhi {
+    fn new(block: BlockId) -> Self {
+        Self {
+            incoming: Vec::new(),
             block,
-            users: BTreeSet::new(),
+            users: Vec::new(),
+        }
+    }
+
+    fn add_incoming(&mut self, block: BlockId, value: ValueId) {
+        self.incoming.push((block, value));
+    }
+
+    fn add_user(&mut self, user: ValueId) {
+        if !self.users.contains(&user) {
+            self.users.push(user);
         }
     }
 }
@@ -81,28 +105,40 @@ pub enum Value {
     BinaryOp(BinaryOpCode, ValueId, ValueId),
     UnaryOp(UnaryOpCode, ValueId),
     Phi(Phi),
-    Rerouted(ValueId),
     Undef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Block {
-    instructions: Vec<ValueId>,
-    terminator: Option<Terminator>,
-    preds: BTreeSet<BlockId>,
-    sealed: bool,
+enum BuildingValue {
+    Int(i32),
+    String(String),
+    Bool(bool),
+    Call(VariableId, Vec<ValueId>),
+    Argument(u32),
+    BinaryOp(BinaryOpCode, ValueId, ValueId),
+    UnaryOp(UnaryOpCode, ValueId),
+    Phi(BuildingPhi),
+    Undef,
 }
 
-impl Block {
-    fn ready(self) -> ReadyBlock {
-        assert!(self.sealed);
-        assert!(self.terminator.is_some());
-        ReadyBlock {
-            instructions: self.instructions,
-            terminator: self.terminator.unwrap(),
-            preds: self.preds,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildingValueData {
+    ty: Type,
+    kind: BuildingValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValueData {
+    pub ty: Type,
+    pub kind: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildingBlock {
+    instructions: Vec<ValueId>,
+    terminator: Option<Terminator>,
+    predecessors: Vec<BlockId>,
+    sealed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,90 +150,78 @@ pub enum Terminator {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IrContext {
-    variable_names: BTreeMap<VariableId, String>,
-    values_in_blocks: BTreeMap<VariableId, BTreeMap<BlockId, ValueId>>,
+struct IrBuilder {
+    current_definitions: BTreeMap<VariableId, BTreeMap<BlockId, ValueId>>,
     variable_types: BTreeMap<VariableId, Type>,
-    values: BTreeMap<ValueId, Value>,
-    value_types: BTreeMap<ValueId, Type>,
-    blocks: BTreeMap<BlockId, Block>,
+    values: Vec<BuildingValueData>,
+    aliases: Vec<Option<ValueId>>,
+    blocks: Vec<BuildingBlock>,
     incomplete_phis: BTreeMap<BlockId, BTreeMap<VariableId, ValueId>>,
-    defined_in_instructions: BTreeSet<ValueId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadyBlock {
+pub struct BasicBlock {
     pub instructions: Vec<ValueId>,
     pub terminator: Terminator,
-    pub preds: BTreeSet<BlockId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadyIr {
-    pub values: BTreeMap<ValueId, Value>,
-    pub types: BTreeMap<ValueId, Type>,
-    pub blocks: BTreeMap<BlockId, ReadyBlock>,
+pub struct FunctionIr {
+    pub ty: Type,
+    pub values: Vec<ValueData>,
+    pub blocks: Vec<BasicBlock>,
 }
 
-impl Default for IrContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl IrContext {
-    pub fn new() -> IrContext {
-        IrContext {
-            variable_names: BTreeMap::new(),
-            values_in_blocks: BTreeMap::new(),
+impl IrBuilder {
+    fn new() -> Self {
+        Self {
+            current_definitions: BTreeMap::new(),
             variable_types: BTreeMap::new(),
-            values: BTreeMap::new(),
-            value_types: BTreeMap::new(),
-            blocks: BTreeMap::new(),
+            values: Vec::new(),
+            aliases: Vec::new(),
+            blocks: Vec::new(),
             incomplete_phis: BTreeMap::new(),
-            defined_in_instructions: BTreeSet::new(),
         }
     }
 
-    pub fn ready(self) -> ReadyIr {
-        assert!(self.incomplete_phis.is_empty());
-        if DBG.load(std::sync::atomic::Ordering::Relaxed) {
-            dbg!((&self.variable_names, &self.values, &self.blocks));
-        }
-        let blocks = self
-            .blocks
-            .into_iter()
-            .map(|(id, block)| (id, block.ready()))
-            .collect();
-        ReadyIr {
-            values: self.values,
-            types: self.value_types,
-            blocks,
-        }
+    fn allocate(&mut self, kind: BuildingValue, ty: Type) -> ValueId {
+        let id = ValueId(self.values.len() as u32);
+        self.values.push(BuildingValueData { ty, kind });
+        self.aliases.push(None);
+        id
     }
 
-    fn add_instruction(&mut self, block: BlockId, value: ValueId) {
-        let block = self
-            .blocks
-            .get_mut(&block)
-            .unwrap_or_else(|| panic!("Block {:?} not found", block));
-        if let Value::Phi(_) = self.values[&value].clone() {
-            // TODO: Phi nodes can be added post-sealing, but they should be added to the beginning
-        } else {
-            assert!(block.terminator.is_none());
-        }
-        if !self.defined_in_instructions.contains(&value) {
-            self.defined_in_instructions.insert(value);
-            block.instructions.push(value);
-        }
+    fn emit(&mut self, block: BlockId, kind: BuildingValue, ty: Type) -> ValueId {
+        assert!(self.blocks[block.index()].terminator.is_none());
+        let id = self.allocate(kind, ty);
+        self.blocks[block.index()].instructions.push(id);
+        id
     }
 
-    fn add_terminator(&mut self, block_id: BlockId, terminator: Terminator) {
-        let mut block = self
-            .blocks
-            .remove(&block_id)
-            .unwrap_or_else(|| panic!("Block {:?} not found", block_id));
-        assert!(block.terminator.is_none());
+    fn new_phi(&mut self, block: BlockId, ty: Type) -> ValueId {
+        let id = self.allocate(BuildingValue::Phi(BuildingPhi::new(block)), ty);
+        self.blocks[block.index()].instructions.push(id);
+        id
+    }
+
+    fn resolve_alias(&mut self, id: ValueId) -> ValueId {
+        let Some(next) = self.aliases[id.index()] else {
+            return id;
+        };
+        let resolved = self.resolve_alias(next);
+        self.aliases[id.index()] = Some(resolved);
+        resolved
+    }
+
+    fn resolve_alias_readonly(&self, mut id: ValueId) -> ValueId {
+        while let Some(next) = self.aliases[id.index()] {
+            id = next;
+        }
+        id
+    }
+
+    fn finish_block(&mut self, block_id: BlockId, terminator: Terminator) {
+        assert!(self.blocks[block_id.index()].terminator.is_none());
         match &terminator {
             Terminator::Return(_) | Terminator::ReturnNoValue => {}
             Terminator::Branch(_, then, else_) => {
@@ -208,92 +232,68 @@ impl IrContext {
                 self.add_predecessor(*target, block_id);
             }
         }
-        block.terminator = Some(terminator);
-        self.blocks.insert(block_id, block);
+        self.blocks[block_id.index()].terminator = Some(terminator);
     }
 
     fn add_predecessor(&mut self, block: BlockId, pred: BlockId) {
-        let block = self
-            .blocks
-            .get_mut(&block)
-            .unwrap_or_else(|| panic!("Block {:?} not found", block));
+        let block = &mut self.blocks[block.index()];
         assert!(!block.sealed);
-        block.preds.insert(pred);
+        if !block.predecessors.contains(&pred) {
+            block.predecessors.push(pred);
+        }
     }
 
-    pub fn new_block(&mut self) -> BlockId {
+    fn new_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len() as u32);
-        self.blocks.insert(
-            id,
-            Block {
-                instructions: Vec::new(),
-                terminator: None,
-                preds: BTreeSet::new(),
-                sealed: false,
-            },
-        );
+        self.blocks.push(BuildingBlock {
+            instructions: Vec::new(),
+            terminator: None,
+            predecessors: Vec::new(),
+            sealed: false,
+        });
         id
     }
 
-    pub fn write_variable(&mut self, variable: VariableId, block: BlockId, value: ValueId) {
-        let value_ty = self
-            .value_types
-            .get(&value)
-            .cloned()
-            .unwrap_or_else(|| panic!("Value {:?} not found", value));
+    fn write_variable(&mut self, variable: VariableId, block: BlockId, value: ValueId) {
+        let value = self.resolve_alias(value);
+        let value_ty = self.values[value.index()].ty.clone();
         self.variable_types.insert(variable, value_ty);
-        self.values_in_blocks
+        self.current_definitions
             .entry(variable)
             .or_default()
             .insert(block, value);
     }
 
-    pub fn new_value(&mut self, value: Value, ty: Type) -> ValueId {
-        let id = ValueId(self.values.len() as u32);
-        self.values.insert(id, value);
-        self.value_types.insert(id, ty);
-        id
-    }
-
-    pub fn remove_value(&mut self, value: ValueId) {
-        self.values.remove(&value);
-        self.value_types.remove(&value);
-    }
-
-    pub fn read_variable(&mut self, variable: VariableId, block_id: BlockId) -> ValueId {
+    fn read_variable(&mut self, variable: VariableId, block_id: BlockId) -> ValueId {
         if let Some(value) = self
-            .values_in_blocks
+            .current_definitions
             .get(&variable)
             .and_then(|map| map.get(&block_id))
+            .copied()
         {
-            *value
+            self.resolve_alias(value)
         } else {
-            let block = self
-                .blocks
-                .get(&block_id)
-                .unwrap_or_else(|| panic!("Block {:?} not found", block_id));
+            let sealed = self.blocks[block_id.index()].sealed;
+            let predecessors = self.blocks[block_id.index()].predecessors.clone();
             let ty = self
                 .variable_types
                 .get(&variable)
                 .cloned()
                 .unwrap_or_else(|| panic!("Variable {:?} not found", variable));
-            let val = if !block.sealed {
+            let val = if !sealed {
                 // Incomplete CFG
-                let phi = Phi::new(block_id);
-                let id = self.new_value(Value::Phi(phi), ty);
+                let id = self.new_phi(block_id, ty);
                 self.incomplete_phis
                     .entry(block_id)
                     .or_default()
                     .insert(variable, id);
                 id
-            } else if block.preds.len() == 1 {
+            } else if predecessors.len() == 1 {
                 // Optimize the common case of a single predecessor: no phi needed
-                let pred = block.preds.iter().next().unwrap();
-                self.read_variable(variable, *pred)
+                self.read_variable(variable, predecessors[0])
             } else {
                 // Break potential cycles with operandless phi
-                let phi = Phi::new(block_id);
-                let val = self.new_value(Value::Phi(phi), ty);
+                let val = self.new_phi(block_id, ty);
                 self.write_variable(variable, block_id, val);
 
                 self.add_phi_operands(variable, val)
@@ -304,43 +304,35 @@ impl IrContext {
     }
 
     fn add_phi_operands(&mut self, variable: VariableId, phi_id: ValueId) -> ValueId {
+        let phi_id = self.resolve_alias(phi_id);
         let phi_block = self.get_phi(phi_id).unwrap().block;
-        let block = self
-            .blocks
-            .get(&phi_block)
-            .unwrap_or_else(|| panic!("Block {:?} not found", phi_block));
-        for pred in block.preds.clone() {
+        for pred in self.blocks[phi_block.index()].predecessors.clone() {
             let pred_val = self.read_variable(variable, pred);
-            if let Some(pred_phi) = self.get_phi(pred_val) {
-                pred_phi.users.insert(phi_id);
+            let pred_val = self.resolve_alias(pred_val);
+            if let Some(BuildingValue::Phi(pred_phi)) = self
+                .values
+                .get_mut(pred_val.index())
+                .map(|data| &mut data.kind)
+            {
+                pred_phi.add_user(phi_id);
             }
             self.get_phi(phi_id)
                 .unwrap()
-                .incoming
-                .insert(pred, pred_val);
+                .add_incoming(pred, pred_val);
         }
         self.try_remove_trivial_phi(phi_id)
     }
 
-    fn get_phi(&mut self, phi_id: ValueId) -> Option<&mut Phi> {
-        if let Some(Value::Rerouted(id)) = self.values.get(&phi_id) {
-            self.get_phi(*id)
-        } else if let Some(Value::Phi(phi)) = self.values.get_mut(&phi_id) {
-            Some(phi)
-        } else {
-            None
+    fn get_phi(&mut self, phi_id: ValueId) -> Option<&mut BuildingPhi> {
+        match &mut self.values[phi_id.index()].kind {
+            BuildingValue::Phi(phi) => Some(phi),
+            _ => None,
         }
     }
 
-    pub fn seal_block(&mut self, block_id: BlockId) {
-        let mut block = self
-            .blocks
-            .get(&block_id)
-            .cloned()
-            .unwrap_or_else(|| panic!("Block {:?} not found", block_id));
-        assert!(!block.sealed);
-        block.sealed = true;
-        self.blocks.insert(block_id, block);
+    fn seal_block(&mut self, block_id: BlockId) {
+        assert!(!self.blocks[block_id.index()].sealed);
+        self.blocks[block_id.index()].sealed = true;
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
             for (variable, phi_id) in incomplete_phis {
                 self.add_phi_operands(variable, phi_id);
@@ -349,12 +341,17 @@ impl IrContext {
     }
 
     fn try_remove_trivial_phi(&mut self, phi_id: ValueId) -> ValueId {
+        let phi_id = self.resolve_alias(phi_id);
         let mut phi = self.get_phi(phi_id).cloned().unwrap();
         let mut same = None;
-        for &op in phi.incoming.values() {
+        for &(_, operand) in &phi.incoming {
+            let op = self.resolve_alias(operand);
+            if op == phi_id {
+                continue;
+            }
             if let Some(same) = same {
-                if op == same || op == phi_id {
-                    // Unique value or self−reference
+                if op == same {
+                    // Another edge carrying the same unique value
                     continue;
                 } else {
                     // This phi merges at least two different values, so it's not trivial
@@ -366,28 +363,103 @@ impl IrContext {
         }
         if same.is_none() {
             // This phi is unreachable or in the entry block
-            let ty = self
-                .value_types
-                .get(&phi_id)
-                .cloned()
-                .unwrap_or_else(|| panic!("Value {:?} not found", phi_id));
-            let undef = self.new_value(Undef, ty);
+            let ty = self.values[phi_id.index()].ty.clone();
+            let undef = self.allocate(BuildingValue::Undef, ty);
+            self.blocks[phi.block.index()].instructions.push(undef);
             same = Some(undef);
         }
         // Remember all users except the phi itself
-        phi.users.remove(&phi_id);
-        // Reroute all uses of phi to same and remove phi
-        self.values.insert(phi_id, Value::Rerouted(same.unwrap()));
+        phi.users.retain(|&user| user != phi_id);
+        let replacement = self.resolve_alias(same.unwrap());
+        self.aliases[phi_id.index()] = Some(replacement);
 
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
-            if let Some(_phi) = self.get_phi(user) {
-                let target = self.try_remove_trivial_phi(user);
-                // TODO: is this necessary?
-                self.values.insert(user, Value::Rerouted(target));
+            let user = self.resolve_alias(user);
+            if matches!(self.values[user.index()].kind, BuildingValue::Phi(_)) {
+                self.try_remove_trivial_phi(user);
             }
         }
-        same.unwrap()
+        replacement
+    }
+
+    fn finish(mut self, ty: Type) -> FunctionIr {
+        assert!(self.incomplete_phis.is_empty());
+        assert!(self.blocks.iter().all(|block| block.sealed));
+        assert!(self.blocks.iter().all(|block| block.terminator.is_some()));
+
+        for id in 0..self.values.len() {
+            self.resolve_alias(ValueId(id as u32));
+        }
+
+        let mut canonical_ids = vec![None; self.values.len()];
+        let mut next_id = 0;
+        for (old_id, final_id) in canonical_ids.iter_mut().enumerate() {
+            if self.aliases[old_id].is_none() {
+                *final_id = Some(ValueId(next_id));
+                next_id += 1;
+            }
+        }
+        let remapped_ids: Vec<ValueId> = (0..self.values.len())
+            .map(|id| {
+                let canonical = self.resolve_alias_readonly(ValueId(id as u32));
+                canonical_ids[canonical.index()].expect("canonical value was discarded")
+            })
+            .collect();
+        let remap = |id: ValueId| remapped_ids[id.index()];
+
+        let values = self
+            .values
+            .into_iter()
+            .enumerate()
+            .filter_map(|(old_id, data)| {
+                canonical_ids[old_id]?;
+                let kind = match data.kind {
+                    BuildingValue::Int(value) => Value::Int(value),
+                    BuildingValue::String(value) => Value::String(value),
+                    BuildingValue::Bool(value) => Value::Bool(value),
+                    BuildingValue::Argument(index) => Value::Argument(index),
+                    BuildingValue::Call(function, args) => {
+                        Value::Call(function, args.into_iter().map(remap).collect())
+                    }
+                    BuildingValue::BinaryOp(op, lhs, rhs) => {
+                        Value::BinaryOp(op, remap(lhs), remap(rhs))
+                    }
+                    BuildingValue::UnaryOp(op, operand) => Value::UnaryOp(op, remap(operand)),
+                    BuildingValue::Phi(phi) => Value::Phi(Phi {
+                        incoming: phi
+                            .incoming
+                            .into_iter()
+                            .map(|(block, value)| (block, remap(value)))
+                            .collect(),
+                    }),                    BuildingValue::Undef => Value::Undef,
+                };
+                Some(ValueData { ty: data.ty, kind })
+            })
+            .collect();
+
+        let blocks = self
+            .blocks
+            .into_iter()
+            .map(|block| BasicBlock {
+                instructions: block
+                    .instructions
+                    .into_iter()
+                    .filter(|id| self.aliases[id.index()].is_none())
+                    .map(remap)
+                    .collect(),
+                terminator: match block.terminator.unwrap() {
+                    Terminator::Return(value) => Terminator::Return(remap(value)),
+                    Terminator::ReturnNoValue => Terminator::ReturnNoValue,
+                    Terminator::Branch(condition, then_block, else_block) => {
+                        Terminator::Branch(remap(condition), then_block, else_block)
+                    }
+                    Terminator::Jump(target) => Terminator::Jump(target),
+                },
+            })
+            .collect();
+
+        FunctionIr { ty, values, blocks }
     }
 }
 
@@ -398,7 +470,6 @@ enum BasicBlockContinuation {
 }
 
 pub struct Ir {
-    pub names: BTreeMap<VariableId, String>,
     pub functions: BTreeMap<String, FunctionIr>,
 }
 
@@ -411,29 +482,26 @@ impl Default for Ir {
 impl Ir {
     pub fn new() -> Self {
         Ir {
-            names: BTreeMap::new(),
             functions: BTreeMap::new(),
         }
     }
 
     pub fn translate_function(&mut self, decl: TypedFnDecl) {
-        let mut ir = IrContext::new();
+        let mut ir = IrBuilder::new();
         let ty = decl.ty();
         let entry_block = ir.new_block();
         ir.seal_block(entry_block);
         for (arg, i) in decl.args.into_iter().zip(0..) {
-            let argument = ir.new_value(Value::Argument(i), arg.value.ty);
+            let argument = ir.emit(entry_block, BuildingValue::Argument(i), arg.value.ty);
             ir.write_variable(arg.value.var_id, entry_block, argument);
-            ir.add_instruction(entry_block, argument);
         }
 
         let continuation = FunctionIr::translate_block(&mut ir, decl.body.value, entry_block);
         if let ContinueBlock(block_id) = continuation {
-            ir.add_terminator(block_id, Terminator::ReturnNoValue);
+            ir.finish_block(block_id, Terminator::ReturnNoValue);
         }
         let function_name = decl.name.value.0;
-        let ir = ir.ready();
-        let function_ir = FunctionIr { ir, ty };
+        let function_ir = ir.finish(ty);
 
         self.functions.insert(function_name, function_ir);
     }
@@ -442,13 +510,14 @@ impl Ir {
         let mut result = String::new();
         for (name, function) in &self.functions {
             result.push_str(&format!("Function {}\n", name));
-            for (id, block) in &function.ir.blocks {
+            for (index, block) in function.blocks.iter().enumerate() {
+                let id = BlockId(index as u32);
                 result.push_str(&format!("{}:\n", id));
                 for instr in &block.instructions {
                     result.push_str(&format!(
                         "  {:?}: {:?}\n",
                         instr,
-                        function.ir.values.get(instr).unwrap()
+                        function.values[instr.index()]
                     ));
                 }
                 result.push_str(&format!("  {:?}\n", block.terminator));
@@ -458,15 +527,9 @@ impl Ir {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionIr {
-    pub ir: ReadyIr,
-    pub ty: Type,
-}
-
 impl FunctionIr {
     fn translate_expr(
-        context: &mut IrContext,
+        context: &mut IrBuilder,
         expr: TypedExpr,
         block_id: BlockId,
     ) -> (ValueId, BlockId) {
@@ -474,9 +537,11 @@ impl FunctionIr {
             TypedExprKind::Variable(_, id) => (context.read_variable(id, block_id), block_id),
             TypedExprKind::Literal(lit) => {
                 let val = match lit {
-                    Literal::Int(i) => context.new_value(Value::Int(i), Type::Int),
-                    Literal::String(s) => context.new_value(Value::String(s), Type::LatteString),
-                    Literal::Bool(b) => context.new_value(Value::Bool(b), Type::Bool),
+                    Literal::Int(i) => context.emit(block_id, BuildingValue::Int(i), Type::Int),
+                    Literal::String(s) => {
+                        context.emit(block_id, BuildingValue::String(s), Type::LatteString)
+                    }
+                    Literal::Bool(b) => context.emit(block_id, BuildingValue::Bool(b), Type::Bool),
                 };
                 (val, block_id)
             }
@@ -491,27 +556,22 @@ impl FunctionIr {
                     let join_block = context.new_block();
 
                     context
-                        .add_terminator(lhs_block, Terminator::Branch(lhs, rhs_block, false_block));
+                        .finish_block(lhs_block, Terminator::Branch(lhs, rhs_block, false_block));
                     context.seal_block(rhs_block);
                     let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
-                    context.add_terminator(
-                        rhs_block,
-                        Terminator::Branch(rhs, true_block, false_block),
-                    );
+                    context
+                        .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
                     context.seal_block(true_block);
                     context.seal_block(false_block);
-                    context.add_terminator(true_block, Terminator::Jump(join_block));
-                    context.add_terminator(false_block, Terminator::Jump(join_block));
+                    context.finish_block(true_block, Terminator::Jump(join_block));
+                    context.finish_block(false_block, Terminator::Jump(join_block));
                     context.seal_block(join_block);
-                    let true_ = context.new_value(Value::Bool(true), Type::Bool);
-                    let false_ = context.new_value(Value::Bool(false), Type::Bool);
-                    context.add_instruction(join_block, true_);
-                    context.add_instruction(join_block, false_);
-                    let mut phi = Phi::new(join_block);
-                    phi.incoming.insert(true_block, true_);
-                    phi.incoming.insert(false_block, false_);
-                    let phi = context.new_value(Value::Phi(phi), Type::Bool);
-                    context.add_instruction(join_block, phi);
+                    let true_ = context.emit(join_block, BuildingValue::Bool(true), Type::Bool);
+                    let false_ = context.emit(join_block, BuildingValue::Bool(false), Type::Bool);
+                    let phi = context.new_phi(join_block, Type::Bool);
+                    let phi_data = context.get_phi(phi).unwrap();
+                    phi_data.add_incoming(true_block, true_);
+                    phi_data.add_incoming(false_block, false_);
                     return (phi, join_block);
                 } else if op.value == ast::BinaryOp::Or {
                     let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
@@ -521,28 +581,22 @@ impl FunctionIr {
                     let false_block = context.new_block();
                     let join_block = context.new_block();
 
-                    context
-                        .add_terminator(lhs_block, Terminator::Branch(lhs, true_block, rhs_block));
+                    context.finish_block(lhs_block, Terminator::Branch(lhs, true_block, rhs_block));
                     context.seal_block(rhs_block);
                     let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
-                    context.add_terminator(
-                        rhs_block,
-                        Terminator::Branch(rhs, true_block, false_block),
-                    );
+                    context
+                        .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
                     context.seal_block(true_block);
                     context.seal_block(false_block);
-                    context.add_terminator(true_block, Terminator::Jump(join_block));
-                    context.add_terminator(false_block, Terminator::Jump(join_block));
+                    context.finish_block(true_block, Terminator::Jump(join_block));
+                    context.finish_block(false_block, Terminator::Jump(join_block));
                     context.seal_block(join_block);
-                    let true_ = context.new_value(Value::Bool(true), Type::Bool);
-                    let false_ = context.new_value(Value::Bool(false), Type::Bool);
-                    context.add_instruction(join_block, true_);
-                    context.add_instruction(join_block, false_);
-                    let mut phi = Phi::new(join_block);
-                    phi.incoming.insert(true_block, true_);
-                    phi.incoming.insert(false_block, false_);
-                    let phi = context.new_value(Value::Phi(phi), Type::Bool);
-                    context.add_instruction(join_block, phi);
+                    let true_ = context.emit(join_block, BuildingValue::Bool(true), Type::Bool);
+                    let false_ = context.emit(join_block, BuildingValue::Bool(false), Type::Bool);
+                    let phi = context.new_phi(join_block, Type::Bool);
+                    let phi_data = context.get_phi(phi).unwrap();
+                    phi_data.add_incoming(true_block, true_);
+                    phi_data.add_incoming(false_block, false_);
                     return (phi, join_block);
                 }
 
@@ -564,7 +618,7 @@ impl FunctionIr {
                 let (lhs, block_id) = Self::translate_expr(context, lhs.value, block_id);
                 let (rhs, block_id) = Self::translate_expr(context, rhs.value, block_id);
 
-                let val = context.new_value(Value::BinaryOp(op, lhs, rhs), expr.ty);
+                let val = context.emit(block_id, BuildingValue::BinaryOp(op, lhs, rhs), expr.ty);
                 (val, block_id)
             }
             TypedExprKind::Unary { op, expr: target } => {
@@ -573,7 +627,7 @@ impl FunctionIr {
                     ast::UnaryOp::Neg => UnaryOpCode::Neg,
                     ast::UnaryOp::Not => UnaryOpCode::Not,
                 };
-                let val = context.new_value(Value::UnaryOp(op, val), expr.ty);
+                let val = context.emit(block_id, BuildingValue::UnaryOp(op, val), expr.ty);
                 (val, block_id)
             }
             TypedExprKind::Application { target, args } => {
@@ -590,20 +644,19 @@ impl FunctionIr {
                     arg_values.push(arg);
                 }
 
-                let val = context.new_value(Value::Call(id, arg_values), expr.ty);
+                let val = context.emit(
+                    current_block_id,
+                    BuildingValue::Call(id, arg_values),
+                    expr.ty,
+                );
                 (val, current_block_id)
             }
         };
-        if let Value::Phi(phi) = &context.values[&value] {
-            context.add_instruction(phi.block, value);
-        } else {
-            context.add_instruction(block_id, value);
-        }
         (value, block_id)
     }
 
     fn translate_block(
-        context: &mut IrContext,
+        context: &mut IrBuilder,
         block: TypedBlock,
         block_id: BlockId,
     ) -> BasicBlockContinuation {
@@ -622,18 +675,18 @@ impl FunctionIr {
         final_continuation
     }
 
-    fn default_value(ty: &Type) -> Value {
+    fn default_value(ty: &Type) -> BuildingValue {
         match ty {
-            Type::Int => Value::Int(0),
-            Type::Bool => Value::Bool(false),
-            Type::LatteString => Value::String(String::new()),
+            Type::Int => BuildingValue::Int(0),
+            Type::Bool => BuildingValue::Bool(false),
+            Type::LatteString => BuildingValue::String(String::new()),
             Type::Function(_, _) => panic!("Function cannot have a default value"),
             Type::Void => panic!("Void cannot have a default value"),
         }
     }
 
     fn translate_stmt(
-        context: &mut IrContext,
+        context: &mut IrBuilder,
         stmt: TypedStmt,
         block_id: BlockId,
     ) -> BasicBlockContinuation {
@@ -643,9 +696,6 @@ impl FunctionIr {
             TypedStmt::Decl(decl) => {
                 let mut block_id = block_id;
                 for item in decl.value.items {
-                    context
-                        .variable_names
-                        .insert(item.value.var_id, item.value.ident.value.0);
                     if let Some(expr) = item.value.init {
                         let (expr, continuation_block) =
                             Self::translate_expr(context, expr.value, block_id);
@@ -653,8 +703,7 @@ impl FunctionIr {
                         context.write_variable(item.value.var_id, block_id, expr);
                     } else {
                         let default = Self::default_value(&item.value.ty);
-                        let default = context.new_value(default, item.value.ty);
-                        context.add_instruction(block_id, default);
+                        let default = context.emit(block_id, default, item.value.ty);
                         context.write_variable(item.value.var_id, block_id, default);
                     }
                 }
@@ -672,9 +721,9 @@ impl FunctionIr {
             TypedStmt::Return(expr) => {
                 let expr = expr.map(|expr| Self::translate_expr(context, expr.value, block_id));
                 if let Some((expr, block_id)) = expr {
-                    context.add_terminator(block_id, Terminator::Return(expr));
+                    context.finish_block(block_id, Terminator::Return(expr));
                 } else {
-                    context.add_terminator(block_id, Terminator::ReturnNoValue);
+                    context.finish_block(block_id, Terminator::ReturnNoValue);
                 }
                 Stop
             }
@@ -684,8 +733,9 @@ impl FunctionIr {
                 otherwise,
             } => {
                 let (cond, block_id) = Self::translate_expr(context, cond.value, block_id);
-                if let Value::Bool(cond) = context.values[&cond] {
-                    return if cond {
+                let cond = context.resolve_alias(cond);
+                if let BuildingValue::Bool(constant) = &context.values[cond.index()].kind {
+                    return if *constant {
                         Self::translate_stmt(context, then.value, block_id)
                     } else if let Some(otherwise) = otherwise {
                         Self::translate_stmt(context, otherwise.value, block_id)
@@ -701,7 +751,7 @@ impl FunctionIr {
                     let else_continuation =
                         Self::translate_stmt(context, otherwise.value, else_block);
                     context
-                        .add_terminator(block_id, Terminator::Branch(cond, then_block, else_block));
+                        .finish_block(block_id, Terminator::Branch(cond, then_block, else_block));
                     context.seal_block(else_block);
                     context.seal_block(then_block);
 
@@ -712,11 +762,11 @@ impl FunctionIr {
                     let after_block = context.new_block();
 
                     if let ContinueBlock(after_then_block) = then_continuation {
-                        context.add_terminator(after_then_block, Terminator::Jump(after_block));
+                        context.finish_block(after_then_block, Terminator::Jump(after_block));
                     }
 
                     if let ContinueBlock(after_else_block) = else_continuation {
-                        context.add_terminator(after_else_block, Terminator::Jump(after_block));
+                        context.finish_block(after_else_block, Terminator::Jump(after_block));
                     }
                     context.seal_block(after_block);
 
@@ -724,14 +774,12 @@ impl FunctionIr {
                 } else {
                     let after_block = context.new_block();
 
-                    context.add_terminator(
-                        block_id,
-                        Terminator::Branch(cond, then_block, after_block),
-                    );
+                    context
+                        .finish_block(block_id, Terminator::Branch(cond, then_block, after_block));
                     context.seal_block(then_block);
 
                     if let ContinueBlock(after_then_block) = then_continuation {
-                        context.add_terminator(after_then_block, Terminator::Jump(after_block));
+                        context.finish_block(after_then_block, Terminator::Jump(after_block));
                     }
 
                     context.seal_block(after_block);
@@ -741,25 +789,26 @@ impl FunctionIr {
             }
             TypedStmt::While { cond, body } => {
                 let cond_block = context.new_block();
-                context.add_terminator(block_id, Terminator::Jump(cond_block));
+                context.finish_block(block_id, Terminator::Jump(cond_block));
 
                 let (cond, cond_block) = Self::translate_expr(context, cond.value, cond_block);
 
-                if let Value::Bool(cond) = context.values[&cond] {
-                    return if !cond {
+                let cond = context.resolve_alias(cond);
+                if let BuildingValue::Bool(constant) = &context.values[cond.index()].kind {
+                    return if !*constant {
                         let after_block = context.new_block();
-                        context.add_terminator(cond_block, Terminator::Jump(after_block));
+                        context.finish_block(cond_block, Terminator::Jump(after_block));
                         context.seal_block(cond_block);
                         context.seal_block(after_block);
                         ContinueBlock(after_block)
                     } else {
                         let body_block = context.new_block();
-                        context.add_terminator(cond_block, Terminator::Jump(body_block));
+                        context.finish_block(cond_block, Terminator::Jump(body_block));
                         context.seal_block(body_block);
                         let body_continuation =
                             Self::translate_stmt(context, body.value, body_block);
                         if let ContinueBlock(after_body_block) = body_continuation {
-                            context.add_terminator(after_body_block, Terminator::Jump(cond_block));
+                            context.finish_block(after_body_block, Terminator::Jump(cond_block));
                         }
                         context.seal_block(cond_block);
                         Stop
@@ -769,7 +818,7 @@ impl FunctionIr {
                 let after_block = context.new_block();
                 let body_block = context.new_block();
 
-                context.add_terminator(
+                context.finish_block(
                     cond_block,
                     Terminator::Branch(cond, body_block, after_block),
                 );
@@ -778,7 +827,7 @@ impl FunctionIr {
 
                 let body_continuation = Self::translate_stmt(context, body.value, body_block);
                 if let ContinueBlock(after_body_block) = body_continuation {
-                    context.add_terminator(after_body_block, Terminator::Jump(cond_block));
+                    context.finish_block(after_body_block, Terminator::Jump(cond_block));
                 }
 
                 context.seal_block(cond_block);
@@ -793,11 +842,12 @@ impl FunctionIr {
                     panic!("This should have been caught by the typechecker")
                 };
                 let (expr, block_id) = Self::translate_expr(context, expr.value, block_id);
-                let one = context.new_value(Value::Int(1), Type::Int);
-                context.add_instruction(block_id, one);
-                let op =
-                    context.new_value(Value::BinaryOp(BinaryOpCode::Add, expr, one), Type::Int);
-                context.add_instruction(block_id, op);
+                let one = context.emit(block_id, BuildingValue::Int(1), Type::Int);
+                let op = context.emit(
+                    block_id,
+                    BuildingValue::BinaryOp(BinaryOpCode::Add, expr, one),
+                    Type::Int,
+                );
                 context.write_variable(var_id, block_id, op);
                 ContinueBlock(block_id)
             }
@@ -806,14 +856,150 @@ impl FunctionIr {
                     panic!("This should have been caught by the typechecker")
                 };
                 let (expr, block_id) = Self::translate_expr(context, expr.value, block_id);
-                let one = context.new_value(Value::Int(1), Type::Int);
-                context.add_instruction(block_id, one);
-                let op =
-                    context.new_value(Value::BinaryOp(BinaryOpCode::Sub, expr, one), Type::Int);
-                context.add_instruction(block_id, op);
+                let one = context.emit(block_id, BuildingValue::Int(1), Type::Int);
+                let op = context.emit(
+                    block_id,
+                    BuildingValue::BinaryOp(BinaryOpCode::Sub, expr, one),
+                    Type::Int,
+                );
                 context.write_variable(var_id, block_id, op);
                 ContinueBlock(block_id)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_operands_are_valid(ir: &FunctionIr) {
+        let valid = |id: ValueId| id.index() < ir.values.len();
+        for value in &ir.values {
+            match &value.kind {
+                Value::Call(_, args) => assert!(args.iter().copied().all(valid)),
+                Value::BinaryOp(_, lhs, rhs) => assert!(valid(*lhs) && valid(*rhs)),
+                Value::UnaryOp(_, operand) => assert!(valid(*operand)),
+                Value::Phi(phi) => {
+                    assert!(phi.incoming.iter().all(|(_, value)| valid(*value)))
+                }
+                Value::Int(_)
+                | Value::String(_)
+                | Value::Bool(_)
+                | Value::Argument(_)
+                | Value::Undef => {}
+            }
+        }
+        for block in &ir.blocks {
+            assert!(block.instructions.iter().copied().all(valid));
+            match block.terminator {
+                Terminator::Return(value) | Terminator::Branch(value, _, _) => {
+                    assert!(valid(value))
+                }
+                Terminator::ReturnNoValue | Terminator::Jump(_) => {}
+            }
+        }
+    }
+
+    #[test]
+    fn recursive_trivial_phis_are_removed_and_values_are_compacted() {
+        let mut builder = IrBuilder::new();
+        let entry = builder.new_block();
+        let left = builder.new_block();
+        let right = builder.new_block();
+        let join = builder.new_block();
+        builder.seal_block(entry);
+
+        let condition = builder.emit(entry, BuildingValue::Bool(true), Type::Bool);
+        let value = builder.emit(entry, BuildingValue::Int(7), Type::Int);
+        builder.finish_block(entry, Terminator::Branch(condition, left, right));
+        builder.seal_block(left);
+        builder.seal_block(right);
+        builder.finish_block(left, Terminator::Jump(join));
+        builder.finish_block(right, Terminator::Jump(join));
+        builder.seal_block(join);
+
+        let first = builder.new_phi(join, Type::Int);
+        builder.get_phi(first).unwrap().incoming = [(left, value), (right, first)].into();
+        let second = builder.new_phi(join, Type::Int);
+        builder.get_phi(second).unwrap().incoming = [(left, first), (right, second)].into();
+        builder.get_phi(first).unwrap().users.push(second);
+
+        assert_eq!(builder.try_remove_trivial_phi(first), value);
+        assert_eq!(builder.resolve_alias(second), value);
+        builder.finish_block(join, Terminator::Return(second));
+
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        assert!(
+            ir.values
+                .iter()
+                .all(|value| !matches!(value.kind, Value::Phi(_)))
+        );
+        assert_eq!(ir.values.len(), 2);
+        assert_operands_are_valid(&ir);
+        assert_values_are_dense(&ir);
+    }
+
+    fn assert_values_are_dense(ir: &FunctionIr) {
+        let mut seen = vec![false; ir.values.len()];
+        for block in &ir.blocks {
+            for &id in &block.instructions {
+                assert!(!seen[id.index()], "value {:?} defined twice", id);
+                seen[id.index()] = true;
+            }
+        }
+        assert!(
+            seen.iter().all(|&seen| seen),
+            "value ids are not dense: {:?}",
+            seen
+        );
+    }
+
+    #[test]
+    fn loop_header_incomplete_phi_becomes_canonical_ssa() {
+        let mut builder = IrBuilder::new();
+        let entry = builder.new_block();
+        let header = builder.new_block();
+        let body = builder.new_block();
+        let exit = builder.new_block();
+        builder.seal_block(entry);
+        let variable = VariableId::new(0);
+
+        let initial = builder.emit(entry, BuildingValue::Int(0), Type::Int);
+        builder.write_variable(variable, entry, initial);
+        builder.finish_block(entry, Terminator::Jump(header));
+
+        let header_value = builder.read_variable(variable, header);
+        assert!(builder.incomplete_phis[&header].contains_key(&variable));
+        let condition = builder.emit(header, BuildingValue::Bool(true), Type::Bool);
+        builder.finish_block(header, Terminator::Branch(condition, body, exit));
+        builder.seal_block(body);
+        builder.seal_block(exit);
+
+        let body_value = builder.read_variable(variable, body);
+        let one = builder.emit(body, BuildingValue::Int(1), Type::Int);
+        let next = builder.emit(
+            body,
+            BuildingValue::BinaryOp(BinaryOpCode::Add, body_value, one),
+            Type::Int,
+        );
+        builder.write_variable(variable, body, next);
+        builder.finish_block(body, Terminator::Jump(header));
+        builder.seal_block(header);
+        builder.finish_block(exit, Terminator::Return(header_value));
+
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        let phis: Vec<_> = ir
+            .values
+            .iter()
+            .filter_map(|value| match &value.kind {
+                Value::Phi(phi) => Some(phi),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(phis.len(), 1);
+        assert_eq!(phis[0].incoming.len(), 2);
+        assert_operands_are_valid(&ir);
+        assert_values_are_dense(&ir);
     }
 }

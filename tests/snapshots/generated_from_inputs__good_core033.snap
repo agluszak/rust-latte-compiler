@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int funkcja_ifbooltrudny (boolean f, boolean t) {\n  if ((!f && f) || !(f || !t)) {\n    printInt(1042);\n  } else {\n    printInt(2042);\n  }\n  return 0;\n}\n\nint main () {\n  funkcja_ifbooltrudny (false, true);\n  return 0;\n}\n"
+input_file: inputs/good/core033.lat
 ---
 ; ModuleID = 'core033'
 source_filename = "core033"
@@ -51,23 +52,23 @@ b7:                                               ; preds = %b12
   br label %b8
 
 b8:                                               ; preds = %b7, %b5
-  %v17 = phi i1 [ true, %b5 ], [ false, %b7 ]
-  br i1 %v17, label %b13, label %b14
+  %v13 = phi i1 [ true, %b5 ], [ false, %b7 ]
+  br i1 %v13, label %b13, label %b14
 
 b9:                                               ; preds = %b10, %b6
   br label %b12
 
 b10:                                              ; preds = %b6
-  %v10 = xor i1 %1, true
-  br i1 %v10, label %b9, label %b11
+  %v6 = xor i1 %1, true
+  br i1 %v6, label %b9, label %b11
 
 b11:                                              ; preds = %b10
   br label %b12
 
 b12:                                              ; preds = %b11, %b9
-  %v13 = phi i1 [ true, %b9 ], [ false, %b11 ]
-  %v14 = xor i1 %v13, true
-  br i1 %v14, label %b5, label %b7
+  %v9 = phi i1 [ true, %b9 ], [ false, %b11 ]
+  %v10 = xor i1 %v9, true
+  br i1 %v10, label %b5, label %b7
 
 b13:                                              ; preds = %b8
   call void @printInt(i32 1042)
