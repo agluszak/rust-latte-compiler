@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 ariadne = "0.4"
-lalrpop-util = { version = "0.20", features = ["lexer"] }
-logos = "0.13"
+lalrpop-util = { version = "0.23", features = ["lexer"] }
+logos = "0.16"
 either = "1"
 tempfile = "3"
 inkwell = {
@@ -20,7 +20,7 @@ inkwell = {
 
 [dev-dependencies]
 insta = "1"
-libtest-mimic = "0.7"
+libtest-mimic = "0.8"
 
 [[test]]
 name = "fixtures"
@@ -28,7 +28,7 @@ path = "tests/fixtures.rs"
 harness = false
 
 [build-dependencies]
-lalrpop = "0.20"
+lalrpop = "0.23"
 
 [profile.dev.package.insta]
 opt-level = 3

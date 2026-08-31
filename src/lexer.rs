@@ -77,6 +77,25 @@ fn escape_str(s: &str) -> Result<String, LexingError> {
     Ok(result)
 }
 
+fn skip_line_comment(lexer: &mut logos::Lexer<'_, Token>) -> logos::Skip {
+    let remainder = lexer.remainder();
+    let comment_len = remainder
+        .find(['\n', '\r'])
+        .unwrap_or(remainder.len());
+    lexer.bump(comment_len);
+    logos::Skip
+}
+
+fn skip_block_comment(
+    lexer: &mut logos::Lexer<'_, Token>,
+) -> Result<logos::Skip, LexingError> {
+    let Some(comment_end) = lexer.remainder().find("*/") else {
+        return Err(LexingError::Other);
+    };
+    lexer.bump(comment_end + "*/".len());
+    Ok(logos::Skip)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Logos)]
 #[logos(error = LexingError)]
 pub enum Token {
@@ -148,9 +167,9 @@ pub enum Token {
     PlusPlus,
     #[token("--")]
     MinusMinus,
-    #[regex(r"[ \t\n\f]+", logos::skip)] // whitespace
-    #[regex(r"//[^\n\r]*", logos::skip)] // single line comment
-    #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)] // multi line comment
+    #[regex(r"[ \t\n\r\f]+", logos::skip)] // whitespace
+    #[token("//", skip_line_comment)] // single line comment
+    #[token("/*", skip_block_comment)] // multi line comment
     Ignored,
 }
 
@@ -212,4 +231,13 @@ mod tests {
     }
 
     lexer_tests!(_lexer_comments, hello_world, _lexer_simple);
+
+    #[test]
+    fn line_comments_allow_arbitrary_content_and_end_of_file() {
+        let tokens = Lexer::new("// /* / zażółć\r\n42 // no newline")
+            .map(|result| result.map(|(_, token, _)| token))
+            .collect::<Vec<_>>();
+
+        assert_eq!(tokens, vec![Ok(Token::Num(42))]);
+    }
 }
