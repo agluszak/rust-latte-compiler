@@ -311,17 +311,23 @@ impl IrBuilder {
         let phi_block = self.get_phi(phi_id).unwrap().block;
         for pred in self.blocks[phi_block.index()].predecessors.clone() {
             let pred_val = self.read_variable(variable, pred);
-            let pred_val = self.resolve_alias(pred_val);
-            if let Some(BuildingValue::Phi(pred_phi)) = self
-                .values
-                .get_mut(pred_val.index())
-                .map(|data| &mut data.kind)
-            {
-                pred_phi.add_user(phi_id);
-            }
-            self.get_phi(phi_id).unwrap().add_incoming(pred, pred_val);
+            self.add_phi_incoming(phi_id, pred, pred_val);
         }
         self.try_remove_trivial_phi(phi_id)
+    }
+
+    /// Adds `(block, value)` as an incoming edge of the building phi `phi`.
+    ///
+    /// Centralizes the SSA invariant that registering a phi operand must also
+    /// update the use relation when the operand is itself a building phi.
+    fn add_phi_incoming(&mut self, phi: ValueId, block: BlockId, value: ValueId) {
+        let value = self.resolve_alias(value);
+
+        if let Some(operand_phi) = self.get_phi(value) {
+            operand_phi.add_user(phi);
+        }
+
+        self.get_phi(phi).unwrap().add_incoming(block, value);
     }
 
     fn get_phi(&mut self, phi_id: ValueId) -> Option<&mut BuildingPhi> {
@@ -374,6 +380,9 @@ impl IrBuilder {
         let replacement = self.resolve_alias(same.unwrap());
         self.aliases[phi_id.index()] = Some(replacement);
 
+        // Transfer the users to the replacement phi, so that if the
+        // replacement itself becomes trivial later, these users are
+        // reconsidered as well.
         if let Some(BuildingValue::Phi(replacement_phi)) = self
             .values
             .get_mut(replacement.index())
@@ -383,9 +392,6 @@ impl IrBuilder {
                 replacement_phi.add_user(*user);
             }
         }
-        // Transfer the users to the replacement phi, so that if the
-        // replacement itself becomes trivial later, these users are
-        // reconsidered as well.
 
         // Try to recursively remove all phi users, which might have become trivial
         for &user in &phi.users {
@@ -575,56 +581,35 @@ impl FunctionIr {
             }
             TypedExprKind::Binary { lhs, op, rhs } => {
                 // Logical operators are represented exclusively by short-circuit CFG.
-                if op.value == ast::BinaryOp::And {
+                if matches!(op.value, ast::BinaryOp::And | ast::BinaryOp::Or) {
                     let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
 
-                    let true_block = context.new_block();
                     let rhs_block = context.new_block();
-                    let false_block = context.new_block();
                     let join_block = context.new_block();
 
-                    context
-                        .finish_block(lhs_block, Terminator::Branch(lhs, rhs_block, false_block));
-                    context.seal_block(rhs_block);
-                    let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
-                    context
-                        .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
-                    context.seal_block(true_block);
-                    context.seal_block(false_block);
-                    let true_ = context.emit(true_block, BuildingValue::Bool(true), Type::Bool);
-                    context.finish_block(true_block, Terminator::Jump(join_block));
-                    let false_ = context.emit(false_block, BuildingValue::Bool(false), Type::Bool);
-                    context.finish_block(false_block, Terminator::Jump(join_block));
-                    context.seal_block(join_block);
-                    let phi = context.new_phi(join_block, Type::Bool);
-                    let phi_data = context.get_phi(phi).unwrap();
-                    phi_data.add_incoming(true_block, true_);
-                    phi_data.add_incoming(false_block, false_);
-                    return (phi, join_block);
-                } else if op.value == ast::BinaryOp::Or {
-                    let (lhs, lhs_block) = Self::translate_expr(context, lhs.value, block_id);
+                    // `a && b` evaluates b only when a is true, so the direct
+                    // edge to the join carries `false` (a itself); `a || b`
+                    // evaluates b only when a is false, so its direct edge
+                    // carries `true` (again a itself). Either way the phi
+                    // merges the actual operand values, no synthetic blocks
+                    // or booleans needed.
+                    let (then_block, else_block) = match op.value {
+                        ast::BinaryOp::And => (rhs_block, join_block),
+                        ast::BinaryOp::Or => (join_block, rhs_block),
+                        _ => unreachable!(),
+                    };
 
-                    let true_block = context.new_block();
-                    let rhs_block = context.new_block();
-                    let false_block = context.new_block();
-                    let join_block = context.new_block();
-
-                    context.finish_block(lhs_block, Terminator::Branch(lhs, true_block, rhs_block));
-                    context.seal_block(rhs_block);
-                    let (rhs, rhs_block) = Self::translate_expr(context, rhs.value, rhs_block);
                     context
-                        .finish_block(rhs_block, Terminator::Branch(rhs, true_block, false_block));
-                    context.seal_block(true_block);
-                    context.seal_block(false_block);
-                    let true_ = context.emit(true_block, BuildingValue::Bool(true), Type::Bool);
-                    context.finish_block(true_block, Terminator::Jump(join_block));
-                    let false_ = context.emit(false_block, BuildingValue::Bool(false), Type::Bool);
-                    context.finish_block(false_block, Terminator::Jump(join_block));
+                        .finish_block(lhs_block, Terminator::Branch(lhs, then_block, else_block));
+                    context.seal_block(rhs_block);
+                    let (rhs, rhs_end) = Self::translate_expr(context, rhs.value, rhs_block);
+                    context.finish_block(rhs_end, Terminator::Jump(join_block));
                     context.seal_block(join_block);
+
                     let phi = context.new_phi(join_block, Type::Bool);
-                    let phi_data = context.get_phi(phi).unwrap();
-                    phi_data.add_incoming(true_block, true_);
-                    phi_data.add_incoming(false_block, false_);
+                    context.add_phi_incoming(phi, lhs_block, lhs);
+                    context.add_phi_incoming(phi, rhs_end, rhs);
+                    let phi = context.try_remove_trivial_phi(phi);
                     return (phi, join_block);
                 }
 
@@ -900,6 +885,7 @@ impl FunctionIr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
     fn assert_operands_are_valid(ir: &FunctionIr) {
         let valid = |id: ValueId| id.index() < ir.values.len();
@@ -918,8 +904,63 @@ mod tests {
                 | Value::Undef => {}
             }
         }
-        for block in &ir.blocks {
-            assert!(block.instructions.iter().copied().all(valid));
+
+        // Predecessor sets, derived from terminators only.
+        let mut predecessors: Vec<BTreeSet<BlockId>> = vec![BTreeSet::new(); ir.blocks.len()];
+        for (index, block) in ir.blocks.iter().enumerate() {
+            let from = BlockId(index as u32);
+            match block.terminator {
+                Terminator::Return(_) | Terminator::ReturnNoValue => {}
+                Terminator::Branch(_, then_block, else_block) => {
+                    predecessors[then_block.index()].insert(from);
+                    predecessors[else_block.index()].insert(from);
+                }
+                Terminator::Jump(target) => {
+                    predecessors[target.index()].insert(from);
+                }
+            }
+        }
+
+        for (index, block) in ir.blocks.iter().enumerate() {
+            for &id in &block.phis {
+                assert!(valid(id));
+                assert!(
+                    matches!(ir.values[id.index()].kind, Value::Phi(_)),
+                    "block.phis must only contain phi values"
+                );
+            }
+            for &id in &block.instructions {
+                assert!(valid(id));
+                assert!(
+                    !matches!(ir.values[id.index()].kind, Value::Phi(_)),
+                    "phi {:?} must live in block.phis, not instructions",
+                    id
+                );
+            }
+
+            // Every phi's incoming edges must match the block's real CFG
+            // predecessors exactly: one incoming edge per predecessor.
+            for &phi in &block.phis {
+                let Value::Phi(phi_data) = &ir.values[phi.index()].kind else {
+                    unreachable!()
+                };
+                let incoming_blocks: BTreeSet<BlockId> =
+                    phi_data.incoming.iter().map(|(block, _)| *block).collect();
+                assert_eq!(
+                    incoming_blocks,
+                    predecessors[index],
+                    "phi {:?} incoming edges do not match CFG predecessors of {}",
+                    phi,
+                    BlockId(index as u32)
+                );
+                assert_eq!(
+                    phi_data.incoming.len(),
+                    predecessors[index].len(),
+                    "phi {:?} has duplicate incoming edges for one predecessor",
+                    phi
+                );
+            }
+
             match block.terminator {
                 Terminator::Return(value) | Terminator::Branch(value, _, _) => {
                     assert!(valid(value))
