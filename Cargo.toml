@@ -10,7 +10,14 @@ lalrpop-util = { version = "0.20", features = ["lexer"] }
 logos = "0.13"
 either = "1"
 tempfile = "3"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
+inkwell = {
+    version = "0.3",
+    default-features = false,
+    features = [
+        "llvm14-0-force-static",
+        "target-x86",
+    ]
+}
 
 [dev-dependencies]
 insta = "1"
