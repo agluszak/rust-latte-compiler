@@ -9,7 +9,9 @@ use ariadne::Report;
 use crate::ir::Ir;
 use crate::llvm_generator::CodeGen;
 use inkwell::context::Context;
+use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
+use inkwell::support::LLVMString;
 use std::ops::Range;
 
 use std::sync::atomic::AtomicBool;
@@ -28,6 +30,8 @@ mod typed_ast;
 pub static DBG: AtomicBool = AtomicBool::new(false);
 
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
+
+static RUNTIME_BITCODE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.bc"));
 
 pub fn compile<'ctx, 'src>(
     context: &'ctx Context,
@@ -67,4 +71,10 @@ pub fn compile<'ctx, 'src>(
     }
 
     Ok(codegen.into_module())
+}
+
+pub fn link_runtime(module: &Module<'_>) -> Result<(), LLVMString> {
+    let runtime_buffer = MemoryBuffer::create_from_memory_range(RUNTIME_BITCODE, "runtime.bc");
+    let runtime = Module::parse_bitcode_from_buffer(&runtime_buffer, module.get_context())?;
+    module.link_in_module(runtime)
 }

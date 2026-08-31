@@ -2,6 +2,7 @@ use inkwell::context::Context;
 use libtest_mimic::{Arguments, Failed, Trial};
 use rust_latte_compiler::compile;
 use rust_latte_compiler::input::Input;
+use rust_latte_compiler::link_runtime;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
@@ -78,15 +79,14 @@ fn test_good(path: &Path) -> Result<(), Failed> {
         .trim()
         .parse::<i32>()
         .unwrap_or(0);
+    link_runtime(&module)?;
+    module.verify().map_err(|error| error.to_string())?;
     let bitcode = tempfile::NamedTempFile::new()?;
     if !module.write_bitcode_to_path(bitcode.path()) {
         return Err("failed to write fixture bitcode".into());
     }
 
-    let runtime = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/runtime.bc");
     let mut child = Command::new("lli")
-        .arg("--extra-module")
-        .arg(runtime)
         .arg(bitcode.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

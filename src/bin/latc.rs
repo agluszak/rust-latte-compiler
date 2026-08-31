@@ -1,5 +1,6 @@
 use rust_latte_compiler::compile;
 use rust_latte_compiler::input::Input;
+use rust_latte_compiler::link_runtime;
 
 use inkwell::context::Context;
 use std::io::Read;
@@ -52,6 +53,11 @@ fn main() -> ExitCode {
         Ok(module) => {
             if rust_latte_compiler::DBG.load(std::sync::atomic::Ordering::Relaxed) {
                 println!("{}", module.print_to_string().to_string());
+            }
+
+            if let Err(err) = link_runtime(&module) {
+                eprintln!("ERROR\n failed to link the Latte runtime: {err}");
+                return ExitCode::FAILURE;
             }
 
             if let Err(err) = module.verify() {
