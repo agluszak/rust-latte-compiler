@@ -7,10 +7,9 @@ edition = "2024"
 ariadne = "0.6"
 lalrpop-util = { version = "0.23", features = ["lexer"] }
 logos = "0.16"
-either = "1"
 tempfile = "3"
 inkwell = {
-    version = "0.3",
+    version = "0.10",
     default-features = false,
     features = [
         "llvm14-0-force-static",

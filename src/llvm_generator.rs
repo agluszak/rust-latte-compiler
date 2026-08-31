@@ -1,6 +1,5 @@
 use crate::ir::{BinaryOpCode, FunctionIr, Terminator, UnaryOpCode, Value, ValueId};
 use crate::typechecker::{ReadyEnvironment, Type};
-use either::Left;
 use inkwell::AddressSpace;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -226,7 +225,7 @@ impl<'ctx> CodeGen<'ctx> {
                         self.builder.build_store(str_ptr, const_str).unwrap();
                         let str_ptr = self
                             .builder
-                            .build_bitcast(
+                            .build_bit_cast(
                                 str_ptr,
                                 self.context.i8_type().ptr_type(AddressSpace::default()),
                                 "str_ptr",
@@ -237,7 +236,7 @@ impl<'ctx> CodeGen<'ctx> {
                             .builder
                             .build_call(new_string_fn, &[str_ptr.into(), len.into()], "new_string")
                             .unwrap();
-                        values.insert(id, string_ptr.try_as_basic_value().unwrap_left());
+                        values.insert(id, string_ptr.try_as_basic_value().unwrap_basic());
                     }
                     Value::Bool(b) => {
                         values.insert(
@@ -256,7 +255,7 @@ impl<'ctx> CodeGen<'ctx> {
                             .builder
                             .build_call(function, args.as_slice(), name)
                             .unwrap();
-                        if let Left(value) = value.try_as_basic_value() {
+                        if let Some(value) = value.try_as_basic_value().basic() {
                             values.insert(id, value);
                         }
                     }
@@ -278,7 +277,7 @@ impl<'ctx> CodeGen<'ctx> {
                                         "new_string",
                                     )
                                     .unwrap();
-                                values.insert(id, new_string.try_as_basic_value().unwrap_left());
+                                values.insert(id, new_string.try_as_basic_value().unwrap_basic());
                             } else if let Type::Int = value_types[lhs] {
                                 let lhs = values[lhs].into_int_value();
                                 let rhs = values[rhs].into_int_value();
@@ -414,7 +413,7 @@ impl<'ctx> CodeGen<'ctx> {
                                     )
                                     .unwrap()
                                     .try_as_basic_value()
-                                    .unwrap_left()
+                                    .unwrap_basic()
                                     .into_int_value();
                                 values.insert(
                                     id,
@@ -458,7 +457,7 @@ impl<'ctx> CodeGen<'ctx> {
                                     )
                                     .unwrap()
                                     .try_as_basic_value()
-                                    .unwrap_left()
+                                    .unwrap_basic()
                                     .into_int_value();
                                 values.insert(
                                     id,
