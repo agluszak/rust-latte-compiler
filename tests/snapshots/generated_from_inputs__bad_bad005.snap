@@ -1,9 +1,10 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "foo() {}\n"
+input_file: inputs/bad/bad005.lat
 ---
 [31mError:[0m Syntax error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad005:1:4[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m bad005:1:4 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m1 │[0m [38;5;249mf[0m[38;5;249mo[0m[38;5;249mo[0m[31m([0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m{[0m[38;5;249m}[0m
  [38;5;240m  │[0m    [31m┬[0m  
@@ -11,4 +12,3 @@ description: "foo() {}\n"
  [38;5;240m  │[0m    [31m│[0m  
  [38;5;240m  │[0m    [31m╰[0m[31m─[0m[31m─[0m Expected one of: "ident"
 [38;5;246m───╯[0m
-

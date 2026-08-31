@@ -16,8 +16,11 @@ pub fn typechecking_reports(
 
     errs.into_iter()
         .map(|err| {
-            let report = Report::build(ReportKind::Error, filename.to_string(), err.location.start)
-                .with_message("Type error".to_string());
+            let report = Report::build(
+                ReportKind::Error,
+                (filename.to_string(), err.location.start..err.location.start),
+            )
+            .with_message("Type error".to_string());
 
             let report = match err.kind {
                 TypecheckingErrorKind::DuplicateArgument(name) => report.with_label(
@@ -114,7 +117,8 @@ pub fn typechecking_reports(
 }
 
 fn syntax_error(filename: &str, offset: usize) -> ReportBuilder<'_, (String, Span)> {
-    Report::build(ReportKind::Error, filename, offset).with_message("Syntax error".to_string())
+    Report::build(ReportKind::Error, (filename.to_string(), offset..offset))
+        .with_message("Syntax error".to_string())
 }
 
 pub fn parsing_reports(

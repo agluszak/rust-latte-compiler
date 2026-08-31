@@ -1,12 +1,12 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int main() {\n   trololo();\n   return 0;\n}"
+input_file: inputs/bad/undefined_function.lat
 ---
 [31mError:[0m Type error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mundefined_function:2:4[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m undefined_function:2:4 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m2 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[31mt[0m[31mr[0m[31mo[0m[31ml[0m[31mo[0m[31ml[0m[31mo[0m[38;5;249m([0m[38;5;249m)[0m[38;5;249m;[0m
  [38;5;240m  │[0m    [31m─[0m[31m─[0m[31m─[0m[31m┬[0m[31m─[0m[31m─[0m[31m─[0m  
  [38;5;240m  │[0m       [31m╰[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m Unknown variable `trololo`
 [38;5;246m───╯[0m
-

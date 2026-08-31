@@ -1,12 +1,12 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "// Assigning int to string variable.\n\nint main () {\n string x = 1;\n return 0 ;\n}"
+input_file: inputs/bad/bad023.lat
 ---
 [31mError:[0m Type error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad023:4:13[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m bad023:4:13 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m4 │[0m [38;5;249m [0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249m [0m[38;5;249mx[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[31m1[0m[38;5;249m;[0m
  [38;5;240m  │[0m             [31m┬[0m  
  [38;5;240m  │[0m             [31m╰[0m[31m─[0m[31m─[0m Type mismatch: expected `string`, found `int`
 [38;5;246m───╯[0m
-

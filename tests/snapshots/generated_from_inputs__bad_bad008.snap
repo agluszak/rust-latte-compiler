@@ -1,9 +1,10 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "  int main() { \n    if (false)\n       return 0; \n}\n"
+input_file: inputs/bad/bad008.lat
 ---
 [31mError:[0m Type error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad008:1:14[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m bad008:1:14 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m1 │[0m [31m╭[0m[31m─[0m[31m▶[0m[31m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249m([0m[38;5;249m)[0m[38;5;249m [0m[31m{[0m
  [38;5;240m  ┆[0m [31m┆[0m   
@@ -11,4 +12,3 @@ description: "  int main() { \n    if (false)\n       return 0; \n}\n"
  [38;5;240m  │[0m [31m│[0m       
  [38;5;240m  │[0m [31m╰[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m[31m─[0m Missing return statement
 [38;5;246m───╯[0m
-

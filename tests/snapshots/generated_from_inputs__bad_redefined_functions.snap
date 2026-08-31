@@ -1,9 +1,10 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "// Author: Tomasz Biczel 277568\nint main() {\n  foo();\n  return 0 ;\n}\n\nvoid foo() {\n   printString(\"foo\");\n   return;\n}\n\nint foo(int x) {\n    x = x + 1;\n    return x - 5;\n}\n"
+input_file: inputs/bad/redefined_functions.lat
 ---
 [31mError:[0m Type error
-    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mredefined_functions:12:5[38;5;246m][0m
+    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m redefined_functions:12:5 [38;5;246m][0m
     [38;5;246m│[0m
  [38;5;246m12 │[0m [38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[31mf[0m[31mo[0m[31mo[0m[38;5;249m([0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mx[0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m{[0m
  [38;5;240m   │[0m     [31m─[0m[31m┬[0m[31m─[0m  
@@ -12,10 +13,9 @@ description: "// Author: Tomasz Biczel 277568\nint main() {\n  foo();\n  return 
  [38;5;240m   │[0m      [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Previous declaration of `foo`
 [38;5;246m────╯[0m
 [31mError:[0m Type error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mredefined_functions:3:3[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m redefined_functions:3:3 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m3 │[0m [38;5;249m [0m[38;5;249m [0m[31mf[0m[31mo[0m[31mo[0m[38;5;249m([0m[38;5;249m)[0m[38;5;249m;[0m
  [38;5;240m  │[0m   [31m─[0m[31m┬[0m[31m─[0m  
  [38;5;240m  │[0m    [31m╰[0m[31m─[0m[31m─[0m[31m─[0m Wrong number of arguments: expected 1, found 0
 [38;5;246m───╯[0m
-

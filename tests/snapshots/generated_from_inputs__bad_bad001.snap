@@ -1,14 +1,12 @@
 ---
 source: tests/fixtures.rs
-assertion_line: 149
 description: "/*\n"
 input_file: inputs/bad/bad001.lat
 ---
 [31mError:[0m Syntax error
-   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0mbad001:1:1[38;5;246m][0m
+   [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m bad001:1:1 [38;5;246m][0m
    [38;5;246m│[0m
  [38;5;246m1 │[0m [31m/[0m[31m*[0m
  [38;5;240m  │[0m [31m─[0m[31m┬[0m  
  [38;5;240m  │[0m  [31m╰[0m[31m─[0m[31m─[0m Lexing error
 [38;5;246m───╯[0m
-
