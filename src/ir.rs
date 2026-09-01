@@ -583,7 +583,8 @@ impl Ir {
             ir.finish_block(block_id, Terminator::ReturnNoValue);
         }
         let function_name = decl.name.value.0;
-        let function_ir = ir.finish(ty, entry_block);
+        let mut function_ir = ir.finish(ty, entry_block);
+        crate::gvn::optimize(&mut function_ir);
 
         self.functions.insert(function_name, function_ir);
     }

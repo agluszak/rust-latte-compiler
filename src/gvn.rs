@@ -267,6 +267,83 @@ impl ValueNumbers {
     }
 }
 
+fn eliminate_redundancies(
+    ir: &mut FunctionIr,
+    numbers: &ValueNumbers,
+    dominators: &Dominators,
+) -> BTreeMap<ValueId, ValueId> {
+    fn visit(
+        ir: &FunctionIr,
+        block: BlockId,
+        numbers: &ValueNumbers,
+        dominators: &Dominators,
+        available: &mut BTreeMap<ValueNumber, ValueId>,
+        replacements: &mut BTreeMap<ValueId, ValueId>,
+    ) {
+        let data = &ir.blocks[&block];
+        let mut inserted_here = Vec::new();
+        for &id in data.phis.iter().chain(&data.instructions) {
+            let number = numbers.values[&id];
+            if let Some(&existing) = available.get(&number) {
+                replacements.insert(id, existing);
+            } else {
+                available.insert(number, id);
+                inserted_here.push(number);
+            }
+        }
+
+        for &child in &dominators.children[&block] {
+            visit(ir, child, numbers, dominators, available, replacements);
+        }
+
+        for number in inserted_here {
+            assert!(available.remove(&number).is_some());
+        }
+    }
+
+    let mut replacements = BTreeMap::new();
+    visit(
+        ir,
+        ir.entry,
+        numbers,
+        dominators,
+        &mut BTreeMap::new(),
+        &mut replacements,
+    );
+
+    debug_assert!(
+        replacements
+            .values()
+            .all(|target| !replacements.contains_key(target)),
+        "replacement targets must be surviving definitions"
+    );
+
+    for data in ir.values.values_mut() {
+        data.kind
+            .rewrite_operands(|id| replacements.get(&id).copied().unwrap_or(id));
+    }
+    for block in ir.blocks.values_mut() {
+        block
+            .terminator
+            .rewrite_operands(|id| replacements.get(&id).copied().unwrap_or(id));
+        block.phis.retain(|id| !replacements.contains_key(id));
+        block
+            .instructions
+            .retain(|id| !replacements.contains_key(id));
+    }
+    for id in replacements.keys() {
+        ir.values.remove(id);
+    }
+
+    replacements
+}
+
+pub(crate) fn optimize(ir: &mut FunctionIr) {
+    let numbers = ValueNumbers::compute(ir);
+    let dominators = Dominators::compute(ir);
+    eliminate_redundancies(ir, &numbers, &dominators);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -612,5 +689,214 @@ mod tests {
 
         let numbers = ValueNumbers::compute(&ir);
         assert_ne!(numbers.values[&phi_left], numbers.values[&phi_right]);
+    }
+
+    #[test]
+    fn eliminates_redundancy_in_one_block_and_preserves_surviving_ids() {
+        let first = ValueId(3);
+        let redundant = ValueId(7);
+        let user = ValueId(12);
+        let unrelated = ValueId(18);
+        let entry = BlockId(5);
+        let mut ir = FunctionIr {
+            ty: Type::Int,
+            entry,
+            values: BTreeMap::from([
+                (first, data(Type::Int, Value::Int(1))),
+                (redundant, data(Type::Int, Value::Int(1))),
+                (
+                    user,
+                    data(Type::Int, Value::UnaryOp(UnaryOpCode::Neg, redundant)),
+                ),
+                (unrelated, data(Type::Int, Value::Int(99))),
+            ]),
+            blocks: BTreeMap::from([(
+                entry,
+                BasicBlock {
+                    phis: vec![],
+                    instructions: vec![first, redundant, user, unrelated],
+                    terminator: Terminator::Return(user),
+                },
+            )]),
+        };
+
+        optimize(&mut ir);
+
+        assert_eq!(
+            ir.values.keys().copied().collect::<Vec<_>>(),
+            vec![first, user, unrelated]
+        );
+        assert_eq!(ir.blocks[&entry].instructions, vec![first, user, unrelated]);
+        assert_eq!(
+            ir.values[&user].kind,
+            Value::UnaryOp(UnaryOpCode::Neg, first)
+        );
+        assert_eq!(ir.blocks[&entry].terminator, Terminator::Return(user));
+        assert!(
+            ir.values.contains_key(&unrelated),
+            "GVN must not perform DCE"
+        );
+    }
+
+    #[test]
+    fn eliminates_a_congruent_definition_in_a_dominated_block() {
+        let entry = BlockId(1);
+        let child = BlockId(2);
+        let lhs = ValueId(1);
+        let rhs = ValueId(2);
+        let parent_sum = ValueId(10);
+        let child_sum = ValueId(20);
+        let mut ir = FunctionIr {
+            ty: Type::Int,
+            entry,
+            values: BTreeMap::from([
+                (lhs, data(Type::Int, Value::Argument(0))),
+                (rhs, data(Type::Int, Value::Argument(1))),
+                (
+                    parent_sum,
+                    data(Type::Int, Value::BinaryOp(BinaryOpCode::Add, lhs, rhs)),
+                ),
+                (
+                    child_sum,
+                    data(Type::Int, Value::BinaryOp(BinaryOpCode::Add, lhs, rhs)),
+                ),
+            ]),
+            blocks: BTreeMap::from([
+                (
+                    entry,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![lhs, rhs, parent_sum],
+                        terminator: Terminator::Jump(child),
+                    },
+                ),
+                (
+                    child,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![child_sum],
+                        terminator: Terminator::Return(child_sum),
+                    },
+                ),
+            ]),
+        };
+
+        optimize(&mut ir);
+
+        assert!(!ir.values.contains_key(&child_sum));
+        assert!(ir.blocks[&child].instructions.is_empty());
+        assert_eq!(ir.blocks[&child].terminator, Terminator::Return(parent_sum));
+    }
+
+    #[test]
+    fn numbers_but_does_not_eliminate_congruent_sibling_definitions() {
+        let entry = BlockId(1);
+        let left = BlockId(2);
+        let right = BlockId(3);
+        let join = BlockId(4);
+        let lhs = ValueId(1);
+        let rhs = ValueId(2);
+        let condition = ValueId(3);
+        let left_sum = ValueId(10);
+        let right_sum = ValueId(20);
+        let mut ir = FunctionIr {
+            ty: Type::Int,
+            entry,
+            values: BTreeMap::from([
+                (lhs, data(Type::Int, Value::Argument(0))),
+                (rhs, data(Type::Int, Value::Argument(1))),
+                (condition, data(Type::Bool, Value::Argument(2))),
+                (
+                    left_sum,
+                    data(Type::Int, Value::BinaryOp(BinaryOpCode::Add, lhs, rhs)),
+                ),
+                (
+                    right_sum,
+                    data(Type::Int, Value::BinaryOp(BinaryOpCode::Add, lhs, rhs)),
+                ),
+            ]),
+            blocks: BTreeMap::from([
+                (
+                    entry,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![lhs, rhs, condition],
+                        terminator: Terminator::Branch(condition, left, right),
+                    },
+                ),
+                (
+                    left,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![left_sum],
+                        terminator: Terminator::Jump(join),
+                    },
+                ),
+                (
+                    right,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![right_sum],
+                        terminator: Terminator::Jump(join),
+                    },
+                ),
+                (
+                    join,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![],
+                        terminator: Terminator::Return(lhs),
+                    },
+                ),
+            ]),
+        };
+        let numbers = ValueNumbers::compute(&ir);
+        assert_eq!(numbers.values[&left_sum], numbers.values[&right_sum]);
+
+        optimize(&mut ir);
+
+        assert!(ir.values.contains_key(&left_sum));
+        assert!(ir.values.contains_key(&right_sum));
+        assert_eq!(ir.blocks[&left].instructions, vec![left_sum]);
+        assert_eq!(ir.blocks[&right].instructions, vec![right_sum]);
+    }
+
+    #[test]
+    fn all_operands_refer_to_surviving_values_after_optimization() {
+        let (mut ir, _) = induction_variables(0);
+        optimize(&mut ir);
+
+        let valid = |id: ValueId| ir.values.contains_key(&id);
+        for data in ir.values.values() {
+            match &data.kind {
+                Value::Call(_, args) => assert!(args.iter().copied().all(valid)),
+                Value::BinaryOp(_, lhs, rhs) => assert!(valid(*lhs) && valid(*rhs)),
+                Value::UnaryOp(_, operand) => assert!(valid(*operand)),
+                Value::Phi(phi) => {
+                    assert!(phi.incoming.iter().all(|(_, value)| valid(*value)));
+                }
+                Value::Int(_)
+                | Value::String(_)
+                | Value::Bool(_)
+                | Value::Argument(_)
+                | Value::Undef => {}
+            }
+        }
+        for block in ir.blocks.values() {
+            assert!(
+                block
+                    .phis
+                    .iter()
+                    .chain(&block.instructions)
+                    .copied()
+                    .all(valid)
+            );
+            match block.terminator {
+                Terminator::Return(value) | Terminator::Branch(value, _, _) => {
+                    assert!(valid(value));
+                }
+                Terminator::ReturnNoValue | Terminator::Jump(_) => {}
+            }
+        }
     }
 }
