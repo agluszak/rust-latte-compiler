@@ -8,7 +8,7 @@ use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct BlockId(u32);
+pub struct BlockId(pub(crate) u32);
 
 impl Display for BlockId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -18,7 +18,7 @@ impl Display for BlockId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct ValueId(u32);
+pub struct ValueId(pub(crate) u32);
 
 impl Display for ValueId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,6 +92,33 @@ pub enum Value {
     Undef,
 }
 
+impl Value {
+    pub(crate) fn rewrite_operands(&mut self, mut f: impl FnMut(ValueId) -> ValueId) {
+        match self {
+            Value::Call(_, args) => {
+                for arg in args {
+                    *arg = f(*arg);
+                }
+            }
+            Value::BinaryOp(_, lhs, rhs) => {
+                *lhs = f(*lhs);
+                *rhs = f(*rhs);
+            }
+            Value::UnaryOp(_, operand) => *operand = f(*operand),
+            Value::Phi(phi) => {
+                for (_, value) in &mut phi.incoming {
+                    *value = f(*value);
+                }
+            }
+            Value::Int(_)
+            | Value::String(_)
+            | Value::Bool(_)
+            | Value::Argument(_)
+            | Value::Undef => {}
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum BuildingValue {
     Int(i32),
@@ -134,6 +161,25 @@ pub enum Terminator {
     Jump(BlockId),
 }
 
+impl Terminator {
+    pub(crate) fn successors(&self) -> impl Iterator<Item = BlockId> {
+        let successors = match *self {
+            Terminator::Return(_) | Terminator::ReturnNoValue => [None, None],
+            Terminator::Branch(_, then_block, else_block) => [Some(then_block), Some(else_block)],
+            Terminator::Jump(target) => [Some(target), None],
+        };
+        successors.into_iter().flatten()
+    }
+
+    pub(crate) fn rewrite_operands(&mut self, mut f: impl FnMut(ValueId) -> ValueId) {
+        match self {
+            Terminator::Return(value) => *value = f(*value),
+            Terminator::Branch(condition, _, _) => *condition = f(*condition),
+            Terminator::ReturnNoValue | Terminator::Jump(_) => {}
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct IrBuilder {
     next_value_id: u32,
@@ -156,6 +202,7 @@ pub struct BasicBlock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionIr {
     pub ty: Type,
+    pub entry: BlockId,
     pub values: BTreeMap<ValueId, ValueData>,
     pub blocks: BTreeMap<BlockId, BasicBlock>,
 }
@@ -400,7 +447,7 @@ impl IrBuilder {
         replacement
     }
 
-    fn finish(mut self, ty: Type) -> FunctionIr {
+    fn finish(mut self, ty: Type, entry: BlockId) -> FunctionIr {
         assert!(self.incomplete_phis.is_empty());
         assert!(self.blocks.values().all(|block| block.sealed));
         assert!(self.blocks.values().all(|block| block.terminator.is_some()));
@@ -467,7 +514,12 @@ impl IrBuilder {
             })
             .collect();
 
-        FunctionIr { ty, values, blocks }
+        FunctionIr {
+            ty,
+            entry,
+            values,
+            blocks,
+        }
     }
 }
 
@@ -531,7 +583,7 @@ impl Ir {
             ir.finish_block(block_id, Terminator::ReturnNoValue);
         }
         let function_name = decl.name.value.0;
-        let function_ir = ir.finish(ty);
+        let function_ir = ir.finish(ty, entry_block);
 
         self.functions.insert(function_name, function_ir);
     }
@@ -999,7 +1051,7 @@ mod tests {
         assert_eq!(builder.resolve_alias(second), value);
         builder.finish_block(join, Terminator::Return(second));
 
-        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)), entry);
         assert!(
             ir.values
                 .iter()
@@ -1048,7 +1100,7 @@ mod tests {
 
         builder.finish_block(join, Terminator::Return(c));
 
-        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)), entry);
         assert!(
             ir.values
                 .iter()
@@ -1092,7 +1144,7 @@ mod tests {
         builder.seal_block(header);
         builder.finish_block(exit, Terminator::Return(header_value));
 
-        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)));
+        let ir = builder.finish(Type::Function(Vec::new(), Box::new(Type::Int)), entry);
         let phis: Vec<_> = ir
             .values
             .values()

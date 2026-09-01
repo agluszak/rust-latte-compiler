@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 
 mod ast;
 mod errors;
+mod gvn;
 pub mod input;
 pub mod ir;
 pub mod lexer;

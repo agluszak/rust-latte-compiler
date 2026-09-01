@@ -169,12 +169,12 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn generate(&self, name: &str, ir: &FunctionIr) {
         let function = self.module.get_function(name).unwrap();
-        let basic_blocks: BTreeMap<BlockId, BasicBlock> = ir
-            .blocks
-            .keys()
+        let block_order =
+            std::iter::once(ir.entry).chain(ir.blocks.keys().copied().filter(|id| *id != ir.entry));
+        let basic_blocks: BTreeMap<BlockId, BasicBlock> = block_order
             .map(|id| {
                 (
-                    *id,
+                    id,
                     self.context.append_basic_block(function, &id.to_string()),
                 )
             })
