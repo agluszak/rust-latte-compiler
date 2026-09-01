@@ -1,0 +1,18 @@
+int main() {
+    int a = readInt();
+    int b = readInt();
+
+    int sum = a + b;
+    int sameBlock = a + b;
+    printInt(sum);
+    printInt(sameBlock);
+
+    if (a > b) {
+        int dominated = b + a;
+        printInt(dominated);
+    } else {
+        printInt(sum);
+    }
+
+    return 0;
+}

@@ -1,0 +1,47 @@
+---
+source: tests/fixtures.rs
+description: "int main() {\n    int a = readInt();\n    int b = readInt();\n\n    int sum = a + b;\n    int sameBlock = a + b;\n    printInt(sum);\n    printInt(sameBlock);\n\n    if (a > b) {\n        int dominated = b + a;\n        printInt(dominated);\n    } else {\n        printInt(sum);\n    }\n\n    return 0;\n}\n"
+input_file: inputs/good/global_common_subexpression_elimination.lat
+---
+; ModuleID = 'global_common_subexpression_elimination'
+source_filename = "global_common_subexpression_elimination"
+
+%string = type { i8*, i32 }
+
+declare void @printInt(i32)
+
+declare void @printString(%string*)
+
+declare i32 @readInt()
+
+declare %string* @readString()
+
+declare void @error()
+
+declare %string* @newString(i8*, i32)
+
+declare %string* @stringConcat(%string*, %string*)
+
+declare i32 @stringEqual(%string*, %string*)
+
+define i32 @main() {
+b0:
+  %readInt = call i32 @readInt()
+  %readInt1 = call i32 @readInt()
+  %v2 = add i32 %readInt, %readInt1
+  call void @printInt(i32 %v2)
+  call void @printInt(i32 %v2)
+  %v6 = icmp sgt i32 %readInt, %readInt1
+  br i1 %v6, label %b1, label %b2
+
+b1:                                               ; preds = %b0
+  call void @printInt(i32 %v2)
+  br label %b3
+
+b2:                                               ; preds = %b0
+  call void @printInt(i32 %v2)
+  br label %b3
+
+b3:                                               ; preds = %b2, %b1
+  ret i32 0
+}
