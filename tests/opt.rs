@@ -1,22 +1,12 @@
-use rust_latte_compiler::{emit_llvm, link_runtime, lower_program, optimize_program};
+use rust_latte_compiler::{compile_ir, emit_llvm, link_runtime, optimize_program};
 
 #[path = "common/mod.rs"]
 mod common;
 
 fn run_source(source: &str, stdin_data: &str) -> (String, i32) {
-    let lexer = rust_latte_compiler::lexer::Lexer::new(source);
-    let parsed = rust_latte_compiler::parser::latte::ProgramParser::new()
-        .parse(lexer)
-        .expect("test source must parse");
-    let (checked, env) = rust_latte_compiler::typechecker::typecheck_program(parsed)
-        .expect("test source must typecheck");
-
     // Lower once, then compare the unoptimized program against an optimized copy.
-    let unoptimized = lower_program(checked, env);
-    let mut optimized = rust_latte_compiler::ProgramIr {
-        ir: unoptimized.ir.clone(),
-        env: unoptimized.env.clone(),
-    };
+    let unoptimized = compile_ir(source, "test").expect("test source must compile");
+    let mut optimized = unoptimized.clone();
     optimize_program(&mut optimized);
 
     let context = inkwell::context::Context::create();

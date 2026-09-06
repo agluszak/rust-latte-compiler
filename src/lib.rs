@@ -28,8 +28,8 @@ pub mod parser;
 mod passes;
 mod return_analysis;
 pub mod ssa;
-pub mod typechecker;
-pub mod typed_ast;
+mod typechecker;
+mod typed_ast;
 pub mod types;
 mod symbols;
 mod verify;
@@ -44,7 +44,7 @@ pub struct ProgramIr {
     pub env: crate::typechecker::ReadyEnvironment,
 }
 
-pub fn lower_program(
+fn lower_program(
     typechecked: crate::typed_ast::TypedProgram,
     env: crate::typechecker::ReadyEnvironment,
 ) -> ProgramIr {
@@ -53,6 +53,21 @@ pub fn lower_program(
         ir.translate_function(decl.value);
     }
     ProgramIr { ir, env }
+}
+
+/// Runs the frontend and lowering, stopping before optimization, so tests can
+/// compare unoptimized and optimized programs from a single lowering.
+pub fn compile_ir<'src>(
+    source: &'src str,
+    filename: &'src str,
+) -> Result<ProgramIr, Vec<AriadneReport<'src>>> {
+    let lexer = Lexer::new(source);
+    let parsed = ProgramParser::new()
+        .parse(lexer)
+        .map_err(|err| parsing_reports(err, filename))?;
+    let (typechecked, env) =
+        typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
+    Ok(lower_program(typechecked, env))
 }
 
 pub fn optimize_program(program: &mut ProgramIr) {
@@ -78,14 +93,7 @@ pub fn compile<'ctx, 'src>(
     input: &'src str,
     filename: &'src str,
 ) -> Result<Module<'ctx>, Vec<AriadneReport<'src>>> {
-    let lexer = Lexer::new(input);
-    let parsed = ProgramParser::new()
-        .parse(lexer)
-        .map_err(|err| parsing_reports(err, filename))?;
-    let (typechecked, env) =
-        typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
-
-    let mut program = lower_program(typechecked, env);
+    let mut program = compile_ir(input, filename)?;
     optimize_program(&mut program);
 
     Ok(emit_llvm(context, filename, &program))
