@@ -60,7 +60,7 @@ pub fn optimize_program(program: &mut ProgramIr) {
 }
 
 pub fn emit_llvm<'ctx>(context: &'ctx Context, filename: &str, program: &ProgramIr) -> Module<'ctx> {
-    let codegen = CodeGen::new(context, filename, program.env.clone());
+    let mut codegen = CodeGen::new(context, filename, program.env.clone());
 
     for (name, func) in &program.ir.functions {
         codegen.declare(name, func);
