@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 const LLI_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[allow(dead_code)]
 pub struct Outcome {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
