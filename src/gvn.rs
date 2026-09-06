@@ -56,8 +56,8 @@ impl ValueNumbers {
         let mut current: BTreeMap<ValueId, ValueNumber> = BTreeMap::new();
         for (&id, data) in &ir.values {
             // Calls, arguments, and undef never share a class: each stays
-            // opaque so GVN only reuses dominating congruent definitions and
-            // never deletes or moves an operation.
+            // opaque so GVN only reuses dominating congruent definitions,
+            // with no code motion and no unused-result elimination.
             let class = match &data.kind {
                 Value::Int(value) => InitialClass::Int(*value),
                 Value::Bool(value) => InitialClass::Bool(*value),

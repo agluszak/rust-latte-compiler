@@ -80,8 +80,8 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
         }
     }
 
-    // Successor validity is already enforced by Cfg::compute (panics on
-    // missing successors). Check phi/predecessor correspondence exactly.
+    // Successors were validated above. Check phi/predecessor correspondence
+    // exactly.
     for (&block, data) in &ir.blocks {
         let preds: BTreeSet<BlockId> = cfg.predecessors[&block].iter().copied().collect();
         for &phi in &data.phis {
