@@ -387,6 +387,11 @@ fn typecheck_expr(
                     Type::Bool
                 }
                 ast::BinaryOp::Eq | ast::BinaryOp::Neq => {
+                    ensure_one_of(
+                        &[Type::Int, Type::Bool, Type::LatteString],
+                        lhs_ty,
+                        lhs_typed_expr.span.clone(),
+                    )?;
                     ensure_type(lhs_ty, rhs_ty, rhs_typed_expr.span.clone())?;
                     Type::Bool
                 }
