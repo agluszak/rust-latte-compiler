@@ -1,4 +1,4 @@
-use crate::cfg::{Cfg, Dominators};
+use crate::cfg::Dominators;
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, UnaryOpCode, Value, ValueId};
 use crate::typechecker::Type;
 use std::collections::{BTreeMap, BTreeSet};
