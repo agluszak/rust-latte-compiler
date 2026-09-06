@@ -246,13 +246,16 @@ mod tests {
     ) -> FunctionIr {
         let entry = BlockId(10);
         FunctionIr {
-            ty: Type::Void,
+            ty: Type::Function(
+                vec![Type::Int, Type::Int, Type::LatteString, Type::LatteString],
+                Box::new(Type::Void),
+            ),
             entry,
             values,
             blocks: BTreeMap::from([(
                 entry,
                 BasicBlock {
-                    phis: Vec::new(),
+                    phis: vec![],
                     instructions,
                     terminator: Terminator::ReturnNoValue,
                 },
@@ -267,7 +270,7 @@ mod tests {
         let right = BlockId(11);
         let join = BlockId(13);
         let ir = FunctionIr {
-            ty: Type::Void,
+            ty: Type::Function(Vec::new(), Box::new(Type::Void)),
             entry,
             values: BTreeMap::new(),
             blocks: BTreeMap::from([
@@ -482,7 +485,7 @@ mod tests {
         ]);
         (
             FunctionIr {
-                ty: Type::Int,
+                ty: Type::Function(vec![Type::Bool], Box::new(Type::Int)),
                 entry,
                 values,
                 blocks,
@@ -523,7 +526,7 @@ mod tests {
         let phi_left = ValueId(2);
         let phi_right = ValueId(3);
         let ir = FunctionIr {
-            ty: Type::Int,
+            ty: Type::Function(vec![Type::Bool], Box::new(Type::Int)),
             entry,
             values: BTreeMap::from([
                 (source, data(Type::Int, Value::Int(1))),
@@ -588,7 +591,7 @@ mod tests {
         let unrelated = ValueId(18);
         let entry = BlockId(5);
         let mut ir = FunctionIr {
-            ty: Type::Int,
+            ty: Type::Function(Vec::new(), Box::new(Type::Int)),
             entry,
             values: BTreeMap::from([
                 (first, data(Type::Int, Value::Int(1))),
@@ -638,7 +641,7 @@ mod tests {
         let parent_sum = ValueId(10);
         let child_sum = ValueId(20);
         let mut ir = FunctionIr {
-            ty: Type::Int,
+            ty: Type::Function(vec![Type::Int, Type::Int], Box::new(Type::Int)),
             entry,
             values: BTreeMap::from([
                 (lhs, data(Type::Int, Value::Argument(0))),
@@ -693,7 +696,10 @@ mod tests {
         let left_sum = ValueId(10);
         let right_sum = ValueId(20);
         let mut ir = FunctionIr {
-            ty: Type::Int,
+            ty: Type::Function(
+                vec![Type::Int, Type::Int, Type::Bool],
+                Box::new(Type::Int),
+            ),
             entry,
             values: BTreeMap::from([
                 (lhs, data(Type::Int, Value::Argument(0))),

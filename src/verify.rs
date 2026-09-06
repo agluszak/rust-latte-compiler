@@ -8,11 +8,19 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
     if !ir.blocks.contains_key(&ir.entry) {
         return Err(format!("entry {} is not in the function", ir.entry));
     }
-    // Test fragments use a bare return type; accept it as the return type.
-    let (arg_types, ret) = match &ir.ty {
-        Type::Function(args, ret) => (args.clone(), (**ret).clone()),
-        other => (Vec::new(), other.clone()),
+    let Type::Function(arg_types, ret) = &ir.ty else {
+        return Err("function IR type must be a function".to_string());
     };
+
+    for (&block, data) in &ir.blocks {
+        for successor in data.terminator.successors() {
+            if !ir.blocks.contains_key(&successor) {
+                return Err(format!(
+                    "terminator of {block} targets missing block {successor}"
+                ));
+            }
+        }
+    }
 
     let cfg = Cfg::compute(ir);
 
@@ -165,14 +173,12 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
                 return Err(format!("literal {id} has wrong type {}", data.ty));
             }
             Value::Argument(i) => {
-                if !arg_types.is_empty() {
-                    let idx = *i as usize;
-                    if idx >= arg_types.len() {
-                        return Err(format!("argument {id} index {i} out of range"));
-                    }
-                    if data.ty != arg_types[idx] {
-                        return Err(format!("argument {id} type mismatch"));
-                    }
+                let idx = *i as usize;
+                if idx >= arg_types.len() {
+                    return Err(format!("argument {id} index {i} out of range"));
+                }
+                if data.ty != arg_types[idx] {
+                    return Err(format!("argument {id} type mismatch"));
                 }
             }
             Value::BinaryOp(op, lhs, rhs) => {
@@ -252,15 +258,15 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
     for (&block, data) in &ir.blocks {
         match &data.terminator {
             crate::ir::Terminator::Return(value) => {
-                if ret == Type::Void {
+                if **ret == Type::Void {
                     return Err(format!("void function returns a value in {block}"));
                 }
-                if ir.values[value].ty != ret {
+                if ir.values[value].ty != **ret {
                     return Err(format!("return type mismatch in {block}"));
                 }
             }
             crate::ir::Terminator::ReturnNoValue => {
-                if ret != Type::Void {
+                if **ret != Type::Void {
                     return Err(format!("non-void function has value-less return in {block}"));
                 }
             }
