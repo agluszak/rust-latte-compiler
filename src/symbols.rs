@@ -1,18 +1,23 @@
 use crate::types::Type;
 
 /// The five source-language builtins. Single source of truth for checking and codegen.
+pub(crate) const LANGUAGE_BUILTINS: &[(&str, &[Type], Type)] = &[
+    ("printInt", &[Type::Int], Type::Void),
+    ("printString", &[Type::LatteString], Type::Void),
+    ("error", &[], Type::Void),
+    ("readInt", &[], Type::Int),
+    ("readString", &[], Type::LatteString),
+];
+
 pub(crate) fn language_builtins() -> Vec<(&'static str, Vec<Type>, Type)> {
-    vec![
-        ("printInt", vec![Type::Int], Type::Void),
-        ("printString", vec![Type::LatteString], Type::Void),
-        ("error", vec![], Type::Void),
-        ("readInt", vec![], Type::Int),
-        ("readString", vec![], Type::LatteString),
-    ]
+    LANGUAGE_BUILTINS
+        .iter()
+        .map(|(name, args, ret)| (*name, args.to_vec(), ret.clone()))
+        .collect()
 }
 
 pub(crate) fn is_language_builtin(name: &str) -> bool {
-    language_builtins().iter().any(|(n, _, _)| *n == name)
+    LANGUAGE_BUILTINS.iter().any(|(n, _, _)| *n == name)
 }
 
 /// Runtime helpers used by codegen. Not source-language builtins; their ABI
@@ -32,12 +37,8 @@ pub(crate) fn mangle_user(name: &str) -> String {
 }
 
 pub(crate) fn resolve_callee(source_name: &str) -> String {
-    if is_language_builtin(source_name)
-        || source_name == RUNTIME_NEW_STRING
-        || source_name == RUNTIME_STRING_CONCAT
-        || source_name == RUNTIME_STRING_EQUAL
-    {
-        source_name.to_string()
+    if is_language_builtin(source_name) {
+        source_name.to_owned()
     } else {
         mangle_user(source_name)
     }
