@@ -74,8 +74,8 @@ impl Environment {
             next_variable_id: 0,
         };
 
-        for (name, args, ret) in crate::symbols::language_builtins() {
-            env.add_predefined_fn(name, args, ret);
+        for (name, args, ret) in crate::symbols::LANGUAGE_BUILTINS {
+            env.add_predefined_fn(name, args.to_vec(), ret.clone());
         }
 
         env
