@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdnoreturn.h>
 #include <errno.h>
+#include <unistd.h>
 
 struct string {
     char *str; // not null-terminated
@@ -17,10 +18,11 @@ void printInt(int n) {
 }
 
 void printString(struct string *s) {
-    for (int i = 0; i < s->len; i++) {
-        putchar(s->str[i]);
-    }
-    putchar('\n');
+    // Flush earlier buffered `printf` output so file-captured streams stay
+    // ordered relative to these length-based direct writes.
+    fflush(stdout);
+    write(STDOUT_FILENO, s->str, s->len);
+    write(STDOUT_FILENO, "\n", 1);
 }
 
 noreturn void error() {

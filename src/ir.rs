@@ -135,12 +135,12 @@ impl Terminator {
         }
     }
 
-    pub(crate) fn operands(&self) -> impl Iterator<Item = ValueId> + '_ {
+    pub(crate) fn operands(&self) -> impl Iterator<Item = ValueId> {
         match *self {
             Terminator::Return(value) | Terminator::Branch(value, _, _) => {
-                vec![value].into_iter()
+                Some(value).into_iter()
             }
-            Terminator::ReturnNoValue | Terminator::Jump(_) => Vec::new().into_iter(),
+            Terminator::ReturnNoValue | Terminator::Jump(_) => None.into_iter(),
         }
     }
 }

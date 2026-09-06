@@ -4,7 +4,7 @@ use crate::typed_ast::VariableId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct BuildingPhi {
+pub(crate) struct BuildingPhi {
     block: BlockId,
     incoming: Vec<(BlockId, ValueId)>,
     users: Vec<ValueId>,
@@ -315,20 +315,14 @@ impl IrBuilder {
         assert!(self.blocks.values().all(|block| block.sealed));
         assert!(self.blocks.values().all(|block| block.terminator.is_some()));
 
-        // Path-compress every alias so surviving operands resolve in one step.
+        // Path-compress every alias so one lookup resolves each use.
         let aliased: Vec<ValueId> = self.aliases.keys().copied().collect();
         for id in aliased {
             self.resolve_alias(id);
         }
 
         let aliases = std::mem::take(&mut self.aliases);
-        let remap = |id: ValueId| {
-            let mut id = id;
-            while let Some(&next) = aliases.get(&id) {
-                id = next;
-            }
-            id
-        };
+        let remap = |id: ValueId| aliases.get(&id).copied().unwrap_or(id);
 
         let building_values = std::mem::take(&mut self.values);
         let values = building_values
@@ -353,17 +347,18 @@ impl IrBuilder {
         let blocks = building_blocks
             .into_iter()
             .map(|(id, block)| {
-                let operands = |ids: Vec<ValueId>| -> Vec<ValueId> {
+                // Surviving definitions are already canonical; only uses
+                // (value kinds, terminators) still need remapping.
+                let live = |ids: Vec<ValueId>| -> Vec<ValueId> {
                     ids.into_iter()
                         .filter(|id| !aliases.contains_key(id))
-                        .map(remap)
                         .collect()
                 };
                 (
                     id,
                     BasicBlock {
-                        phis: operands(block.phis),
-                        instructions: operands(block.instructions),
+                        phis: live(block.phis),
+                        instructions: live(block.instructions),
                         terminator: match block.terminator.unwrap() {
                             Terminator::Return(value) => Terminator::Return(remap(value)),
                             Terminator::ReturnNoValue => Terminator::ReturnNoValue,

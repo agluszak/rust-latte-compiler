@@ -158,18 +158,13 @@ fn translate_block(
     block_id: BlockId,
 ) -> BasicBlockContinuation {
     let mut block_id = block_id;
-    let mut final_continuation = ContinueBlock(block_id);
     for stmt in block.0 {
-        let continuation = translate_stmt(context, stmt.value, block_id);
-        match continuation {
-            ContinueBlock(new_block_id) => {
-                block_id = new_block_id;
-                final_continuation = ContinueBlock(new_block_id);
-            }
+        match translate_stmt(context, stmt.value, block_id) {
+            ContinueBlock(new_block_id) => block_id = new_block_id,
             Stop => return Stop,
         }
     }
-    final_continuation
+    ContinueBlock(block_id)
 }
 
 fn default_value(ty: &Type) -> BuildingValue {

@@ -135,7 +135,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
             }
         }
         for &instr in &data.instructions {
-            for operand in ir.values[&instr].kind.operands().collect::<Vec<_>>() {
+            for operand in ir.values[&instr].kind.operands() {
                 let def = def_block[&operand];
                 if def == block {
                     let use_idx = block_order_index[&block][&instr];
@@ -153,7 +153,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
                 }
             }
         }
-        for operand in data.terminator.operands().collect::<Vec<_>>() {
+        for operand in data.terminator.operands() {
             let def = def_block[&operand];
             if def != block && !dominators.dominates(def, block) {
                 return Err(format!(
