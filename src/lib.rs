@@ -28,6 +28,7 @@ mod passes;
 mod return_analysis;
 pub mod typechecker;
 pub mod typed_ast;
+mod verify;
 
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 

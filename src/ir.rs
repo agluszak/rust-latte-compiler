@@ -118,6 +118,20 @@ impl Value {
             | Value::Undef => {}
         }
     }
+
+    pub(crate) fn operands(&self) -> impl Iterator<Item = ValueId> + '_ {
+        match self {
+            Value::Call(_, args) => args.iter().copied().collect::<Vec<_>>().into_iter(),
+            Value::BinaryOp(_, lhs, rhs) => vec![*lhs, *rhs].into_iter(),
+            Value::UnaryOp(_, operand) => vec![*operand].into_iter(),
+            Value::Phi(phi) => phi.incoming.iter().map(|(_, v)| *v).collect::<Vec<_>>().into_iter(),
+            Value::Int(_)
+            | Value::String(_)
+            | Value::Bool(_)
+            | Value::Argument(_)
+            | Value::Undef => Vec::new().into_iter(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,6 +191,15 @@ impl Terminator {
             Terminator::Return(value) => *value = f(*value),
             Terminator::Branch(condition, _, _) => *condition = f(*condition),
             Terminator::ReturnNoValue | Terminator::Jump(_) => {}
+        }
+    }
+
+    pub(crate) fn operands(&self) -> impl Iterator<Item = ValueId> + '_ {
+        match *self {
+            Terminator::Return(value) | Terminator::Branch(value, _, _) => {
+                vec![value].into_iter()
+            }
+            Terminator::ReturnNoValue | Terminator::Jump(_) => Vec::new().into_iter(),
         }
     }
 }

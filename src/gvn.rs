@@ -530,22 +530,25 @@ mod tests {
 
     #[test]
     fn phis_in_different_blocks_start_in_different_classes() {
+        let entry = BlockId(0);
         let left = BlockId(1);
         let right = BlockId(2);
         let source = ValueId(1);
+        let condition = ValueId(4);
         let phi_left = ValueId(2);
         let phi_right = ValueId(3);
         let ir = FunctionIr {
             ty: Type::Int,
-            entry: left,
+            entry,
             values: BTreeMap::from([
                 (source, data(Type::Int, Value::Int(1))),
+                (condition, data(Type::Bool, Value::Argument(0))),
                 (
                     phi_left,
                     data(
                         Type::Int,
                         Value::Phi(Phi {
-                            incoming: vec![(left, source)],
+                            incoming: vec![(entry, source)],
                         }),
                     ),
                 ),
@@ -554,18 +557,26 @@ mod tests {
                     data(
                         Type::Int,
                         Value::Phi(Phi {
-                            incoming: vec![(left, source)],
+                            incoming: vec![(entry, source)],
                         }),
                     ),
                 ),
             ]),
             blocks: BTreeMap::from([
                 (
+                    entry,
+                    BasicBlock {
+                        phis: vec![],
+                        instructions: vec![source, condition],
+                        terminator: Terminator::Branch(condition, left, right),
+                    },
+                ),
+                (
                     left,
                     BasicBlock {
                         phis: vec![phi_left],
-                        instructions: vec![source],
-                        terminator: Terminator::Jump(right),
+                        instructions: vec![],
+                        terminator: Terminator::Return(phi_left),
                     },
                 ),
                 (
@@ -578,6 +589,7 @@ mod tests {
                 ),
             ]),
         };
+        crate::verify::verify(&ir).unwrap();
 
         let numbers = ValueNumbers::compute(&ir);
         assert_ne!(numbers.values[&phi_left], numbers.values[&phi_right]);
@@ -611,8 +623,10 @@ mod tests {
                 },
             )]),
         };
+        crate::verify::verify(&ir).unwrap();
 
         optimize(&mut ir);
+        crate::verify::verify(&ir).unwrap();
 
         assert_eq!(
             ir.values.keys().copied().collect::<Vec<_>>(),
@@ -672,8 +686,10 @@ mod tests {
                 ),
             ]),
         };
+        crate::verify::verify(&ir).unwrap();
 
         optimize(&mut ir);
+        crate::verify::verify(&ir).unwrap();
 
         assert!(!ir.values.contains_key(&child_sum));
         assert!(ir.blocks[&child].instructions.is_empty());
@@ -742,10 +758,12 @@ mod tests {
                 ),
             ]),
         };
+        crate::verify::verify(&ir).unwrap();
         let numbers = ValueNumbers::compute(&ir);
         assert_eq!(numbers.values[&left_sum], numbers.values[&right_sum]);
 
         optimize(&mut ir);
+        crate::verify::verify(&ir).unwrap();
 
         assert!(ir.values.contains_key(&left_sum));
         assert!(ir.values.contains_key(&right_sum));
@@ -756,7 +774,9 @@ mod tests {
     #[test]
     fn all_operands_refer_to_surviving_values_after_optimization() {
         let (mut ir, _) = induction_variables(0);
+        crate::verify::verify(&ir).unwrap();
         optimize(&mut ir);
+        crate::verify::verify(&ir).unwrap();
 
         let valid = |id: ValueId| ir.values.contains_key(&id);
         for data in ir.values.values() {
