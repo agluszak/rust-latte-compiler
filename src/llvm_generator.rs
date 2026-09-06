@@ -1,6 +1,6 @@
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Terminator, UnaryOpCode, Value, ValueId};
 use crate::symbols::{
-    RUNTIME_NEW_STRING, RUNTIME_STRING_CONCAT, RUNTIME_STRING_EQUAL, language_builtins,
+    LANGUAGE_BUILTINS, RUNTIME_NEW_STRING, RUNTIME_STRING_CONCAT, RUNTIME_STRING_EQUAL,
     mangle_user, resolve_callee,
 };
 use crate::typechecker::ReadyEnvironment;
@@ -58,13 +58,11 @@ impl<'ctx> CodeGen<'ctx> {
         let void = self.context.void_type();
         let string_ptr = self.string_type.ptr_type(AddressSpace::default());
 
-        for (name, args, ret) in language_builtins() {
+        for (name, args, ret) in LANGUAGE_BUILTINS {
             let params: Vec<_> = args.iter().map(|arg| self.llvm_basic_type(arg).into()).collect();
             let fn_type = match ret {
                 Type::Void => void.fn_type(&params, false),
-                _ => self
-                    .llvm_basic_type(&ret)
-                    .fn_type(&params, false),
+                _ => self.llvm_basic_type(ret).fn_type(&params, false),
             };
             self.module
                 .add_function(name, fn_type, Some(Linkage::External));

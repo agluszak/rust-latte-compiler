@@ -9,13 +9,6 @@ pub(crate) const LANGUAGE_BUILTINS: &[(&str, &[Type], Type)] = &[
     ("readString", &[], Type::LatteString),
 ];
 
-pub(crate) fn language_builtins() -> Vec<(&'static str, Vec<Type>, Type)> {
-    LANGUAGE_BUILTINS
-        .iter()
-        .map(|(name, args, ret)| (*name, args.to_vec(), ret.clone()))
-        .collect()
-}
-
 pub(crate) fn is_language_builtin(name: &str) -> bool {
     LANGUAGE_BUILTINS.iter().any(|(n, _, _)| *n == name)
 }
