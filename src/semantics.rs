@@ -36,6 +36,7 @@ pub(crate) fn can_reuse_dominating_result(value: &Value) -> bool {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn can_remove_when_unused(_value: &Value) -> bool {
     // No current pass deletes unused definitions based on this query.
     // Division, remainder, and calls must not be treated as freely deletable
@@ -43,6 +44,7 @@ pub(crate) fn can_remove_when_unused(_value: &Value) -> bool {
     false
 }
 
+#[allow(dead_code)]
 pub(crate) fn can_hoist(_value: &Value) -> bool {
     false
 }

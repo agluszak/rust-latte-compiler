@@ -39,6 +39,7 @@ type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 
 static RUNTIME_BITCODE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.bc"));
 
+#[derive(Debug, Clone)]
 pub struct ProgramIr {
     pub ir: Ir,
     pub env: crate::typechecker::ReadyEnvironment,

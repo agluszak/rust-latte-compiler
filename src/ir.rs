@@ -160,6 +160,7 @@ pub struct FunctionIr {
     pub blocks: BTreeMap<BlockId, BasicBlock>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ir {
     pub functions: BTreeMap<String, FunctionIr>,
 }
