@@ -76,7 +76,7 @@ pub enum BinaryOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
-    Int(i32),
+    Int(i64),
     String(String),
     Bool(bool),
 }

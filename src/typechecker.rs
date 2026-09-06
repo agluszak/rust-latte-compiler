@@ -182,6 +182,7 @@ pub enum TypecheckingErrorKind {
     VoidReturn,
     NoMain,
     InvalidLvalue,
+    IntegerOutOfRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -277,6 +278,13 @@ impl TypecheckingError {
             location,
         }
     }
+
+    pub fn integer_out_of_range(location: lexer::Span) -> Self {
+        Self {
+            kind: TypecheckingErrorKind::IntegerOutOfRange,
+            location,
+        }
+    }
 }
 
 fn ensure_type(
@@ -326,6 +334,14 @@ fn typecheck_expr(
             Ok(TypedExpr { expr, ty })
         }
         ast::Expr::Literal(literal) => {
+            match &literal {
+                ast::Literal::Int(i) => {
+                    if *i < i32::MIN as i64 || *i > i32::MAX as i64 {
+                        return Err(TypecheckingError::integer_out_of_range(span));
+                    }
+                }
+                ast::Literal::Bool(_) | ast::Literal::String(_) => {}
+            }
             let ty = match literal {
                 ast::Literal::Int(_) => Type::Int,
                 ast::Literal::Bool(_) => Type::Bool,
@@ -336,25 +352,48 @@ fn typecheck_expr(
                 ty,
             })
         }
-        ast::Expr::Unary { op, expr } => {
+        ast::Expr::Unary { op, expr } if op.value == ast::UnaryOp::Neg => {
+            if let ast::Expr::Literal(ast::Literal::Int(magnitude)) = &expr.value {
+                if *magnitude == i32::MAX as i64 + 1 {
+                    // `-2147483648` is the signed minimum: its magnitude alone
+                    // is out of range, but the signed literal is valid.
+                    let literal = ast::Literal::Int(i32::MIN as i64);
+                    return Ok(Spanned::new(
+                        span,
+                        TypedExpr {
+                            expr: TypedExprKind::Literal(literal),
+                            ty: Type::Int,
+                        },
+                    ));
+                }
+            }
             let typed_expr = typecheck_expr(*expr, env)?;
             let expr_ty = &typed_expr.value.ty;
-            let ty = match &op.value {
-                ast::UnaryOp::Neg => {
-                    ensure_type(&Type::Int, expr_ty, op.span.clone())?;
-                    Type::Int
+            ensure_type(&Type::Int, expr_ty, op.span.clone())?;
+            if let TypedExprKind::Literal(ast::Literal::Int(i)) = &typed_expr.value.expr {
+                if *i == i32::MIN as i64 {
+                    return Err(TypecheckingError::integer_out_of_range(span));
                 }
-                ast::UnaryOp::Not => {
-                    ensure_type(&Type::Bool, expr_ty, op.span.clone())?;
-                    Type::Bool
-                }
-            };
+            }
+            let ty = Type::Int;
             Ok(TypedExpr {
                 expr: TypedExprKind::Unary {
                     op,
                     expr: Box::new(typed_expr),
                 },
                 ty,
+            })
+        }
+        ast::Expr::Unary { op, expr } => {
+            let typed_expr = typecheck_expr(*expr, env)?;
+            let expr_ty = &typed_expr.value.ty;
+            ensure_type(&Type::Bool, expr_ty, op.span.clone())?;
+            Ok(TypedExpr {
+                expr: TypedExprKind::Unary {
+                    op,
+                    expr: Box::new(typed_expr),
+                },
+                ty: Type::Bool,
             })
         }
         ast::Expr::Binary { lhs, op, rhs } => {

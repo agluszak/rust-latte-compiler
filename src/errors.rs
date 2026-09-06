@@ -109,6 +109,11 @@ pub fn typechecking_reports(
                         .with_message("Invalid lvalue")
                         .with_color(color),
                 ),
+                TypecheckingErrorKind::IntegerOutOfRange => report.with_label(
+                    Label::new((filename.to_string(), err.location))
+                        .with_message("Integer literal is outside the 32-bit signed range")
+                        .with_color(color),
+                ),
             };
 
             report.finish()

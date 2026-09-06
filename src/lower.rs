@@ -51,7 +51,11 @@ fn translate_expr(
         TypedExprKind::Variable(_, id) => (context.read_variable(id, block_id), block_id),
         TypedExprKind::Literal(lit) => {
             let val = match lit {
-                Literal::Int(i) => context.emit(block_id, BuildingValue::Int(i), Type::Int),
+                Literal::Int(i) => context.emit(
+                    block_id,
+                    BuildingValue::Int(i32::try_from(i).expect("int range checked")),
+                    Type::Int,
+                ),
                 Literal::String(s) => {
                     context.emit(block_id, BuildingValue::String(s), Type::LatteString)
                 }
