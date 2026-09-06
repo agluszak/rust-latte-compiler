@@ -17,6 +17,7 @@ use std::ops::Range;
 use std::sync::atomic::AtomicBool;
 
 mod ast;
+mod cfg;
 mod const_cond;
 mod errors;
 mod gvn;
