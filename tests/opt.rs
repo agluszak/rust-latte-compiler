@@ -62,7 +62,7 @@ fn loop_with_short_circuit_condition_terminates() {
 }
 
 #[test]
-fn constant_condition_return_agrees() {
-    let source = "int main() { if (!false) { return 0; } return 1; }";
+fn constant_condition_return_needs_no_synthetic_return() {
+    let source = "int main() { if (!false) return 0; }";
     assert_eq!(run_source(source, ""), ("".to_string(), 0));
 }
