@@ -14,8 +14,6 @@ use inkwell::module::Module;
 use inkwell::support::LLVMString;
 use std::ops::Range;
 
-use std::sync::atomic::AtomicBool;
-
 mod ast;
 mod cfg;
 mod const_cond;
@@ -26,15 +24,48 @@ pub mod ir;
 pub mod lexer;
 pub mod llvm_generator;
 pub mod parser;
+mod passes;
 mod return_analysis;
-mod typechecker;
-mod typed_ast;
-
-pub static DBG: AtomicBool = AtomicBool::new(false);
+pub mod typechecker;
+pub mod typed_ast;
 
 type AriadneReport<'a> = Report<'a, (String, Range<usize>)>;
 
 static RUNTIME_BITCODE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.bc"));
+
+pub struct ProgramIr {
+    pub ir: Ir,
+    pub env: crate::typechecker::ReadyEnvironment,
+}
+
+pub fn lower_program(
+    typechecked: crate::typed_ast::TypedProgram,
+    env: crate::typechecker::ReadyEnvironment,
+) -> ProgramIr {
+    let mut ir = Ir::new();
+    for decl in typechecked.0 {
+        ir.translate_function(decl.value);
+    }
+    ProgramIr { ir, env }
+}
+
+pub fn optimize_program(program: &mut ProgramIr) {
+    passes::optimize_program(&mut program.ir);
+}
+
+pub fn emit_llvm<'ctx>(context: &'ctx Context, filename: &str, program: &ProgramIr) -> Module<'ctx> {
+    let codegen = CodeGen::new(context, filename, program.env.clone());
+
+    for (name, func) in &program.ir.functions {
+        codegen.declare(name, func);
+    }
+
+    for (name, func) in &program.ir.functions {
+        codegen.generate(name, func);
+    }
+
+    codegen.into_module()
+}
 
 pub fn compile<'ctx, 'src>(
     context: &'ctx Context,
@@ -48,32 +79,10 @@ pub fn compile<'ctx, 'src>(
     let (typechecked, env) =
         typecheck_program(parsed).map_err(|errs| typechecking_reports(errs, filename))?;
 
-    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
-        dbg!(&typechecked);
-        dbg!(&env);
-    }
+    let mut program = lower_program(typechecked, env);
+    optimize_program(&mut program);
 
-    let mut ir = Ir::new();
-
-    for decl in typechecked.0 {
-        ir.translate_function(decl.value);
-    }
-
-    if DBG.load(std::sync::atomic::Ordering::Relaxed) {
-        println!("{}", ir.dump());
-    }
-
-    let codegen = CodeGen::new(context, filename, env);
-
-    for (name, func) in &ir.functions {
-        codegen.declare(name, func);
-    }
-
-    for (name, func) in ir.functions {
-        codegen.generate(&name, &func);
-    }
-
-    Ok(codegen.into_module())
+    Ok(emit_llvm(context, filename, &program))
 }
 
 pub fn link_runtime(module: &Module<'_>) -> Result<(), LLVMString> {

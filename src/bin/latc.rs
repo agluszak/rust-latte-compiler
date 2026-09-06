@@ -22,21 +22,18 @@ fn read_from_stdin() -> Result<Input, String> {
     Ok(Input::new(source, "<stdin>".to_string()))
 }
 
-pub fn read_input() -> Result<Input, String> {
+pub fn read_input() -> Result<(Input, bool), String> {
     match std::env::args().collect::<Vec<_>>().as_slice() {
-        [_, path, dbg] if dbg == "--dbg" => {
-            rust_latte_compiler::DBG.store(true, std::sync::atomic::Ordering::Relaxed);
-            read_from_path(path)
-        }
-        [_, path] => read_from_path(path),
-        [_] => read_from_stdin(),
+        [_, path, dbg] if dbg == "--dbg" => Ok((read_from_path(path)?, true)),
+        [_, path] => Ok((read_from_path(path)?, false)),
+        [_] => Ok((read_from_stdin()?, false)),
         [this, ..] => Err(format!("Usage: {this} <file> [--dbg]")),
         &[] => unreachable!(),
     }
 }
 
 fn main() -> ExitCode {
-    let input = {
+    let (input, debug) = {
         match read_input() {
             Ok(input) => input,
             Err(err) => {
@@ -51,7 +48,7 @@ fn main() -> ExitCode {
 
     match result {
         Ok(module) => {
-            if rust_latte_compiler::DBG.load(std::sync::atomic::Ordering::Relaxed) {
+            if debug {
                 println!("{}", module.print_to_string().to_string());
             }
 

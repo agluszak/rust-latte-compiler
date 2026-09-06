@@ -591,8 +591,7 @@ impl Ir {
             }
         }
         let function_name = decl.name.value.0;
-        let mut function_ir = ir.finish(ty, entry_block);
-        crate::gvn::optimize(&mut function_ir);
+        let function_ir = ir.finish(ty, entry_block);
 
         self.functions.insert(function_name, function_ir);
     }
