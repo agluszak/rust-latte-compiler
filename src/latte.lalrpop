@@ -117,8 +117,8 @@ Stmt_<I>: Stmt = {
          Stmt::If { cond, then: Box::new(then), otherwise: Some(Box::new(otherwise)) },
     "while" "(" <cond:Spanned<Expr>> ")" <body:Spanned<Stmt_<I>>> => Stmt::While { cond, body: Box::new(body) },
     <e:Spanned<Expr>> ";" => Stmt::Expr(e),
-    <target:Spanned<Expr>> "++" => Stmt::Incr(target),
-    <target:Spanned<Expr>> "--" => Stmt::Decr(target),
+    <target:Spanned<Expr>> "++" ";" => Stmt::Incr(target),
+    <target:Spanned<Expr>> "--" ";" => Stmt::Decr(target),
 
 };
 

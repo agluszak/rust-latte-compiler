@@ -338,7 +338,7 @@ Ok(
                                                                 },
                                                             },
                                                             Spanned {
-                                                                span: 181..184,
+                                                                span: 181..186,
                                                                 value: Incr(
                                                                     Spanned {
                                                                         span: 181..182,
@@ -349,10 +349,6 @@ Ok(
                                                                         ),
                                                                     },
                                                                 ),
-                                                            },
-                                                            Spanned {
-                                                                span: 185..186,
-                                                                value: Empty,
                                                             },
                                                         ],
                                                     ),
