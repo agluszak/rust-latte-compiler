@@ -3,6 +3,7 @@ use libtest_mimic::{Arguments, Failed, Trial};
 use rust_latte_compiler::compile;
 use rust_latte_compiler::input::Input;
 use rust_latte_compiler::link_runtime;
+use rust_latte_compiler::{compile_ir, emit_llvm, optimize_program};
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
@@ -62,10 +63,38 @@ fn test_good(path: &Path) -> Result<(), Failed> {
     let filename = path.to_string_lossy().into_owned();
     let input = Input::new(source, filename);
     let name = fixture_name(path);
-    let context = Context::create();
-    let module = compile(&context, &input.text, &name)
+    let mut program = compile_ir(&input.text, &name)
         .map_err(|reports| format!("compilation failed with {} reports", reports.len()))?;
-    module.verify().map_err(|error| error.to_string())?;
+
+    let expected_output = read_optional(&path.with_extension("output"))?;
+    let program_input = read_optional(&path.with_extension("input"))?;
+    let exitcode_path = path.with_extension("exitcode");
+    let expected_exit_code = if exitcode_path.is_file() {
+        fs::read_to_string(&exitcode_path)?
+            .trim()
+            .parse::<i32>()
+            .map_err(|err| format!("invalid .exitcode expectation: {err}"))?
+    } else {
+        0
+    };
+
+    // Execute the unoptimized program, then optimize the same ProgramIr in
+    // place and execute again. Both executions must match the same oracle.
+    // Each emission gets a fresh context: LLVM type names are context-global,
+    // so reusing one would rename the second module's string type.
+    {
+        let context = Context::create();
+        let unoptimized = emit_llvm(&context, &name, &program);
+        check_module(
+            &unoptimized,
+            &program_input,
+            &expected_output,
+            expected_exit_code,
+        )?;
+    }
+    optimize_program(&mut program);
+    let context = Context::create();
+    let module = emit_llvm(&context, &name, &program);
 
     if SNAPSHOT_FIXTURES.contains(&name.as_str()) {
         let ir = module.print_to_string().to_string();
@@ -81,25 +110,31 @@ fn test_good(path: &Path) -> Result<(), Failed> {
         });
     }
 
-    let expected_output = read_optional(&path.with_extension("output"))?;
-    let program_input = read_optional(&path.with_extension("input"))?;
-    let exitcode_path = path.with_extension("exitcode");
-    let expected_exit_code = if exitcode_path.is_file() {
-        fs::read_to_string(&exitcode_path)?
-            .trim()
-            .parse::<i32>()
-            .map_err(|err| format!("invalid .exitcode expectation: {err}"))?
-    } else {
-        0
-    };
-    link_runtime(&module)?;
+    check_module(
+        &module,
+        &program_input,
+        &expected_output,
+        expected_exit_code,
+    )?;
+
+    Ok(())
+}
+
+fn check_module(
+    module: &inkwell::module::Module<'_>,
+    program_input: &str,
+    expected_output: &str,
+    expected_exit_code: i32,
+) -> Result<(), Failed> {
+    module.verify().map_err(|error| error.to_string())?;
+    link_runtime(module)?;
     module.verify().map_err(|error| error.to_string())?;
     let bitcode = tempfile::NamedTempFile::new()?;
     if !module.write_bitcode_to_path(bitcode.path()) {
         return Err("failed to write fixture bitcode".into());
     }
 
-    let output = common::run_lli(bitcode.path(), &program_input);
+    let output = common::run_lli(bitcode.path(), program_input);
 
     if output.status.code() != Some(expected_exit_code) {
         return Err(format!(

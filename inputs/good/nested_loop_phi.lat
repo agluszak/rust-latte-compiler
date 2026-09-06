@@ -1,0 +1,11 @@
+int main() {
+    int x = 7;
+    while (readInt() > 0) {
+        while (x > 0) {
+            if (readInt() > 0)
+                printInt(x);
+            return 0;
+        }
+    }
+    return 0;
+}
