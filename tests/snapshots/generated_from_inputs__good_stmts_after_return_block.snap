@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int main() {\n    {   \n        int x = 5;\n        return 0;\n    }\n    int y = 6;\n    y++;\n}"
+input_file: inputs/good/stmts_after_return_block.lat
 ---
 ; ModuleID = 'stmts_after_return_block'
 source_filename = "stmts_after_return_block"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 

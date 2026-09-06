@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -24,7 +24,7 @@ declare %string* @stringConcat(%string*, %string*)
 
 declare i32 @stringEqual(%string*, %string*)
 
-define i32 @f(i32 %0, i32 %1) {
+define i32 @latte_user_f(i32 %0, i32 %1) {
 b0:
   %v3 = icmp sgt i32 %0, 0
   br i1 %v3, label %b1, label %b2
@@ -41,10 +41,6 @@ b3:                                               ; preds = %b2
   %v9 = icmp slt i32 %0, 0
   br i1 %v9, label %b5, label %b6
 
-b4:                                               ; preds = %b6, %b2
-  %v14 = phi i1 [ %v6, %b2 ], [ %v13, %b6 ]
-  br i1 %v14, label %b7, label %b8
-
 b5:                                               ; preds = %b3
   %v12 = icmp slt i32 %1, 0
   br label %b6
@@ -53,16 +49,21 @@ b6:                                               ; preds = %b5, %b3
   %v13 = phi i1 [ %v9, %b3 ], [ %v12, %b5 ]
   br label %b4
 
-b7:                                               ; preds = %b4
-  ret i32 7
+b4:                                               ; preds = %b6, %b2
+  %v14 = phi i1 [ %v6, %b2 ], [ %v13, %b6 ]
+  br i1 %v14, label %b7, label %b8
 
 b8:                                               ; preds = %b4
   ret i32 42
+
+b7:                                               ; preds = %b4
+  ret i32 7
 }
 
 define i32 @main() {
 b0:
-  %f = call i32 @f(i32 1, i32 -1)
-  call void @printInt(i32 %f)
+  %latte_user_f = call i32 @latte_user_f(i32 1, i32 -1)
+  call void @printInt(i32 %latte_user_f)
   ret i32 0
 }
+

@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "void test(int param) {\n    param++;\n    printInt(param);\n}\n\nint main() {\n    int a = 1;\n    test(a);\n    printInt(a);\n    return 0;\n}"
+input_file: inputs/good/call_by_value.lat
 ---
 ; ModuleID = 'call_by_value'
 source_filename = "call_by_value"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -25,12 +26,12 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  call void @test(i32 1)
+  call void @latte_user_test(i32 1)
   call void @printInt(i32 1)
   ret i32 0
 }
 
-define void @test(i32 %0) {
+define void @latte_user_test(i32 %0) {
 b0:
   %v2 = add i32 %0, 1
   call void @printInt(i32 %v2)

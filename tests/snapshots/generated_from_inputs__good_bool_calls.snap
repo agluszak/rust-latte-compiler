@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -24,39 +24,40 @@ declare %string* @stringConcat(%string*, %string*)
 
 declare i32 @stringEqual(%string*, %string*)
 
-define i1 @blah(i32 %0, i32 %1) {
+define i1 @latte_user_blah(i32 %0, i32 %1) {
 b0:
   %v2 = icmp eq i32 %0, %1
   %v3 = xor i1 %v2, true
   br i1 %v3, label %b1, label %b2
 
+b2:                                               ; preds = %b0
+  ret i1 true
+
 b1:                                               ; preds = %b0
   call void @printInt(i32 %0)
   call void @printInt(i32 %1)
   ret i1 false
-
-b2:                                               ; preds = %b0
-  ret i1 true
 }
 
 define i32 @main() {
 b0:
-  %blah = call i1 @blah(i32 1, i32 1)
-  br i1 %blah, label %b1, label %b2
+  %latte_user_blah = call i1 @latte_user_blah(i32 1, i32 1)
+  br i1 %latte_user_blah, label %b1, label %b2
 
 b1:                                               ; preds = %b0
-  %blah1 = call i1 @blah(i32 1, i32 2)
+  %latte_user_blah1 = call i1 @latte_user_blah(i32 1, i32 2)
   br label %b2
 
 b2:                                               ; preds = %b1, %b0
-  %v6 = phi i1 [ %blah, %b0 ], [ %blah1, %b1 ]
+  %v6 = phi i1 [ %latte_user_blah, %b0 ], [ %latte_user_blah1, %b1 ]
   br i1 %v6, label %b4, label %b3
 
 b3:                                               ; preds = %b2
-  %blah2 = call i1 @blah(i32 5, i32 5)
+  %latte_user_blah2 = call i1 @latte_user_blah(i32 5, i32 5)
   br label %b4
 
 b4:                                               ; preds = %b3, %b2
-  %v10 = phi i1 [ %v6, %b2 ], [ %blah2, %b3 ]
+  %v10 = phi i1 [ %v6, %b2 ], [ %latte_user_blah2, %b3 ]
   ret i32 0
 }
+

@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int main() {\n    if (false) {\n        printInt(2);\n    } else {\n        return 0;\n    }\n}"
+input_file: inputs/good/if_false_always_returns.lat
 ---
 ; ModuleID = 'if_false_always_returns'
 source_filename = "if_false_always_returns"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 

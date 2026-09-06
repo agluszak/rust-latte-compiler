@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -31,129 +31,130 @@ b0:
   %str_ptr1 = bitcast [2 x i8]* %str_ptr to i8*
   %new_string = call %string* @newString(i8* %str_ptr1, i32 2)
   call void @printString(%string* %new_string)
-  %test = call i1 @test(i32 -1)
-  br i1 %test, label %b1, label %b2
+  %latte_user_test = call i1 @latte_user_test(i32 -1)
+  br i1 %latte_user_test, label %b1, label %b2
 
 b1:                                               ; preds = %b0
-  %test2 = call i1 @test(i32 0)
+  %latte_user_test2 = call i1 @latte_user_test(i32 0)
   br label %b2
 
 b2:                                               ; preds = %b1, %b0
-  %v7 = phi i1 [ %test, %b0 ], [ %test2, %b1 ]
-  call void @printBool(i1 %v7)
-  %test3 = call i1 @test(i32 -2)
-  br i1 %test3, label %b3, label %b4
+  %v7 = phi i1 [ %latte_user_test, %b0 ], [ %latte_user_test2, %b1 ]
+  call void @latte_user_printBool(i1 %v7)
+  %latte_user_test3 = call i1 @latte_user_test(i32 -2)
+  br i1 %latte_user_test3, label %b3, label %b4
 
 b3:                                               ; preds = %b2
-  %test4 = call i1 @test(i32 1)
+  %latte_user_test4 = call i1 @latte_user_test(i32 1)
   br label %b4
 
 b4:                                               ; preds = %b3, %b2
-  %v14 = phi i1 [ %test3, %b2 ], [ %test4, %b3 ]
-  call void @printBool(i1 %v14)
-  %test5 = call i1 @test(i32 3)
-  br i1 %test5, label %b5, label %b6
+  %v14 = phi i1 [ %latte_user_test3, %b2 ], [ %latte_user_test4, %b3 ]
+  call void @latte_user_printBool(i1 %v14)
+  %latte_user_test5 = call i1 @latte_user_test(i32 3)
+  br i1 %latte_user_test5, label %b5, label %b6
 
 b5:                                               ; preds = %b4
-  %test6 = call i1 @test(i32 -5)
+  %latte_user_test6 = call i1 @latte_user_test(i32 -5)
   br label %b6
 
 b6:                                               ; preds = %b5, %b4
-  %v21 = phi i1 [ %test5, %b4 ], [ %test6, %b5 ]
-  call void @printBool(i1 %v21)
-  %test7 = call i1 @test(i32 234234)
-  br i1 %test7, label %b7, label %b8
+  %v21 = phi i1 [ %latte_user_test5, %b4 ], [ %latte_user_test6, %b5 ]
+  call void @latte_user_printBool(i1 %v21)
+  %latte_user_test7 = call i1 @latte_user_test(i32 234234)
+  br i1 %latte_user_test7, label %b7, label %b8
 
 b7:                                               ; preds = %b6
-  %test8 = call i1 @test(i32 21321)
+  %latte_user_test8 = call i1 @latte_user_test(i32 21321)
   br label %b8
 
 b8:                                               ; preds = %b7, %b6
-  %v27 = phi i1 [ %test7, %b6 ], [ %test8, %b7 ]
-  call void @printBool(i1 %v27)
+  %v27 = phi i1 [ %latte_user_test7, %b6 ], [ %latte_user_test8, %b7 ]
+  call void @latte_user_printBool(i1 %v27)
   %str_ptr9 = alloca [2 x i8], align 1
   store [2 x i8] c"||", [2 x i8]* %str_ptr9, align 1
   %str_ptr10 = bitcast [2 x i8]* %str_ptr9 to i8*
   %new_string11 = call %string* @newString(i8* %str_ptr10, i32 2)
   call void @printString(%string* %new_string11)
-  %test12 = call i1 @test(i32 -1)
-  br i1 %test12, label %b10, label %b9
+  %latte_user_test12 = call i1 @latte_user_test(i32 -1)
+  br i1 %latte_user_test12, label %b10, label %b9
 
 b9:                                               ; preds = %b8
-  %test13 = call i1 @test(i32 0)
+  %latte_user_test13 = call i1 @latte_user_test(i32 0)
   br label %b10
 
 b10:                                              ; preds = %b9, %b8
-  %v36 = phi i1 [ %test12, %b8 ], [ %test13, %b9 ]
-  call void @printBool(i1 %v36)
-  %test14 = call i1 @test(i32 -2)
-  br i1 %test14, label %b12, label %b11
+  %v36 = phi i1 [ %latte_user_test12, %b8 ], [ %latte_user_test13, %b9 ]
+  call void @latte_user_printBool(i1 %v36)
+  %latte_user_test14 = call i1 @latte_user_test(i32 -2)
+  br i1 %latte_user_test14, label %b12, label %b11
 
 b11:                                              ; preds = %b10
-  %test15 = call i1 @test(i32 1)
+  %latte_user_test15 = call i1 @latte_user_test(i32 1)
   br label %b12
 
 b12:                                              ; preds = %b11, %b10
-  %v43 = phi i1 [ %test14, %b10 ], [ %test15, %b11 ]
-  call void @printBool(i1 %v43)
-  %test16 = call i1 @test(i32 3)
-  br i1 %test16, label %b14, label %b13
+  %v43 = phi i1 [ %latte_user_test14, %b10 ], [ %latte_user_test15, %b11 ]
+  call void @latte_user_printBool(i1 %v43)
+  %latte_user_test16 = call i1 @latte_user_test(i32 3)
+  br i1 %latte_user_test16, label %b14, label %b13
 
 b13:                                              ; preds = %b12
-  %test17 = call i1 @test(i32 -5)
+  %latte_user_test17 = call i1 @latte_user_test(i32 -5)
   br label %b14
 
 b14:                                              ; preds = %b13, %b12
-  %v50 = phi i1 [ %test16, %b12 ], [ %test17, %b13 ]
-  call void @printBool(i1 %v50)
-  %test18 = call i1 @test(i32 234234)
-  br i1 %test18, label %b16, label %b15
+  %v50 = phi i1 [ %latte_user_test16, %b12 ], [ %latte_user_test17, %b13 ]
+  call void @latte_user_printBool(i1 %v50)
+  %latte_user_test18 = call i1 @latte_user_test(i32 234234)
+  br i1 %latte_user_test18, label %b16, label %b15
 
 b15:                                              ; preds = %b14
-  %test19 = call i1 @test(i32 21321)
+  %latte_user_test19 = call i1 @latte_user_test(i32 21321)
   br label %b16
 
 b16:                                              ; preds = %b15, %b14
-  %v56 = phi i1 [ %test18, %b14 ], [ %test19, %b15 ]
-  call void @printBool(i1 %v56)
+  %v56 = phi i1 [ %latte_user_test18, %b14 ], [ %latte_user_test19, %b15 ]
+  call void @latte_user_printBool(i1 %v56)
   %str_ptr20 = alloca [1 x i8], align 1
   store [1 x i8] c"!", [1 x i8]* %str_ptr20, align 1
   %str_ptr21 = bitcast [1 x i8]* %str_ptr20 to i8*
   %new_string22 = call %string* @newString(i8* %str_ptr21, i32 1)
   call void @printString(%string* %new_string22)
-  call void @printBool(i1 true)
-  call void @printBool(i1 false)
+  call void @latte_user_printBool(i1 true)
+  call void @latte_user_printBool(i1 false)
   ret i32 0
 }
 
-define void @printBool(i1 %0) {
+define void @latte_user_printBool(i1 %0) {
 b0:
   %v1 = xor i1 %0, true
   br i1 %v1, label %b1, label %b2
 
-b1:                                               ; preds = %b0
-  %str_ptr = alloca [5 x i8], align 1
-  store [5 x i8] c"false", [5 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
+b2:                                               ; preds = %b0
+  %str_ptr = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
   call void @printString(%string* %new_string)
   br label %b3
 
-b2:                                               ; preds = %b0
-  %str_ptr2 = alloca [4 x i8], align 1
-  store [4 x i8] c"true", [4 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
+b1:                                               ; preds = %b0
+  %str_ptr2 = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
   call void @printString(%string* %new_string4)
   br label %b3
 
-b3:                                               ; preds = %b2, %b1
+b3:                                               ; preds = %b1, %b2
   ret void
 }
 
-define i1 @test(i32 %0) {
+define i1 @latte_user_test(i32 %0) {
 b0:
   call void @printInt(i32 %0)
   %v3 = icmp sgt i32 %0, 0
   ret i1 %v3
 }
+

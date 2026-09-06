@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int x() {\n    return -37;\n}\n\nstring y() {\n    return \"foo\";\n}\n\nstring z() {\n    return \"bar\";\n}\n\nint main() {\n  printInt(x()-5);\n  printString(y()+z());\n  return 0 ;\n}"
+input_file: inputs/good/core018_fun.lat
 ---
 ; ModuleID = 'core018_fun'
 source_filename = "core018_fun"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -25,22 +26,22 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  %x = call i32 @x()
-  %v2 = sub i32 %x, 5
+  %latte_user_x = call i32 @latte_user_x()
+  %v2 = sub i32 %latte_user_x, 5
   call void @printInt(i32 %v2)
-  %y = call %string* @y()
-  %z = call %string* @z()
-  %new_string = call %string* @stringConcat(%string* %y, %string* %z)
+  %latte_user_y = call %string* @latte_user_y()
+  %latte_user_z = call %string* @latte_user_z()
+  %new_string = call %string* @stringConcat(%string* %latte_user_y, %string* %latte_user_z)
   call void @printString(%string* %new_string)
   ret i32 0
 }
 
-define i32 @x() {
+define i32 @latte_user_x() {
 b0:
   ret i32 -37
 }
 
-define %string* @y() {
+define %string* @latte_user_y() {
 b0:
   %str_ptr = alloca [3 x i8], align 1
   store [3 x i8] c"foo", [3 x i8]* %str_ptr, align 1
@@ -49,7 +50,7 @@ b0:
   ret %string* %new_string
 }
 
-define %string* @z() {
+define %string* @latte_user_z() {
 b0:
   %str_ptr = alloca [3 x i8], align 1
   store [3 x i8] c"bar", [3 x i8]* %str_ptr, align 1

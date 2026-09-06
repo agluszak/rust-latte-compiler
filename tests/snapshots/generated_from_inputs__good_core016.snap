@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "/* parity of positive integers by loop */\n\nint main () {\n  int y = 17;\n  while (y > 0)\n    y = y - 2;\n  if (y < 0) {\n    printInt(0);\n    return 0 ;\n    }\n  else {\n    printInt(1);\n    return 0 ;\n    }\n}\n"
+input_file: inputs/good/core016.lat
 ---
 ; ModuleID = 'core016'
 source_filename = "core016"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -36,16 +37,16 @@ b2:                                               ; preds = %b1
   %v7 = icmp slt i32 %v1, 0
   br i1 %v7, label %b4, label %b5
 
-b3:                                               ; preds = %b1
-  %v5 = sub i32 %v1, 2
-  br label %b1
+b5:                                               ; preds = %b2
+  call void @printInt(i32 1)
+  ret i32 0
 
 b4:                                               ; preds = %b2
   call void @printInt(i32 0)
   ret i32 0
 
-b5:                                               ; preds = %b2
-  call void @printInt(i32 1)
-  ret i32 0
+b3:                                               ; preds = %b1
+  %v5 = sub i32 %v1, 2
+  br label %b1
 }
 

@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -26,13 +26,7 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  br i1 true, label %b1, label %b2
-
-b1:                                               ; preds = %b0
   call void @printInt(i32 42)
-  br label %b2
-
-b2:                                               ; preds = %b1, %b0
   ret i32 0
 }
 

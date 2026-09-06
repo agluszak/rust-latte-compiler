@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "int main() {\n    p();\n    printInt(1);\n    return 0;\n}\n\nvoid p() {}\n"
+input_file: inputs/good/core020.lat
 ---
 ; ModuleID = 'core020'
 source_filename = "core020"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -25,12 +26,12 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  call void @p()
+  call void @latte_user_p()
   call void @printInt(i32 1)
   ret i32 0
 }
 
-define void @p() {
+define void @latte_user_p() {
 b0:
   ret void
 }

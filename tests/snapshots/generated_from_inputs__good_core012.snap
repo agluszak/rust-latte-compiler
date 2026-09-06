@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -31,8 +31,8 @@ b0:
   call void @printInt(i32 -1288)
   call void @printInt(i32 22)
   call void @printInt(i32 0)
-  call void @printBool(i1 true)
-  call void @printBool(i1 false)
+  call void @latte_user_printBool(i1 true)
+  call void @latte_user_printBool(i1 false)
   %str_ptr = alloca [6 x i8], align 1
   store [6 x i8] c"string", [6 x i8]* %str_ptr, align 1
   %str_ptr1 = bitcast [6 x i8]* %str_ptr to i8*
@@ -51,23 +51,23 @@ b0:
   ret i32 0
 }
 
-define void @printBool(i1 %0) {
+define void @latte_user_printBool(i1 %0) {
 b0:
   br i1 %0, label %b1, label %b2
 
-b1:                                               ; preds = %b0
-  %str_ptr = alloca [4 x i8], align 1
-  store [4 x i8] c"true", [4 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+b2:                                               ; preds = %b0
+  %str_ptr = alloca [5 x i8], align 1
+  store [5 x i8] c"false", [5 x i8]* %str_ptr, align 1
+  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
+  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
   call void @printString(%string* %new_string)
   ret void
 
-b2:                                               ; preds = %b0
-  %str_ptr2 = alloca [5 x i8], align 1
-  store [5 x i8] c"false", [5 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [5 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 5)
+b1:                                               ; preds = %b0
+  %str_ptr2 = alloca [4 x i8], align 1
+  store [4 x i8] c"true", [4 x i8]* %str_ptr2, align 1
+  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
+  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
   call void @printString(%string* %new_string4)
   ret void
 }

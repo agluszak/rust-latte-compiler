@@ -74,11 +74,9 @@ impl Environment {
             next_variable_id: 0,
         };
 
-        env.add_predefined_fn("printInt", vec![Type::Int], Type::Void);
-        env.add_predefined_fn("printString", vec![Type::LatteString], Type::Void);
-        env.add_predefined_fn("error", vec![], Type::Void);
-        env.add_predefined_fn("readInt", vec![], Type::Int);
-        env.add_predefined_fn("readString", vec![], Type::LatteString);
+        for (name, args, ret) in crate::symbols::language_builtins() {
+            env.add_predefined_fn(name, args, ret);
+        }
 
         env
     }

@@ -1,6 +1,7 @@
 ---
-source: tests/generated_from_inputs.rs
+source: tests/fixtures.rs
 description: "/* test input */\n\nint main() {\n  printInt(readInt()-5);\n  printString(readString()+readString());\n  return 0 ;\n}"
+input_file: inputs/good/core018_direct.lat
 ---
 ; ModuleID = 'core018_direct'
 source_filename = "core018_direct"
@@ -11,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 

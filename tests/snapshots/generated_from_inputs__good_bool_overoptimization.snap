@@ -12,11 +12,11 @@ declare void @printInt(i32)
 
 declare void @printString(%string*)
 
+declare void @error()
+
 declare i32 @readInt()
 
 declare %string* @readString()
-
-declare void @error()
 
 declare %string* @newString(i8*, i32)
 
@@ -26,18 +26,18 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  %print = call i1 @print()
-  br i1 %print, label %b1, label %b2
+  %latte_user_print = call i1 @latte_user_print()
+  br i1 %latte_user_print, label %b1, label %b2
 
 b1:                                               ; preds = %b0
   br label %b2
 
 b2:                                               ; preds = %b1, %b0
-  %v2 = phi i1 [ %print, %b0 ], [ false, %b1 ]
+  %v2 = phi i1 [ %latte_user_print, %b0 ], [ false, %b1 ]
   ret i32 0
 }
 
-define i1 @print() {
+define i1 @latte_user_print() {
 b0:
   %str_ptr = alloca [4 x i8], align 1
   store [4 x i8] c"ahoj", [4 x i8]* %str_ptr, align 1
@@ -46,3 +46,4 @@ b0:
   call void @printString(%string* %new_string)
   ret i1 true
 }
+
