@@ -53,6 +53,10 @@ fn fixture_name(path: &Path) -> String {
         .into_owned()
 }
 
+/// Deliberate backend snapshots. Ordinary good fixtures are checked by
+/// execution against their expected output, not by IR text.
+const SNAPSHOT_FIXTURES: &[&str] = &["concatenation", "expression_cfg_sequencing"];
+
 fn test_good(path: &Path) -> Result<(), Failed> {
     let source = fs::read_to_string(path)?;
     let filename = path.to_string_lossy().into_owned();
@@ -63,17 +67,19 @@ fn test_good(path: &Path) -> Result<(), Failed> {
         .map_err(|reports| format!("compilation failed with {} reports", reports.len()))?;
     module.verify().map_err(|error| error.to_string())?;
 
-    let ir = module.print_to_string().to_string();
-    let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
-    insta::with_settings!({
-        input_file => path,
-        snapshot_path => snapshots_dir,
-        prepend_module_to_snapshot => false,
-        description => &input.text,
-        omit_expression => true
-    }, {
-        insta::assert_snapshot!(format!("generated_from_inputs__good_{name}"), ir);
-    });
+    if SNAPSHOT_FIXTURES.contains(&name.as_str()) {
+        let ir = module.print_to_string().to_string();
+        let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots");
+        insta::with_settings!({
+            input_file => path,
+            snapshot_path => snapshots_dir,
+            prepend_module_to_snapshot => false,
+            description => &input.text,
+            omit_expression => true
+        }, {
+            insta::assert_snapshot!(format!("generated_from_inputs__good_{name}"), ir);
+        });
+    }
 
     let expected_output = read_optional(&path.with_extension("output"))?;
     let program_input = read_optional(&path.with_extension("input"))?;
