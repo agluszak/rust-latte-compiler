@@ -31,7 +31,6 @@ pub mod ssa;
 pub mod typechecker;
 pub mod typed_ast;
 pub mod types;
-mod semantics;
 mod symbols;
 mod verify;
 
