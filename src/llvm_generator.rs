@@ -1,5 +1,6 @@
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, Terminator, UnaryOpCode, Value, ValueId};
-use crate::typechecker::{ReadyEnvironment, Type};
+use crate::typechecker::ReadyEnvironment;
+use crate::types::Type;
 use inkwell::AddressSpace;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;

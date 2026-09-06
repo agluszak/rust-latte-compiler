@@ -1,6 +1,6 @@
 use crate::ast::{BinaryOp, Ident, Literal, UnaryOp};
 use crate::lexer::Spanned;
-use crate::typechecker::Type;
+use crate::types::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]

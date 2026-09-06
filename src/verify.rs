@@ -1,6 +1,6 @@
 use crate::cfg::Cfg;
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, UnaryOpCode, Value, ValueId};
-use crate::typechecker::Type;
+use crate::types::Type;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn dominating_sets(ir: &FunctionIr, cfg: &Cfg) -> BTreeMap<BlockId, BTreeSet<BlockId>> {

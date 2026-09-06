@@ -1,4 +1,4 @@
-use crate::typechecker::Type;
+use crate::types::Type;
 use crate::typed_ast::VariableId;
 use std::collections::BTreeMap;
 use std::fmt::Display;

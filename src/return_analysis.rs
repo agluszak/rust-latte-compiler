@@ -1,5 +1,6 @@
 use crate::const_cond::const_bool;
-use crate::typechecker::{Type, TypecheckingError};
+use crate::typechecker::TypecheckingError;
+use crate::types::Type;
 use crate::typed_ast::{TypedBlock, TypedFnDecl, TypedStmt};
 
 fn block_always_returns(block: &TypedBlock) -> bool {

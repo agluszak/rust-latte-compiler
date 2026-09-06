@@ -1,5 +1,5 @@
 use crate::ir::{BasicBlock, BlockId, FunctionIr, Phi, Terminator, Value, ValueData, ValueId};
-use crate::typechecker::Type;
+use crate::types::Type;
 use crate::typed_ast::VariableId;
 use std::collections::BTreeMap;
 

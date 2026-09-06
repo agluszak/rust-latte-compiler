@@ -4,7 +4,7 @@ use crate::const_cond::const_bool;
 use crate::ir::{BinaryOpCode, BlockId, Ir, Terminator, UnaryOpCode, ValueId};
 use crate::lower::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::ssa::{BuildingValue, IrBuilder};
-use crate::typechecker::Type;
+use crate::types::Type;
 use crate::typed_ast::{TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedStmt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

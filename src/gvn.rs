@@ -1,6 +1,6 @@
 use crate::cfg::Dominators;
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, UnaryOpCode, Value, ValueId};
-use crate::typechecker::Type;
+use crate::types::Type;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -240,7 +240,7 @@ mod tests {
     use super::*;
     use crate::cfg::reachable_reverse_postorder;
     use crate::ir::{BasicBlock, Phi, Terminator, ValueData};
-    use crate::typechecker::Type;
+    use crate::types::Type;
     use crate::typed_ast::VariableId;
 
     fn block(terminator: Terminator) -> BasicBlock {
