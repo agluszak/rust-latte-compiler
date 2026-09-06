@@ -371,13 +371,10 @@ impl IrBuilder {
                     BasicBlock {
                         phis: live(block.phis),
                         instructions: live(block.instructions),
-                        terminator: match block.terminator.unwrap() {
-                            Terminator::Return(value) => Terminator::Return(remap(value)),
-                            Terminator::ReturnNoValue => Terminator::ReturnNoValue,
-                            Terminator::Branch(condition, then_block, else_block) => {
-                                Terminator::Branch(remap(condition), then_block, else_block)
-                            }
-                            Terminator::Jump(target) => Terminator::Jump(target),
+                        terminator: {
+                            let mut terminator = block.terminator.unwrap();
+                            terminator.rewrite_operands(remap);
+                            terminator
                         },
                     },
                 )
