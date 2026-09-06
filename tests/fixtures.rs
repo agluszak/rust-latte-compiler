@@ -83,10 +83,15 @@ fn test_good(path: &Path) -> Result<(), Failed> {
 
     let expected_output = read_optional(&path.with_extension("output"))?;
     let program_input = read_optional(&path.with_extension("input"))?;
-    let expected_exit_code = read_optional(&path.with_extension("exitcode"))?
-        .trim()
-        .parse::<i32>()
-        .unwrap_or(0);
+    let exitcode_path = path.with_extension("exitcode");
+    let expected_exit_code = if exitcode_path.is_file() {
+        fs::read_to_string(&exitcode_path)?
+            .trim()
+            .parse::<i32>()
+            .map_err(|err| format!("invalid .exitcode expectation: {err}"))?
+    } else {
+        0
+    };
     link_runtime(&module)?;
     module.verify().map_err(|error| error.to_string())?;
     let bitcode = tempfile::NamedTempFile::new()?;
