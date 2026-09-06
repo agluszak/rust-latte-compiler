@@ -2,5 +2,5 @@
 .idea
 junk
 *.bc
-lib/*.ll
+*.ll
 latc_llvm
