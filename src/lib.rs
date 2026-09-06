@@ -27,7 +27,7 @@ mod lower;
 pub mod parser;
 mod passes;
 mod return_analysis;
-pub mod ssa;
+mod ssa;
 mod typechecker;
 mod typed_ast;
 pub mod types;
