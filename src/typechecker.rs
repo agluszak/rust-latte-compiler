@@ -725,13 +725,14 @@ fn typecheck_stmt(
             let typed_cond = typecheck_expr(cond, env)?;
             let cond_ty = typed_cond.value.ty.clone();
             ensure_type(&Type::Bool, &cond_ty, typed_cond.span.clone())?;
-            let typed_then = typecheck_stmt(*then, env, expected_return_type)?;
+            // Unbraced declarations are scoped to their branch so checking
+            // agrees with lowering, which never leaks them past the branch.
+            let typed_then =
+                env.with_scope(|env| typecheck_stmt(*then, env, expected_return_type))?;
             let typed_otherwise = if let Some(otherwise) = otherwise {
-                Some(Box::new(typecheck_stmt(
-                    *otherwise,
-                    env,
-                    expected_return_type,
-                )?))
+                Some(Box::new(env.with_scope(|env| {
+                    typecheck_stmt(*otherwise, env, expected_return_type)
+                })?))
             } else {
                 None
             };
@@ -745,7 +746,8 @@ fn typecheck_stmt(
             let typed_cond = typecheck_expr(cond, env)?;
             let cond_ty = typed_cond.value.ty.clone();
             ensure_type(&Type::Bool, &cond_ty, typed_cond.span.clone())?;
-            let typed_body = typecheck_stmt(*body, env, expected_return_type)?;
+            let typed_body =
+                env.with_scope(|env| typecheck_stmt(*body, env, expected_return_type))?;
             TypedStmt::While {
                 cond: typed_cond,
                 body: Box::new(typed_body),
