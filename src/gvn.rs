@@ -1,7 +1,7 @@
 use crate::cfg::Dominators;
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, UnaryOpCode, Value, ValueId};
 use crate::types::Type;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct ValueNumber(ValueId);
@@ -221,6 +221,7 @@ mod tests {
     use crate::ir::{BasicBlock, Phi, Terminator, ValueData};
     use crate::types::Type;
     use crate::typed_ast::VariableId;
+    use std::collections::BTreeSet;
 
     fn block(terminator: Terminator) -> BasicBlock {
         BasicBlock {
