@@ -13,7 +13,6 @@ use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicType, BasicTypeEnum, FunctionType, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum, GlobalValue, PhiValue};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 pub struct CodeGen<'ctx> {
@@ -22,8 +21,8 @@ pub struct CodeGen<'ctx> {
     builder: Builder<'ctx>,
     string_type: StructType<'ctx>,
     env: ReadyEnvironment,
-    string_globals: RefCell<BTreeMap<String, GlobalValue<'ctx>>>,
-    next_string_id: RefCell<u32>,
+    string_globals: BTreeMap<String, GlobalValue<'ctx>>,
+    next_string_id: u32,
 }
 impl<'ctx> CodeGen<'ctx> {
     pub fn new(context: &'ctx Context, name: &str, env: ReadyEnvironment) -> Self {
@@ -45,8 +44,8 @@ impl<'ctx> CodeGen<'ctx> {
             builder,
             string_type,
             env,
-            string_globals: RefCell::new(BTreeMap::new()),
-            next_string_id: RefCell::new(0),
+            string_globals: BTreeMap::new(),
+            next_string_id: 0,
         };
         codegen.declare_builtins();
 
@@ -115,13 +114,7 @@ impl<'ctx> CodeGen<'ctx> {
                     .collect::<Vec<_>>();
                 match ret.as_ref() {
                     Type::Void => self.context.void_type().fn_type(&args, false),
-                    Type::Bool => self.context.bool_type().fn_type(&args, false),
-                    Type::Int => self.context.i32_type().fn_type(&args, false),
-                    Type::Function(_, _) => panic!("function type is not a basic llvm type"),
-                    Type::LatteString => self
-                        .string_type
-                        .ptr_type(AddressSpace::default())
-                        .fn_type(&args, false),
+                    ret => self.llvm_basic_type(ret).fn_type(&args, false),
                 }
             }
             _ => panic!("not a function type"),
@@ -153,8 +146,8 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    fn string_bytes(&self, s: &str) -> GlobalValue<'ctx> {
-        if let Some(global) = self.string_globals.borrow().get(s) {
+    fn string_bytes(&mut self, s: &str) -> GlobalValue<'ctx> {
+        if let Some(global) = self.string_globals.get(s) {
             return *global;
         }
         let bytes = s.as_bytes();
@@ -171,8 +164,8 @@ impl<'ctx> CodeGen<'ctx> {
                 self.context.const_string(bytes, false),
             )
         };
-        let id = *self.next_string_id.borrow();
-        *self.next_string_id.borrow_mut() += 1;
+        let id = self.next_string_id;
+        self.next_string_id += 1;
         let global = self.module.add_global(
             array_type,
             Some(AddressSpace::default()),
@@ -181,9 +174,7 @@ impl<'ctx> CodeGen<'ctx> {
         global.set_initializer(&initializer);
         global.set_constant(true);
         global.set_linkage(Linkage::Private);
-        self.string_globals
-            .borrow_mut()
-            .insert(s.to_string(), global);
+        self.string_globals.insert(s.to_string(), global);
         global
     }
 
@@ -218,7 +209,7 @@ impl<'ctx> CodeGen<'ctx> {
 
     #[allow(clippy::too_many_lines)]
     fn emit_value(
-        &self,
+        &mut self,
         id: ValueId,
         ir: &FunctionIr,
         values: &BTreeMap<ValueId, BasicValueEnum<'ctx>>,
@@ -384,7 +375,7 @@ impl<'ctx> CodeGen<'ctx> {
             .add_function(&mangle_user(name), fn_type, None);
     }
 
-    pub fn generate(&self, name: &str, ir: &FunctionIr) {
+    pub fn generate(&mut self, name: &str, ir: &FunctionIr) {
         let mangled = mangle_user(name);
         let function = self.module.get_function(&mangled).unwrap();
         let cfg = crate::cfg::Cfg::compute(ir);
