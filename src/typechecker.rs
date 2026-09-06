@@ -490,6 +490,7 @@ fn resolve_type(
     }
 }
 
+#[derive(Debug, Clone)]
 struct FunctionHeader {
     function_type: Type,
     args: Vec<(Spanned<ast::Ident>, Type)>,
@@ -544,16 +545,11 @@ fn resolve_function_header(
 
 fn typecheck_fn_decl(
     decl: Spanned<ast::FnDecl>,
+    header: FunctionHeader,
     env: &mut Environment,
 ) -> Result<Spanned<TypedFnDecl>, TypecheckingError> {
     let span = decl.span;
-    let ast::FnDecl {
-        return_type,
-        name,
-        args,
-        body,
-    } = decl.value;
-    let header = resolve_function_header(&return_type, &args, env)?;
+    let ast::FnDecl { name, body, .. } = decl.value;
 
     let (args, body) = env.with_scope(|env| {
         let mut typed_args = Vec::new();
@@ -763,29 +759,41 @@ pub fn typecheck_program(
     // If we supported creating new types, we would have to add them to the environment here
 
     // Before typechecking bodies, first add all the function declarations to the environment
+    let mut headers: Vec<Option<FunctionHeader>> = Vec::new();
     for decl in &program.0 {
         let decl = &decl.value;
         let header = resolve_function_header(&decl.return_type, &decl.args, &env);
         match header {
             Ok(header) => {
                 let var_id = env.fresh_variable_id();
-                let data = VariableData::new(header.function_type, decl.name.span.clone(), var_id);
+                let data = VariableData::new(
+                    header.function_type.clone(),
+                    decl.name.span.clone(),
+                    var_id,
+                );
                 let result = env.insert_data(decl.name.value.clone(), data);
                 if let Err(err) = result {
                     errors.push(err);
+                    headers.push(None);
+                } else {
+                    headers.push(Some(header));
                 }
             }
             Err(err) => {
                 errors.push(err);
+                headers.push(None);
             }
         }
     }
 
     let mut typed_decls = Vec::new();
 
-    // Typecheck bodies
-    for decl in program.0 {
-        match typecheck_fn_decl(decl, &mut env) {
+    // Typecheck bodies, reusing the resolved headers.
+    for (decl, header) in program.0.into_iter().zip(headers) {
+        let Some(header) = header else {
+            continue;
+        };
+        match typecheck_fn_decl(decl, header, &mut env) {
             Ok(decl) => typed_decls.push(decl),
             Err(err) => errors.push(err),
         }
