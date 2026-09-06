@@ -6,9 +6,11 @@ use rust_latte_compiler::link_runtime;
 use std::env;
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+
+#[path = "common/mod.rs"]
+mod common;
 
 fn main() {
     let mut trials = fixture_trials("inputs/good", "good", test_good);
@@ -86,23 +88,15 @@ fn test_good(path: &Path) -> Result<(), Failed> {
         return Err("failed to write fixture bitcode".into());
     }
 
-    let mut child = Command::new("lli")
-        .arg(bitcode.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    child
-        .stdin
-        .take()
-        .expect("lli stdin was not piped")
-        .write_all(program_input.as_bytes())?;
-    let output = wait_with_timeout(child, std::time::Duration::from_secs(10))?;
+    let output = common::run_lli(bitcode.path(), &program_input);
+    if output.timed_out {
+        return Err("lli timed out after 10s".into());
+    }
 
-    if output.status.code() != Some(expected_exit_code) {
+    if output.code != Some(expected_exit_code) {
         return Err(format!(
             "lli exited with {:?}: {}",
-            output.status.code(),
+            output.code,
             String::from_utf8_lossy(&output.stderr)
         )
         .into());
@@ -157,25 +151,5 @@ fn read_optional(path: &Path) -> Result<String, Failed> {
         Ok(fs::read_to_string(path)?)
     } else {
         Ok(String::new())
-    }
-}
-
-fn wait_with_timeout(
-    mut child: std::process::Child,
-    timeout: std::time::Duration,
-) -> Result<std::process::Output, Failed> {
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        match child.try_wait()? {
-            Some(_) => return Ok(child.wait_with_output()?),
-            None => {
-                if std::time::Instant::now() >= deadline {
-                    child.kill()?;
-                    let _ = child.wait();
-                    return Err("lli timed out after 10s".into());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
-        }
     }
 }
