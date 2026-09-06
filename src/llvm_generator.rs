@@ -169,19 +169,21 @@ impl<'ctx> CodeGen<'ctx> {
 
     pub fn generate(&self, name: &str, ir: &FunctionIr) {
         let function = self.module.get_function(name).unwrap();
-        let block_order =
-            std::iter::once(ir.entry).chain(ir.blocks.keys().copied().filter(|id| *id != ir.entry));
+        let cfg = crate::cfg::Cfg::compute(ir);
+        let block_order = cfg.layout_order(ir);
         let basic_blocks: BTreeMap<BlockId, BasicBlock> = block_order
+            .iter()
             .map(|id| {
                 (
-                    id,
+                    *id,
                     self.context.append_basic_block(function, &id.to_string()),
                 )
             })
             .collect();
         let mut values: BTreeMap<ValueId, BasicValueEnum> = BTreeMap::new();
         let mut phis: BTreeMap<ValueId, PhiValue> = BTreeMap::new();
-        for (&id, block) in &ir.blocks {
+        for id in &block_order {
+            let block = &ir.blocks[id];
             let this_block = basic_blocks[&id];
             self.builder.position_at_end(this_block);
             // Phis come first, so their values are available to all instructions.
