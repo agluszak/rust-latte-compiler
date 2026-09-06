@@ -5,8 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// `predecessors` contains one entry per predecessor block: a branch with
 /// identical targets contributes a single predecessor relationship, matching
-/// the builder's deduplication. `reverse_postorder` covers reachable blocks
-/// only; [`Cfg::layout_order`] appends unreachable blocks in ID order.
+/// the builder's deduplication. `reverse_postorder` covers the
+/// entry-reachable blocks, which are the only blocks finalized functions may
+/// contain; it doubles as backend generation order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Cfg {
     pub(crate) predecessors: BTreeMap<BlockId, Vec<BlockId>>,
@@ -21,20 +22,6 @@ impl Cfg {
             predecessors,
             reverse_postorder,
         }
-    }
-
-    /// Generation order for backends: reachable blocks in reverse postorder,
-    /// followed by unreachable blocks in ID order.
-    pub(crate) fn layout_order(&self, ir: &FunctionIr) -> Vec<BlockId> {
-        let reachable: BTreeSet<BlockId> =
-            self.reverse_postorder.iter().copied().collect();
-        let mut order = self.reverse_postorder.clone();
-        for &block in ir.blocks.keys() {
-            if !reachable.contains(&block) {
-                order.push(block);
-            }
-        }
-        order
     }
 }
 

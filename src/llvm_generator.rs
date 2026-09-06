@@ -378,8 +378,7 @@ impl<'ctx> CodeGen<'ctx> {
     pub fn generate(&mut self, name: &str, ir: &FunctionIr) {
         let mangled = mangle_user(name);
         let function = self.module.get_function(&mangled).unwrap();
-        let cfg = crate::cfg::Cfg::compute(ir);
-        let block_order = cfg.layout_order(ir);
+        let block_order = crate::cfg::reachable_reverse_postorder(ir);
         let basic_blocks: BTreeMap<BlockId, BasicBlock> = block_order
             .iter()
             .map(|id| {

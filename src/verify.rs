@@ -23,6 +23,11 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
     }
 
     let cfg = Cfg::compute(ir);
+    for &block in ir.blocks.keys() {
+        if !cfg.reverse_postorder.contains(&block) {
+            return Err(format!("unreachable block {block} is not allowed"));
+        }
+    }
 
     // Definition ownership and placement.
     let mut def_block: BTreeMap<ValueId, BlockId> = BTreeMap::new();
@@ -101,7 +106,6 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
     // the predecessor they arrive on. Intra-block order is checked for
     // non-phi instructions and terminators.
     let dominators = Dominators::compute_from_cfg(ir, &cfg);
-    let reachable: BTreeSet<BlockId> = cfg.reverse_postorder.iter().copied().collect();
     let block_order_index: BTreeMap<BlockId, BTreeMap<ValueId, usize>> = ir
         .blocks
         .iter()
@@ -115,12 +119,6 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
         .collect();
     let is_phi = |id: ValueId| matches!(ir.values[&id].kind, Value::Phi(_));
     for (&block, data) in &ir.blocks {
-        if !reachable.contains(&block) {
-            // Unreachable block: still require operands to exist (checked
-            // above) but skip dominance, which is only defined for
-            // reachable blocks.
-            continue;
-        }
         for &phi in &data.phis {
             let Value::Phi(phi_data) = &ir.values[&phi].kind else {
                 unreachable!()
