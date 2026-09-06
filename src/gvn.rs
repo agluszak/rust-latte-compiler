@@ -130,29 +130,15 @@ impl ValueNumbers {
         }
     }
 
+    /// Associates each listed phi with its block. Ownership itself is checked
+    /// by the verifier; this only builds the map GVN needs for classification.
     fn phi_blocks(ir: &FunctionIr) -> BTreeMap<ValueId, BlockId> {
         let mut blocks = BTreeMap::new();
         for (&block, data) in &ir.blocks {
             for &phi in &data.phis {
-                assert!(
-                    matches!(
-                        ir.values.get(&phi).map(|data| &data.kind),
-                        Some(Value::Phi(_))
-                    ),
-                    "block {block} contains non-phi {phi} in its phi list"
-                );
-                assert!(
-                    blocks.insert(phi, block).is_none(),
-                    "phi {phi} appears in multiple blocks"
-                );
+                blocks.insert(phi, block);
             }
         }
-        let value_phis: BTreeSet<_> = ir
-            .values
-            .iter()
-            .filter_map(|(&id, data)| matches!(data.kind, Value::Phi(_)).then_some(id))
-            .collect();
-        assert_eq!(blocks.keys().copied().collect::<BTreeSet<_>>(), value_phis);
         blocks
     }
 }

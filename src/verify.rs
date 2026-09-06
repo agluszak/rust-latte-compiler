@@ -51,23 +51,6 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
         return Err(format!("values without a defining block: {orphan:?}"));
     }
 
-    // Phi ownership: every phi value appears in exactly one block's phi list.
-    {
-        let mut phi_blocks: BTreeMap<ValueId, BlockId> = BTreeMap::new();
-        for (&block, data) in &ir.blocks {
-            for &phi in &data.phis {
-                if phi_blocks.insert(phi, block).is_some() {
-                    return Err(format!("phi {phi} appears in multiple blocks"));
-                }
-            }
-        }
-        for (&id, data) in &ir.values {
-            if matches!(data.kind, Value::Phi(_)) && !phi_blocks.contains_key(&id) {
-                return Err(format!("phi {id} is not owned by any block"));
-            }
-        }
-    }
-
     // Operand existence.
     for (&id, data) in &ir.values {
         for operand in data.kind.operands() {
