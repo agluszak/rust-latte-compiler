@@ -8,6 +8,8 @@ source_filename = "core002"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [3 x i8] c"foo"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -26,10 +28,7 @@ declare i32 @stringEqual(%string*, %string*)
 
 define void @latte_user_foo() {
 b0:
-  %str_ptr = alloca [3 x i8], align 1
-  store [3 x i8] c"foo", [3 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @latte.str.0, i32 0, i32 0), i32 3)
   call void @printString(%string* %new_string)
   ret void
 }

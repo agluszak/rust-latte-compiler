@@ -8,6 +8,9 @@ source_filename = "string_ops"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [5 x i8] c"Hello"
+@latte.str.1 = private constant [1 x i8] c"!"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -32,10 +35,7 @@ b0:
 
 define i32 @main() {
 b0:
-  %str_ptr = alloca [5 x i8], align 1
-  store [5 x i8] c"Hello", [5 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @latte.str.0, i32 0, i32 0), i32 5)
   br label %b1
 
 b1:                                               ; preds = %b3, %b0
@@ -49,11 +49,8 @@ b2:                                               ; preds = %b1
   ret i32 0
 
 b3:                                               ; preds = %b1
-  %str_ptr2 = alloca [1 x i8], align 1
-  store [1 x i8] c"!", [1 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [1 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 1)
-  %latte_user_add = call %string* @latte_user_add(%string* %v5, %string* %new_string4)
+  %new_string1 = call %string* @newString(i8* getelementptr inbounds ([1 x i8], [1 x i8]* @latte.str.1, i32 0, i32 0), i32 1)
+  %latte_user_add = call %string* @latte_user_add(%string* %v5, %string* %new_string1)
   %v9 = sub i32 %v2, 1
   br label %b1
 }

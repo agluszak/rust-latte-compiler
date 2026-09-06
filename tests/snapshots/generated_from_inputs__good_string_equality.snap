@@ -8,6 +8,11 @@ source_filename = "string_equality"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [4 x i8] c"test"
+@latte.str.1 = private constant [4 x i8] c"blah"
+@latte.str.2 = private constant [13 x i8] c"test == test2"
+@latte.str.3 = private constant [13 x i8] c"test != test3"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -26,37 +31,25 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  %str_ptr = alloca [4 x i8], align 1
-  store [4 x i8] c"test", [4 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
-  %str_ptr2 = alloca [4 x i8], align 1
-  store [4 x i8] c"blah", [4 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @latte.str.0, i32 0, i32 0), i32 4)
+  %new_string1 = call %string* @newString(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @latte.str.1, i32 0, i32 0), i32 4)
   %strings_equal = call i32 @stringEqual(%string* %new_string, %string* %new_string)
   %v3 = icmp ne i32 %strings_equal, 0
   br i1 %v3, label %b1, label %b2
 
 b1:                                               ; preds = %b0
-  %str_ptr5 = alloca [13 x i8], align 1
-  store [13 x i8] c"test == test2", [13 x i8]* %str_ptr5, align 1
-  %str_ptr6 = bitcast [13 x i8]* %str_ptr5 to i8*
-  %new_string7 = call %string* @newString(i8* %str_ptr6, i32 13)
-  call void @printString(%string* %new_string7)
+  %new_string2 = call %string* @newString(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @latte.str.2, i32 0, i32 0), i32 13)
+  call void @printString(%string* %new_string2)
   br label %b2
 
 b2:                                               ; preds = %b1, %b0
-  %strings_equal8 = call i32 @stringEqual(%string* %new_string, %string* %new_string4)
-  %v8 = icmp eq i32 %strings_equal8, 0
+  %strings_equal3 = call i32 @stringEqual(%string* %new_string, %string* %new_string1)
+  %v8 = icmp eq i32 %strings_equal3, 0
   br i1 %v8, label %b3, label %b4
 
 b3:                                               ; preds = %b2
-  %str_ptr9 = alloca [13 x i8], align 1
-  store [13 x i8] c"test != test3", [13 x i8]* %str_ptr9, align 1
-  %str_ptr10 = bitcast [13 x i8]* %str_ptr9 to i8*
-  %new_string11 = call %string* @newString(i8* %str_ptr10, i32 13)
-  call void @printString(%string* %new_string11)
+  %new_string4 = call %string* @newString(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @latte.str.3, i32 0, i32 0), i32 13)
+  call void @printString(%string* %new_string4)
   br label %b4
 
 b4:                                               ; preds = %b3, %b2

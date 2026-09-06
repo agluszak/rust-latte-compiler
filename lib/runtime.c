@@ -9,12 +9,18 @@ struct string {
     int len;
 };
 
+void verifyNotNull(void *p);
+void verifyString(struct string *s);
+
 void printInt(int n) {
     printf("%d\n", n);
 }
 
 void printString(struct string *s) {
-    printf("%.*s\n", s->len, s->str);
+    for (int i = 0; i < s->len; i++) {
+        putchar(s->str[i]);
+    }
+    putchar('\n');
 }
 
 noreturn void error() {
@@ -23,46 +29,65 @@ noreturn void error() {
 }
 
 int readInt() {
-    // use getline first
-    int n;
     char *buf = NULL;
     size_t len = 0;
     ssize_t nread = getline(&buf, &len, stdin);
     if (nread < 0) {
         error();
     } else {
-        //use strtol to convert the string to an integer
         char *endptr;
         errno = 0;
-        n = strtol(buf, &endptr, 10);
-        if (endptr == buf || *endptr != '\n' || errno != 0) {
+        long n = strtol(buf, &endptr, 10);
+        if (endptr == buf || errno != 0) {
             error();
         }
+        if (n < -2147483648L || n > 2147483647L) {
+            error();
+        }
+        // Allow trailing whitespace, including a single newline, CRLF,
+        // or EOF-terminated input without a newline.
+        while (*endptr == ' ' || *endptr == '\t' || *endptr == '\r' || *endptr == '\n') {
+            endptr++;
+        }
+        if (*endptr != '\0') {
+            error();
+        }
+        int result = (int)n;
         free(buf);
-        return n;
+        return result;
     }
 }
 
 struct string *readString() {
-    // use getline to read a line of input and allocate a buffer for it
     char *buf = NULL;
     size_t len = 0;
     ssize_t nread = getline(&buf, &len, stdin);
     if (nread < 0) {
         error();
     } else {
-        // remove the newline character at the end
-        buf[nread - 1] = '\0';
+        // Strip a single trailing newline (and preceding CR for CRLF);
+        // EOF-terminated input without a newline keeps its last byte.
+        ssize_t content_len = nread;
+        if (content_len > 0 && buf[content_len - 1] == '\n') {
+            content_len--;
+        }
+        if (content_len > 0 && buf[content_len - 1] == '\r') {
+            content_len--;
+        }
+        buf[content_len] = '\0';
         struct string *s = malloc(sizeof(struct string));
+        verifyNotNull(s);
         s->str = buf;
-        s->len = nread - 1;
+        s->len = (int)content_len;
         return s;
     }
 }
 
 struct string* newString(char* str, int len) {
     struct string *s = malloc(sizeof(struct string));
-    char *new_str = malloc(len);
+    verifyNotNull(s);
+    char *new_str = malloc(len > 0 ? len : 1);
+    verifyNotNull(new_str);
     memcpy(new_str, str, len);
     s->str = new_str;
     s->len = len;
@@ -91,7 +116,7 @@ struct string *stringConcat(struct string *s1, struct string *s2) {
     verifyNotNull(s);
     int new_len = s1->len + s2->len;
     s->len = new_len;
-    char* new_str = malloc(new_len);
+    char* new_str = malloc(new_len > 0 ? new_len : 1);
     verifyNotNull(new_str);
     s->str = new_str;
     memcpy(new_str, s1->str, s1->len);

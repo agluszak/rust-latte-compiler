@@ -8,6 +8,9 @@ source_filename = "bool_operations"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [5 x i8] c"false"
+@latte.str.1 = private constant [4 x i8] c"true"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -29,19 +32,13 @@ b0:
   br i1 %0, label %b1, label %b2
 
 b2:                                               ; preds = %b0
-  %str_ptr = alloca [5 x i8], align 1
-  store [5 x i8] c"false", [5 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @latte.str.0, i32 0, i32 0), i32 5)
   call void @printString(%string* %new_string)
   br label %b3
 
 b1:                                               ; preds = %b0
-  %str_ptr2 = alloca [4 x i8], align 1
-  store [4 x i8] c"true", [4 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
-  call void @printString(%string* %new_string4)
+  %new_string1 = call %string* @newString(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @latte.str.1, i32 0, i32 0), i32 4)
+  call void @printString(%string* %new_string1)
   br label %b3
 
 b3:                                               ; preds = %b1, %b2

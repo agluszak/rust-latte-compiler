@@ -8,6 +8,9 @@ source_filename = "concatenation"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [1 x i8] c"a"
+@latte.str.1 = private constant [1 x i8] c"b"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -26,16 +29,10 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i32 @main() {
 b0:
-  %str_ptr = alloca [1 x i8], align 1
-  store [1 x i8] c"a", [1 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [1 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 1)
-  %str_ptr2 = alloca [1 x i8], align 1
-  store [1 x i8] c"b", [1 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [1 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 1)
-  %new_string5 = call %string* @stringConcat(%string* %new_string, %string* %new_string4)
-  call void @printString(%string* %new_string5)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([1 x i8], [1 x i8]* @latte.str.0, i32 0, i32 0), i32 1)
+  %new_string1 = call %string* @newString(i8* getelementptr inbounds ([1 x i8], [1 x i8]* @latte.str.1, i32 0, i32 0), i32 1)
+  %new_string2 = call %string* @stringConcat(%string* %new_string, %string* %new_string1)
+  call void @printString(%string* %new_string2)
   ret i32 0
 }
 

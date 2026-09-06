@@ -8,6 +8,8 @@ source_filename = "while_true2"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [11 x i8] c"jeszcze raz"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -37,10 +39,7 @@ b2:                                               ; preds = %b1
   br i1 %v3, label %b3, label %b4
 
 b4:                                               ; preds = %b2
-  %str_ptr = alloca [11 x i8], align 1
-  store [11 x i8] c"jeszcze raz", [11 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [11 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 11)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @latte.str.0, i32 0, i32 0), i32 11)
   call void @printString(%string* %new_string)
   br label %b5
 

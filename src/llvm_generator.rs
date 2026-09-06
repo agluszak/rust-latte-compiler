@@ -12,7 +12,8 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
 use inkwell::types::{BasicType, BasicTypeEnum, FunctionType, StructType};
-use inkwell::values::{BasicValue, BasicValueEnum, PhiValue};
+use inkwell::values::{BasicValue, BasicValueEnum, GlobalValue, PhiValue};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 pub struct CodeGen<'ctx> {
@@ -21,6 +22,8 @@ pub struct CodeGen<'ctx> {
     builder: Builder<'ctx>,
     string_type: StructType<'ctx>,
     env: ReadyEnvironment,
+    string_globals: RefCell<BTreeMap<String, GlobalValue<'ctx>>>,
+    next_string_id: RefCell<u32>,
 }
 impl<'ctx> CodeGen<'ctx> {
     pub fn new(context: &'ctx Context, name: &str, env: ReadyEnvironment) -> Self {
@@ -42,6 +45,8 @@ impl<'ctx> CodeGen<'ctx> {
             builder,
             string_type,
             env,
+            string_globals: RefCell::new(BTreeMap::new()),
+            next_string_id: RefCell::new(0),
         };
         codegen.declare_builtins();
 
@@ -148,6 +153,40 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
+    fn string_bytes(&self, s: &str) -> GlobalValue<'ctx> {
+        if let Some(global) = self.string_globals.borrow().get(s) {
+            return *global;
+        }
+        let bytes = s.as_bytes();
+        // Empty literals still need a valid non-null base pointer for the
+        // `newString` call, even though zero bytes are copied.
+        let (array_type, initializer) = if bytes.is_empty() {
+            (
+                self.context.i8_type().array_type(1),
+                self.context.const_string(b"\x00", false),
+            )
+        } else {
+            (
+                self.context.i8_type().array_type(bytes.len() as u32),
+                self.context.const_string(bytes, false),
+            )
+        };
+        let id = *self.next_string_id.borrow();
+        *self.next_string_id.borrow_mut() += 1;
+        let global = self.module.add_global(
+            array_type,
+            Some(AddressSpace::default()),
+            &format!("latte.str.{id}"),
+        );
+        global.set_initializer(&initializer);
+        global.set_constant(true);
+        global.set_linkage(Linkage::Private);
+        self.string_globals
+            .borrow_mut()
+            .insert(s.to_string(), global);
+        global
+    }
+
     fn emit_string_equality(
         &self,
         lhs: BasicValueEnum<'ctx>,
@@ -190,16 +229,11 @@ impl<'ctx> CodeGen<'ctx> {
             Value::Int(i) => Some(self.context.i32_type().const_int(*i as u64, true).into()),
             Value::String(s) => {
                 let len = self.context.i32_type().const_int(s.len() as u64, false);
-                let const_str = self.context.const_string(s.as_bytes(), false);
-                let str_ptr = self
-                    .builder
-                    .build_alloca(const_str.get_type(), "str_ptr")
-                    .unwrap();
-                self.builder.build_store(str_ptr, const_str).unwrap();
+                let global = self.string_bytes(s);
                 let str_ptr = self
                     .builder
                     .build_bit_cast(
-                        str_ptr,
+                        global.as_pointer_value(),
                         self.context.i8_type().ptr_type(AddressSpace::default()),
                         "str_ptr",
                     )

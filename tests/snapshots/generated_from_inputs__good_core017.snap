@@ -8,6 +8,10 @@ source_filename = "core017"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [3 x i8] c"apa"
+@latte.str.1 = private constant [5 x i8] c"false"
+@latte.str.2 = private constant [4 x i8] c"true"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -63,10 +67,7 @@ b4:                                               ; preds = %b3, %b2
   br i1 %v8, label %b5, label %b6
 
 b6:                                               ; preds = %b4
-  %str_ptr = alloca [3 x i8], align 1
-  store [3 x i8] c"apa", [3 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @latte.str.0, i32 0, i32 0), i32 3)
   call void @printString(%string* %new_string)
   br label %b7
 
@@ -87,11 +88,11 @@ b9:                                               ; preds = %b8, %b7
   br i1 false, label %b10, label %b11
 
 b10:                                              ; preds = %b9
-  %latte_user_dontCallMe2 = call i1 @latte_user_dontCallMe(i32 2)
+  %latte_user_dontCallMe1 = call i1 @latte_user_dontCallMe(i32 2)
   br label %b11
 
 b11:                                              ; preds = %b10, %b9
-  %v26 = phi i1 [ false, %b9 ], [ %latte_user_dontCallMe2, %b10 ]
+  %v26 = phi i1 [ false, %b9 ], [ %latte_user_dontCallMe1, %b10 ]
   call void @latte_user_printBool(i1 %v26)
   br i1 true, label %b12, label %b13
 
@@ -110,12 +111,12 @@ b15:                                              ; preds = %b14, %b13
   call void @latte_user_printBool(i1 %v41)
   %latte_user_implies = call i1 @latte_user_implies(i1 false, i1 false)
   call void @latte_user_printBool(i1 %latte_user_implies)
-  %latte_user_implies3 = call i1 @latte_user_implies(i1 false, i1 true)
+  %latte_user_implies2 = call i1 @latte_user_implies(i1 false, i1 true)
+  call void @latte_user_printBool(i1 %latte_user_implies2)
+  %latte_user_implies3 = call i1 @latte_user_implies(i1 true, i1 false)
   call void @latte_user_printBool(i1 %latte_user_implies3)
-  %latte_user_implies4 = call i1 @latte_user_implies(i1 true, i1 false)
+  %latte_user_implies4 = call i1 @latte_user_implies(i1 true, i1 true)
   call void @latte_user_printBool(i1 %latte_user_implies4)
-  %latte_user_implies5 = call i1 @latte_user_implies(i1 true, i1 true)
-  call void @latte_user_printBool(i1 %latte_user_implies5)
   ret i32 0
 }
 
@@ -124,19 +125,13 @@ b0:
   br i1 %0, label %b1, label %b2
 
 b2:                                               ; preds = %b0
-  %str_ptr = alloca [5 x i8], align 1
-  store [5 x i8] c"false", [5 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [5 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 5)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([5 x i8], [5 x i8]* @latte.str.1, i32 0, i32 0), i32 5)
   call void @printString(%string* %new_string)
   br label %b3
 
 b1:                                               ; preds = %b0
-  %str_ptr2 = alloca [4 x i8], align 1
-  store [4 x i8] c"true", [4 x i8]* %str_ptr2, align 1
-  %str_ptr3 = bitcast [4 x i8]* %str_ptr2 to i8*
-  %new_string4 = call %string* @newString(i8* %str_ptr3, i32 4)
-  call void @printString(%string* %new_string4)
+  %new_string1 = call %string* @newString(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @latte.str.2, i32 0, i32 0), i32 4)
+  call void @printString(%string* %new_string1)
   br label %b3
 
 b3:                                               ; preds = %b1, %b2

@@ -8,6 +8,9 @@ source_filename = "core018_fun"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [3 x i8] c"foo"
+@latte.str.1 = private constant [3 x i8] c"bar"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -43,19 +46,13 @@ b0:
 
 define %string* @latte_user_y() {
 b0:
-  %str_ptr = alloca [3 x i8], align 1
-  store [3 x i8] c"foo", [3 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @latte.str.0, i32 0, i32 0), i32 3)
   ret %string* %new_string
 }
 
 define %string* @latte_user_z() {
 b0:
-  %str_ptr = alloca [3 x i8], align 1
-  store [3 x i8] c"bar", [3 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @latte.str.1, i32 0, i32 0), i32 3)
   ret %string* %new_string
 }
 

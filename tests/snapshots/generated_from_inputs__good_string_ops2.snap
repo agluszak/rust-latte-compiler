@@ -8,6 +8,8 @@ source_filename = "string_ops2"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [1 x i8] c"*"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -32,10 +34,7 @@ b0:
 
 define i32 @main() {
 b0:
-  %str_ptr = alloca [1 x i8], align 1
-  store [1 x i8] c"*", [1 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [1 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 1)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([1 x i8], [1 x i8]* @latte.str.0, i32 0, i32 0), i32 1)
   br label %b1
 
 b1:                                               ; preds = %b3, %b0

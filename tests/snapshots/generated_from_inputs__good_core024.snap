@@ -8,6 +8,9 @@ source_filename = "core024"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [4 x i8] c"NOOO"
+@latte.str.1 = private constant [3 x i8] c"yes"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -26,10 +29,7 @@ declare i32 @stringEqual(%string*, %string*)
 
 define i1 @latte_user_e() {
 b0:
-  %str_ptr = alloca [4 x i8], align 1
-  store [4 x i8] c"NOOO", [4 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [4 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 4)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @latte.str.0, i32 0, i32 0), i32 4)
   call void @printString(%string* %new_string)
   ret i1 false
 }
@@ -48,10 +48,7 @@ b2:                                               ; preds = %b1, %b0
   br i1 %v4, label %b3, label %b4
 
 b3:                                               ; preds = %b2
-  %str_ptr = alloca [3 x i8], align 1
-  store [3 x i8] c"yes", [3 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [3 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 3)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @latte.str.1, i32 0, i32 0), i32 3)
   call void @printString(%string* %new_string)
   br label %b4
 

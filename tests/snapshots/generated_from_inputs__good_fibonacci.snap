@@ -8,6 +8,8 @@ source_filename = "fibonacci"
 
 %string = type { i8*, i32 }
 
+@latte.str.0 = private constant [41 x i8] c"Expected a non-negative integer, but got:"
+
 declare void @printInt(i32)
 
 declare void @printString(%string*)
@@ -58,10 +60,7 @@ b0:
   br i1 %v2, label %b1, label %b2
 
 b2:                                               ; preds = %b0
-  %str_ptr = alloca [41 x i8], align 1
-  store [41 x i8] c"Expected a non-negative integer, but got:", [41 x i8]* %str_ptr, align 1
-  %str_ptr1 = bitcast [41 x i8]* %str_ptr to i8*
-  %new_string = call %string* @newString(i8* %str_ptr1, i32 41)
+  %new_string = call %string* @newString(i8* getelementptr inbounds ([41 x i8], [41 x i8]* @latte.str.0, i32 0, i32 0), i32 41)
   call void @printString(%string* %new_string)
   call void @printInt(i32 %readInt)
   ret i32 1
