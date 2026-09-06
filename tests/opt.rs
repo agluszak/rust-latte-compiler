@@ -1,6 +1,7 @@
 use rust_latte_compiler::{emit_llvm, link_runtime, lower_program, optimize_program};
-use std::io::Write;
-use std::process::{Command, Stdio};
+
+#[path = "common/mod.rs"]
+mod common;
 
 fn run_source(source: &str, stdin_data: &str) -> (String, i32) {
     let lexer = rust_latte_compiler::lexer::Lexer::new(source);
@@ -40,43 +41,12 @@ fn run_source(source: &str, stdin_data: &str) -> (String, i32) {
 fn execute(module: &inkwell::module::Module<'_>, stdin_data: &str) -> (String, i32) {
     let bitcode = tempfile::NamedTempFile::new().unwrap();
     assert!(module.write_bitcode_to_path(bitcode.path()));
-    let mut child = Command::new("lli")
-        .arg(bitcode.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(stdin_data.as_bytes())
-        .unwrap();
-    let output = wait_with_timeout(child, std::time::Duration::from_secs(10));
+    let output = common::run_lli(bitcode.path(), stdin_data);
+    assert!(!output.timed_out, "lli timed out");
     (
         String::from_utf8(output.stdout).unwrap(),
-        output.status.code().unwrap_or(-1),
+        output.code.unwrap_or(-1),
     )
-}
-
-fn wait_with_timeout(
-    mut child: std::process::Child,
-    timeout: std::time::Duration,
-) -> std::process::Output {
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        match child.try_wait().unwrap() {
-            Some(_) => return child.wait_with_output().unwrap(),
-            None => {
-                if std::time::Instant::now() >= deadline {
-                    child.kill().unwrap();
-                    panic!("lli timed out");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
-        }
-    }
 }
 
 #[test]
