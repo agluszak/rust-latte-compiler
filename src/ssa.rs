@@ -274,6 +274,11 @@ impl IrBuilder {
             }
         }
         if same.is_none() {
+            // An unfinished phi (its block is not sealed yet) may still gain
+            // incoming edges; only a finished empty phi is unreachable.
+            if !self.blocks[&phi.block].sealed {
+                return phi_id;
+            }
             // This phi is unreachable or in the entry block
             let ty = self.values[&phi_id].ty.clone();
             let undef = self.allocate(BuildingValue::Undef, ty);
@@ -284,8 +289,11 @@ impl IrBuilder {
                 .push(undef);
             same = Some(undef);
         }
-        // Remember all users except the phi itself
+        // Remember live users except the phi itself. Already-replaced users
+        // resolve elsewhere; revisiting their replacements would visit
+        // definitions that never used this phi.
         phi.users.retain(|&user| user != phi_id);
+        phi.users.retain(|user| !self.aliases.contains_key(user));
         let replacement = self.resolve_alias(same.unwrap());
         self.aliases.insert(phi_id, replacement);
 
@@ -300,9 +308,13 @@ impl IrBuilder {
             }
         }
 
-        // Try to recursively remove all phi users, which might have become trivial
+        // Try to recursively remove all phi users, which might have become
+        // trivial. Recheck liveness per user: an earlier recursive call may
+        // have eliminated a user that is still in this copied list.
         for &user in &phi.users {
-            let user = self.resolve_alias(user);
+            if self.aliases.contains_key(&user) {
+                continue;
+            }
             if matches!(self.values[&user].kind, BuildingValue::Phi(_)) {
                 self.try_remove_trivial_phi(user);
             }

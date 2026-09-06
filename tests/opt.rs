@@ -56,3 +56,9 @@ fn constant_condition_return_needs_no_synthetic_return() {
     let source = "int main() { if (!false) return 0; }";
     assert_eq!(run_source(source, ""), ("".to_string(), 0));
 }
+
+#[test]
+fn nested_loop_forwarded_phi_survives_outer_seal() {
+    let source = "int main() { int x = 7; while (readInt() > 0) { while (x > 0) { if (readInt() > 0) printInt(x); return 0; } } return 0; }";
+    assert_eq!(run_source(source, "1\n1\n"), ("7\n".to_string(), 0));
+}
