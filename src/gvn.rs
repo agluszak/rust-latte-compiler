@@ -50,7 +50,10 @@ impl ValueNumbers {
 
     fn compute_with_iterations(ir: &FunctionIr) -> (Self, usize) {
         let phi_blocks = Self::phi_blocks(ir);
-        let mut initial_groups: BTreeMap<InitialClass, Vec<ValueId>> = BTreeMap::new();
+        // `ir.values` iterates in `BTreeMap` order, so the first ID seen for
+        // a key is already its minimum and can serve as the class leader.
+        let mut leaders: BTreeMap<InitialClass, ValueId> = BTreeMap::new();
+        let mut current: BTreeMap<ValueId, ValueNumber> = BTreeMap::new();
         for (&id, data) in &ir.values {
             let class = match &data.kind {
                 Value::Int(value) => InitialClass::Int(*value),
@@ -61,14 +64,15 @@ impl ValueNumbers {
                 Value::Phi(_) => InitialClass::Phi(phi_blocks[&id], data.ty.clone()),
                 Value::Argument(_) | Value::Call(_, _) | Value::Undef => InitialClass::Opaque(id),
             };
-            initial_groups.entry(class).or_default().push(id);
+            let leader = *leaders.entry(class).or_insert(id);
+            current.insert(id, ValueNumber(leader));
         }
 
-        let mut current = Self::number_groups(initial_groups.into_values());
         let mut iterations = 0;
         loop {
             iterations += 1;
-            let mut groups: BTreeMap<RefinementKey, Vec<ValueId>> = BTreeMap::new();
+            let mut leaders: BTreeMap<RefinementKey, ValueId> = BTreeMap::new();
+            let mut next: BTreeMap<ValueId, ValueNumber> = BTreeMap::new();
             for (&id, data) in &ir.values {
                 let signature = match &data.kind {
                     Value::Int(_)
@@ -101,34 +105,20 @@ impl ValueNumbers {
                         Signature::Phi { incoming }
                     }
                 };
-                groups
+                let leader = *leaders
                     .entry(RefinementKey {
                         previous: current[&id],
                         signature,
                     })
-                    .or_default()
-                    .push(id);
+                    .or_insert(id);
+                next.insert(id, ValueNumber(leader));
             }
 
-            let next = Self::number_groups(groups.into_values());
             if next == current {
                 return (Self { values: next }, iterations);
             }
             current = next;
         }
-    }
-
-    fn number_groups(
-        groups: impl IntoIterator<Item = Vec<ValueId>>,
-    ) -> BTreeMap<ValueId, ValueNumber> {
-        let mut numbers = BTreeMap::new();
-        for group in groups {
-            let number = ValueNumber(*group.iter().min().unwrap());
-            for id in group {
-                numbers.insert(id, number);
-            }
-        }
-        numbers
     }
 
     fn phi_blocks(ir: &FunctionIr) -> BTreeMap<ValueId, BlockId> {
