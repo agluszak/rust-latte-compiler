@@ -4,14 +4,14 @@ use crate::typed_ast::VariableId;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BuildingPhi {
-    pub(crate) block: BlockId,
-    pub(crate) incoming: Vec<(BlockId, ValueId)>,
-    pub(crate) users: Vec<ValueId>,
+struct BuildingPhi {
+    block: BlockId,
+    incoming: Vec<(BlockId, ValueId)>,
+    users: Vec<ValueId>,
 }
 
 impl BuildingPhi {
-    pub(crate) fn new(block: BlockId) -> Self {
+    fn new(block: BlockId) -> Self {
         Self {
             incoming: Vec::new(),
             block,
@@ -19,11 +19,11 @@ impl BuildingPhi {
         }
     }
 
-    pub(crate) fn add_incoming(&mut self, block: BlockId, value: ValueId) {
+    fn add_incoming(&mut self, block: BlockId, value: ValueId) {
         self.incoming.push((block, value));
     }
 
-    pub(crate) fn add_user(&mut self, user: ValueId) {
+    fn add_user(&mut self, user: ValueId) {
         if !self.users.contains(&user) {
             self.users.push(user);
         }
@@ -44,18 +44,18 @@ pub(crate) enum BuildingValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BuildingValueData {
-    pub(crate) ty: Type,
-    pub(crate) kind: BuildingValue,
+struct BuildingValueData {
+    ty: Type,
+    kind: BuildingValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BuildingBlock {
-    pub(crate) phis: Vec<ValueId>,
-    pub(crate) instructions: Vec<ValueId>,
-    pub(crate) terminator: Option<Terminator>,
-    pub(crate) predecessors: Vec<BlockId>,
-    pub(crate) sealed: bool,
+struct BuildingBlock {
+    phis: Vec<ValueId>,
+    instructions: Vec<ValueId>,
+    terminator: Option<Terminator>,
+    predecessors: Vec<BlockId>,
+    sealed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -384,28 +384,6 @@ impl IrBuilder {
             blocks,
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_set_phi_incoming(
-        &mut self,
-        phi: ValueId,
-        incoming: Vec<(BlockId, ValueId)>,
-    ) {
-        self.get_phi(phi).unwrap().incoming = incoming;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_add_phi_user(&mut self, phi: ValueId, user: ValueId) {
-        self.get_phi(phi).unwrap().add_user(user);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_incomplete_phis(
-        &self,
-    ) -> &std::collections::BTreeMap<BlockId, std::collections::BTreeMap<VariableId, ValueId>>
-    {
-        &self.incomplete_phis
-    }
 }
 
 fn finalize_value(kind: BuildingValue, remap: &impl Fn(ValueId) -> ValueId) -> Value {
@@ -434,20 +412,6 @@ fn finalize_value(kind: BuildingValue, remap: &impl Fn(ValueId) -> ValueId) -> V
 mod tests {
     use super::*;
     use crate::ir::{BinaryOpCode, Terminator};
-    use std::collections::BTreeSet;
-
-    fn assert_operands_are_valid(ir: &FunctionIr) {
-        crate::verify::verify(ir).unwrap();
-    }
-
-    fn assert_values_are_single_definitions(ir: &FunctionIr) {
-        let mut seen = BTreeSet::new();
-        for block in ir.blocks.values() {
-            for &id in block.phis.iter().chain(block.instructions.iter()) {
-                assert!(seen.insert(id), "value {:?} defined twice", id);
-            }
-        }
-    }
 
     #[test]
     fn recursive_trivial_phis_are_removed_and_values_are_canonicalized() {
@@ -468,10 +432,10 @@ mod tests {
         builder.seal_block(join);
 
         let first = builder.new_phi(join, Type::Int);
-        builder.test_set_phi_incoming(first, [(left, value), (right, first)].into());
+        builder.get_phi(first).unwrap().incoming = [(left, value), (right, first)].into();
         let second = builder.new_phi(join, Type::Int);
-        builder.test_set_phi_incoming(second, [(left, first), (right, second)].into());
-        builder.test_add_phi_user(first, second);
+        builder.get_phi(second).unwrap().incoming = [(left, first), (right, second)].into();
+        builder.get_phi(first).unwrap().users.push(second);
 
         assert_eq!(builder.try_remove_trivial_phi(first), value);
         assert_eq!(builder.resolve_alias(second), value);
@@ -484,8 +448,7 @@ mod tests {
                 .all(|(_, value)| !matches!(value.kind, Value::Phi(_)))
         );
         assert_eq!(ir.values.len(), 2);
-        assert_operands_are_valid(&ir);
-        assert_values_are_single_definitions(&ir);
+        crate::verify::verify(&ir).unwrap();
     }
 
     #[test]
@@ -508,14 +471,16 @@ mod tests {
 
         // B merges the same value on both edges, but is not removed yet.
         let b = builder.new_phi(join, Type::Int);
-        builder.test_set_phi_incoming(b, [(left, x), (right, x)].into());
+        builder.add_phi_incoming(b, left, x);
+        builder.add_phi_incoming(b, right, x);
         // A is trivially replaced by B.
         let a = builder.new_phi(join, Type::Int);
-        builder.test_set_phi_incoming(a, [(left, b), (right, b)].into());
+        builder.add_phi_incoming(a, left, b);
+        builder.add_phi_incoming(a, right, b);
         // C uses A and X, so it is not trivial while A is still alive.
         let c = builder.new_phi(join, Type::Int);
-        builder.test_set_phi_incoming(c, [(left, a), (right, x)].into());
-        builder.test_add_phi_user(a, c);
+        builder.add_phi_incoming(c, left, a);
+        builder.add_phi_incoming(c, right, x);
 
         // A -> B. C must be transferred to B's users.
         assert_eq!(builder.try_remove_trivial_phi(a), b);
@@ -533,8 +498,7 @@ mod tests {
                 .all(|(_, value)| !matches!(value.kind, Value::Phi(_))),
             "a trivial phi survived finalization"
         );
-        assert_operands_are_valid(&ir);
-        assert_values_are_single_definitions(&ir);
+        crate::verify::verify(&ir).unwrap();
     }
 
     #[test]
@@ -552,7 +516,7 @@ mod tests {
         builder.finish_block(entry, Terminator::Jump(header));
 
         let header_value = builder.read_variable(variable, header);
-        assert!(builder.test_incomplete_phis()[&header].contains_key(&variable));
+        assert!(builder.incomplete_phis[&header].contains_key(&variable));
         let condition = builder.emit(header, BuildingValue::Bool(true), Type::Bool);
         builder.finish_block(header, Terminator::Branch(condition, body, exit));
         builder.seal_block(body);
@@ -581,8 +545,7 @@ mod tests {
             .collect();
         assert_eq!(phis.len(), 1);
         assert_eq!(phis[0].incoming.len(), 2);
-        assert_operands_are_valid(&ir);
-        assert_values_are_single_definitions(&ir);
+        crate::verify::verify(&ir).unwrap();
 
         // Phis are structural: they live in block.phis, never in instructions.
         let header_block = &ir.blocks[&header];
