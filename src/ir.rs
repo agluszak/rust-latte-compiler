@@ -1,5 +1,6 @@
 use crate::ast;
 use crate::ast::Literal;
+use crate::const_cond::const_bool;
 use crate::ir::BasicBlockContinuation::{ContinueBlock, Stop};
 use crate::typechecker::Type;
 use crate::typed_ast::{TypedBlock, TypedExpr, TypedExprKind, TypedFnDecl, TypedStmt, VariableId};
@@ -580,7 +581,14 @@ impl Ir {
 
         let continuation = FunctionIr::translate_block(&mut ir, decl.body.value, entry_block);
         if let ContinueBlock(block_id) = continuation {
-            ir.finish_block(block_id, Terminator::ReturnNoValue);
+            let Type::Function(_, ret) = &ty else {
+                panic!("function type must be a function");
+            };
+            if **ret == Type::Void {
+                ir.finish_block(block_id, Terminator::ReturnNoValue);
+            } else {
+                panic!("non-void function falls through after successful return checking");
+            }
         }
         let function_name = decl.name.value.0;
         let mut function_ir = ir.finish(ty, entry_block);
@@ -792,10 +800,8 @@ impl FunctionIr {
                 then,
                 otherwise,
             } => {
-                let (cond, block_id) = Self::translate_expr(context, cond.value, block_id);
-                let cond = context.resolve_alias(cond);
-                if let BuildingValue::Bool(constant) = &context.values[&cond].kind {
-                    return if *constant {
+                if let Some(constant) = const_bool(&cond.value) {
+                    return if constant {
                         Self::translate_stmt(context, then.value, block_id)
                     } else if let Some(otherwise) = otherwise {
                         Self::translate_stmt(context, otherwise.value, block_id)
@@ -803,6 +809,8 @@ impl FunctionIr {
                         ContinueBlock(block_id)
                     };
                 }
+                let (cond, block_id) = Self::translate_expr(context, cond.value, block_id);
+                let cond = context.resolve_alias(cond);
 
                 let then_block = context.new_block();
                 let then_continuation = Self::translate_stmt(context, then.value, then_block);
@@ -848,6 +856,24 @@ impl FunctionIr {
                 }
             }
             TypedStmt::While { cond, body } => {
+                if let Some(constant) = const_bool(&cond.value) {
+                    return if !constant {
+                        ContinueBlock(block_id)
+                    } else {
+                        let loop_header = context.new_block();
+                        context.finish_block(block_id, Terminator::Jump(loop_header));
+                        let body_block = context.new_block();
+                        context.finish_block(loop_header, Terminator::Jump(body_block));
+                        context.seal_block(body_block);
+                        let body_continuation =
+                            Self::translate_stmt(context, body.value, body_block);
+                        if let ContinueBlock(after_body_block) = body_continuation {
+                            context.finish_block(after_body_block, Terminator::Jump(loop_header));
+                        }
+                        context.seal_block(loop_header);
+                        Stop
+                    };
+                }
                 let loop_header = context.new_block();
                 context.finish_block(block_id, Terminator::Jump(loop_header));
 
@@ -855,36 +881,6 @@ impl FunctionIr {
                     Self::translate_expr(context, cond.value, loop_header);
 
                 let cond = context.resolve_alias(cond);
-                if let BuildingValue::Bool(constant) = &context.values[&cond].kind {
-                    return if !*constant {
-                        let after_block = context.new_block();
-                        context.finish_block(condition_exit, Terminator::Jump(after_block));
-                        if !context.blocks[&loop_header].sealed {
-                            context.seal_block(loop_header);
-                        }
-                        if !context.blocks[&condition_exit].sealed {
-                            context.seal_block(condition_exit);
-                        }
-                        context.seal_block(after_block);
-                        ContinueBlock(after_block)
-                    } else {
-                        let body_block = context.new_block();
-                        context.finish_block(condition_exit, Terminator::Jump(body_block));
-                        context.seal_block(body_block);
-                        let body_continuation =
-                            Self::translate_stmt(context, body.value, body_block);
-                        if let ContinueBlock(after_body_block) = body_continuation {
-                            context.finish_block(after_body_block, Terminator::Jump(loop_header));
-                        }
-                        if !context.blocks[&loop_header].sealed {
-                            context.seal_block(loop_header);
-                        }
-                        if !context.blocks[&condition_exit].sealed {
-                            context.seal_block(condition_exit);
-                        }
-                        Stop
-                    };
-                }
 
                 let after_block = context.new_block();
                 let body_block = context.new_block();
