@@ -55,6 +55,15 @@ impl ValueNumbers {
         let mut leaders: BTreeMap<InitialClass, ValueId> = BTreeMap::new();
         let mut current: BTreeMap<ValueId, ValueNumber> = BTreeMap::new();
         for (&id, data) in &ir.values {
+            // See `semantics`: only reusable results participate in
+            // congruence; calls, arguments, and undef stay opaque.
+            debug_assert_eq!(
+                crate::semantics::can_reuse_dominating_result(&data.kind),
+                !matches!(
+                    data.kind,
+                    Value::Argument(_) | Value::Call(_, _) | Value::Undef
+                )
+            );
             let class = match &data.kind {
                 Value::Int(value) => InitialClass::Int(*value),
                 Value::Bool(value) => InitialClass::Bool(*value),
