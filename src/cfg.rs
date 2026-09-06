@@ -96,7 +96,21 @@ impl Dominators {
         Self::compute_from_cfg(ir, &cfg)
     }
 
-    fn compute_from_cfg(ir: &FunctionIr, cfg: &Cfg) -> Self {
+    /// Dominance query over reachable blocks via the immediate-dominator chain.
+    pub(crate) fn dominates(&self, a: BlockId, b: BlockId) -> bool {
+        let mut current = b;
+        loop {
+            if current == a {
+                return true;
+            }
+            match self.immediate.get(&current) {
+                Some(&parent) => current = parent,
+                None => return false,
+            }
+        }
+    }
+
+    pub(crate) fn compute_from_cfg(ir: &FunctionIr, cfg: &Cfg) -> Self {
         let predecessors = &cfg.predecessors;
         let reverse_postorder = &cfg.reverse_postorder;
         let reachable: BTreeSet<_> = reverse_postorder.iter().copied().collect();

@@ -1,57 +1,7 @@
-use crate::cfg::Cfg;
+use crate::cfg::{Cfg, Dominators};
 use crate::ir::{BinaryOpCode, BlockId, FunctionIr, UnaryOpCode, Value, ValueId};
 use crate::types::Type;
 use std::collections::{BTreeMap, BTreeSet};
-
-fn dominating_sets(ir: &FunctionIr, cfg: &Cfg) -> BTreeMap<BlockId, BTreeSet<BlockId>> {
-    let reachable: BTreeSet<BlockId> = cfg.reverse_postorder.iter().copied().collect();
-    let mut sets: BTreeMap<BlockId, BTreeSet<BlockId>> = cfg
-        .reverse_postorder
-        .iter()
-        .map(|&block| {
-            let initial = if block == ir.entry {
-                BTreeSet::from([block])
-            } else {
-                reachable.clone()
-            };
-            (block, initial)
-        })
-        .collect();
-    loop {
-        let mut changed = false;
-        for &block in cfg.reverse_postorder.iter().skip(1) {
-            let mut preds = cfg.predecessors[&block]
-                .iter()
-                .copied()
-                .filter(|p| reachable.contains(p));
-            let first = match preds.next() {
-                Some(first) => first,
-                None => continue,
-            };
-            let mut next = sets[&first].clone();
-            for p in preds {
-                next = next.intersection(&sets[&p]).copied().collect();
-            }
-            next.insert(block);
-            if next != sets[&block] {
-                sets.insert(block, next);
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-    sets
-}
-
-fn dominates(
-    sets: &BTreeMap<BlockId, BTreeSet<BlockId>>,
-    a: BlockId,
-    b: BlockId,
-) -> bool {
-    sets.get(&b).is_some_and(|s| s.contains(&a))
-}
 
 /// Consolidated well-formedness checks for finalized SSA functions.
 pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
@@ -159,7 +109,8 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
     // Dominance: ordinary uses dominate their block; phi operands dominate
     // the predecessor they arrive on. Intra-block order is checked for
     // non-phi instructions and terminators.
-    let sets = dominating_sets(ir, &cfg);
+    let dominators = Dominators::compute_from_cfg(ir, &cfg);
+    let reachable: BTreeSet<BlockId> = cfg.reverse_postorder.iter().copied().collect();
     let block_order_index: BTreeMap<BlockId, BTreeMap<ValueId, usize>> = ir
         .blocks
         .iter()
@@ -173,7 +124,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
         .collect();
     let is_phi = |id: ValueId| matches!(ir.values[&id].kind, Value::Phi(_));
     for (&block, data) in &ir.blocks {
-        if !sets.contains_key(&block) {
+        if !reachable.contains(&block) {
             // Unreachable block: still require operands to exist (checked
             // above) but skip dominance, which is only defined for
             // reachable blocks.
@@ -185,9 +136,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
             };
             for (pred, operand) in &phi_data.incoming {
                 let def = def_block[operand];
-                if !dominates(&sets, def, *pred) && !(def == *pred) {
-                    // `dominates(def, pred)` already covers `def == pred`;
-                    // the extra clause documents the self-edge case.
+                if !dominators.dominates(def, *pred) {
                     return Err(format!(
                         "phi {phi} operand {operand} (defined in {def}) does not dominate predecessor {pred}"
                     ));
@@ -206,7 +155,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
                     return Err(format!(
                         "value {instr} in {block} uses {operand} defined later in the same block"
                     ));
-                } else if !dominates(&sets, def, block) {
+                } else if !dominators.dominates(def, block) {
                     return Err(format!(
                         "value {instr} in {block} uses {operand} defined in non-dominating {def}"
                     ));
@@ -215,7 +164,7 @@ pub(crate) fn verify(ir: &FunctionIr) -> Result<(), String> {
         }
         for operand in data.terminator.operands().collect::<Vec<_>>() {
             let def = def_block[&operand];
-            if def != block && !dominates(&sets, def, block) {
+            if def != block && !dominators.dominates(def, block) {
                 return Err(format!(
                     "terminator of {block} uses {operand} defined in non-dominating {def}"
                 ));
