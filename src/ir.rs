@@ -848,29 +848,40 @@ impl FunctionIr {
                 }
             }
             TypedStmt::While { cond, body } => {
-                let cond_block = context.new_block();
-                context.finish_block(block_id, Terminator::Jump(cond_block));
+                let loop_header = context.new_block();
+                context.finish_block(block_id, Terminator::Jump(loop_header));
 
-                let (cond, cond_block) = Self::translate_expr(context, cond.value, cond_block);
+                let (cond, condition_exit) =
+                    Self::translate_expr(context, cond.value, loop_header);
 
                 let cond = context.resolve_alias(cond);
                 if let BuildingValue::Bool(constant) = &context.values[&cond].kind {
                     return if !*constant {
                         let after_block = context.new_block();
-                        context.finish_block(cond_block, Terminator::Jump(after_block));
-                        context.seal_block(cond_block);
+                        context.finish_block(condition_exit, Terminator::Jump(after_block));
+                        if !context.blocks[&loop_header].sealed {
+                            context.seal_block(loop_header);
+                        }
+                        if !context.blocks[&condition_exit].sealed {
+                            context.seal_block(condition_exit);
+                        }
                         context.seal_block(after_block);
                         ContinueBlock(after_block)
                     } else {
                         let body_block = context.new_block();
-                        context.finish_block(cond_block, Terminator::Jump(body_block));
+                        context.finish_block(condition_exit, Terminator::Jump(body_block));
                         context.seal_block(body_block);
                         let body_continuation =
                             Self::translate_stmt(context, body.value, body_block);
                         if let ContinueBlock(after_body_block) = body_continuation {
-                            context.finish_block(after_body_block, Terminator::Jump(cond_block));
+                            context.finish_block(after_body_block, Terminator::Jump(loop_header));
                         }
-                        context.seal_block(cond_block);
+                        if !context.blocks[&loop_header].sealed {
+                            context.seal_block(loop_header);
+                        }
+                        if !context.blocks[&condition_exit].sealed {
+                            context.seal_block(condition_exit);
+                        }
                         Stop
                     };
                 }
@@ -879,7 +890,7 @@ impl FunctionIr {
                 let body_block = context.new_block();
 
                 context.finish_block(
-                    cond_block,
+                    condition_exit,
                     Terminator::Branch(cond, body_block, after_block),
                 );
                 context.seal_block(body_block);
@@ -887,10 +898,10 @@ impl FunctionIr {
 
                 let body_continuation = Self::translate_stmt(context, body.value, body_block);
                 if let ContinueBlock(after_body_block) = body_continuation {
-                    context.finish_block(after_body_block, Terminator::Jump(cond_block));
+                    context.finish_block(after_body_block, Terminator::Jump(loop_header));
                 }
 
-                context.seal_block(cond_block);
+                context.seal_block(loop_header);
                 ContinueBlock(after_block)
             }
             TypedStmt::Expr(expr) => {
