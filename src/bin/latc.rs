@@ -62,20 +62,29 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
 
-            let output = Path::new(&input.filename).with_extension("bc");
-            if !module.write_bitcode_to_path(&output) {
+            let bitcode_output = Path::new(&input.filename).with_extension("bc");
+            if !module.write_bitcode_to_path(&bitcode_output) {
                 eprintln!(
                     "ERROR\n failed to write LLVM bitcode to {}",
-                    output.display()
+                    bitcode_output.display()
                 );
                 return ExitCode::FAILURE;
             }
 
-            println!("OK");
+            let llvm_output = Path::new(&input.filename).with_extension("ll");
+            if let Err(err) = module.print_to_file(&llvm_output) {
+                eprintln!(
+                    "ERROR\n failed to write LLVM assembly to {}: {err}",
+                    llvm_output.display()
+                );
+                return ExitCode::FAILURE;
+            }
+
+            eprintln!("OK");
             ExitCode::SUCCESS
         }
         Err(error_reports) => {
-            println!("ERROR");
+            eprintln!("ERROR");
             for report in error_reports {
                 report.eprint(&input).unwrap_or(());
             }
