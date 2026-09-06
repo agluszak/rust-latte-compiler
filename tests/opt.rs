@@ -32,10 +32,9 @@ fn execute(module: &inkwell::module::Module<'_>, stdin_data: &str) -> (String, i
     let bitcode = tempfile::NamedTempFile::new().unwrap();
     assert!(module.write_bitcode_to_path(bitcode.path()));
     let output = common::run_lli(bitcode.path(), stdin_data);
-    assert!(!output.timed_out, "lli timed out");
     (
         String::from_utf8(output.stdout).unwrap(),
-        output.code.unwrap_or(-1),
+        output.status.code().unwrap_or(-1),
     )
 }
 

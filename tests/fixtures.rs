@@ -95,14 +95,11 @@ fn test_good(path: &Path) -> Result<(), Failed> {
     }
 
     let output = common::run_lli(bitcode.path(), &program_input);
-    if output.timed_out {
-        return Err("lli timed out after 10s".into());
-    }
 
-    if output.code != Some(expected_exit_code) {
+    if output.status.code() != Some(expected_exit_code) {
         return Err(format!(
             "lli exited with {:?}: {}",
-            output.code,
+            output.status.code(),
             String::from_utf8_lossy(&output.stderr)
         )
         .into());
